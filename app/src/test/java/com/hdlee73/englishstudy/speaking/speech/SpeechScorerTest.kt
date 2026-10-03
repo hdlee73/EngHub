@@ -1,0 +1,47 @@
+package com.hdlee73.englishstudy.speaking.speech
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SpeechScorerTest {
+    @Test
+    fun `matches spoken words in expected order`() {
+        assertEquals(listOf(false, true, true, false), SpeechScorer.matchedWords("Does that mean I", "that mean"))
+    }
+    @Test fun exactSentencePasses() = assertEquals(100, SpeechScorer.score("I'm ready.", "I'm ready"))
+    @Test fun closeSentenceScoresHigherThanWrongSentence() {
+        assertTrue(SpeechScorer.score("What if we wait for more time?", "What if we wait more time") >
+            SpeechScorer.score("What if we wait for more time?", "Tomorrow is Monday"))
+    }
+
+    @Test fun contractionsAndRecognizerExpansionAreEquivalent() {
+        assertEquals(100, SpeechScorer.score("I'm ready and it'll work", "I am ready and it will work"))
+    }
+
+    @Test fun minorMissingWordsRemainUsable() {
+        assertTrue(SpeechScorer.score("I know you want to help but you are still new", "I know you want help but you are still new") >= 68)
+    }
+
+    @Test fun retryTextContainsOnlyUnmatchedWords() {
+        assertEquals("don't open", SpeechScorer.unmatchedText(
+            "They usually don't open until 4 pm.",
+            "They usually done opne until 4 pm"
+        ))
+    }
+
+    @Test fun contractionHighlightUsesSameNormalizedAlignmentAsScore() {
+        val evaluation = SpeechScorer.evaluate(
+            "I'm on hand for the event on behalf of my boss.",
+            "I'm on hand from the event on behalf of my boss"
+        )
+        assertEquals(
+            listOf(true, true, true, false, true, true, true, true, true, true, true),
+            evaluation.matchedDisplayWords
+        )
+        assertEquals(evaluation.score, SpeechScorer.score(
+            "I'm on hand for the event on behalf of my boss.",
+            "I'm on hand from the event on behalf of my boss"
+        ))
+    }
+}
