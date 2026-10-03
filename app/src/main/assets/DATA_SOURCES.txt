@@ -1,0 +1,31 @@
+Korean meaning index
+Copyright: National Institute of Korean Language (국립국어원), Korean Basic Dictionary (한국어기초사전).
+Source: https://krdict.korean.go.kr/
+License: Creative Commons Attribution-ShareAlike 2.0 Korea
+https://creativecommons.org/licenses/by-sa/2.0/kr/
+Adaptation: exact English equivalent headwords indexed to Korean headword and sense definition; no machine translation used for Korean meanings.
+Mirror: binjang/NIKL-dictionary-parser, January 2024 export, commit 52ffffdc0a6fd8d00d7dce45cffcc0930ebbdaea.
+The adapted database remains under CC BY-SA 2.0 KR. Its complete build script is included in tools/build_learning_data.py.
+
+Bilingual example corpus
+Tatoeba contributors, provided by ManyThings.org/anki (Charles Kelly).
+Source: https://www.manythings.org/anki/kor-eng.zip
+License: CC BY 2.0 France; contributor names and original sentence IDs are retained per pair in the database, displayed below entries and included in the Excel Sources sheet.
+https://creativecommons.org/licenses/by/2.0/fr/
+Corpus pairs have human translations. Their inclusion does not guarantee every sentence has been checked by this app's author or that every searched word has a corpus pair.
+
+ReviewedEntries.kt: original sense paraphrases and bilingual example sentences, separately authored for this app. Does not reproduce Naver's dictionary contents.
+External English definitions: FreeDictionaryAPI / Wiktionary, CC BY-SA 4.0.
+
+Direct English-Korean senses
+Source: Korean Wiktionary contributors, distributed through Kaikki.org / Wiktextract.
+https://ko.wiktionary.org/
+https://kaikki.org/kowiktionary/%EC%98%81%EC%96%B4/index.html
+License: CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+Direct English headwords lead; NIKL reverse-index senses are added only for parts of speech the direct entry lacks, ranked by NIKL learner level (records marked "MERGED" credit both sources). Glosses are preserved and limited to four senses. Online Korean lexical translations come from FreeDictionaryAPI / English Wiktionary senses; English definitions are never machine-translated into Korean meanings.
+Licenses remain attached to their respective source records; the combined file does not relicense NIKL-derived records. Complete adaptation scripts are included in tools/.
+
+Automatic translation fallback (online, labeled "자동 번역" in the app)
+Used only when the sources above have no Korean meaning, and for English example sentences that have no human translation.
+Service: Google Translate (translate.googleapis.com, unofficial "gtx" client). Results are not stored in the bundled data.
+English Wiktionary Korean translations (Kaikki.org English dump), CC BY-SA 4.0

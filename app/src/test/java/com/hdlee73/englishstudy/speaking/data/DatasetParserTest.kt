@@ -1,0 +1,59 @@
+package com.hdlee73.englishstudy.speaking.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class DatasetParserTest {
+    @Test fun readsKoreanAndEnglishColumns() {
+        val pairs = DatasetParser.rowsToPairs(listOf(
+            listOf("안녕하세요", "Hello"),
+            listOf("기다려 볼까요?", "What if we wait?")
+        ))
+        assertEquals("안녕하세요", pairs[0].korean)
+        assertEquals("What if we wait?", pairs[1].english)
+    }
+
+    @Test fun skipsHeaderRow() {
+        val pairs = DatasetParser.rowsToPairs(listOf(
+            listOf("한국어", "English"),
+            listOf("고마워요", "Thank you"),
+            listOf("또 봐요", "See you again")
+        ))
+        assertEquals(2, pairs.size)
+    }
+
+    @Test fun ignoresColumnsAfterKoreanAndEnglish() {
+        val pairs = DatasetParser.rowsToPairs(listOf(
+            listOf("안녕하세요", "Hello", "메모", "무시할 값"),
+            listOf("감사합니다", "Thank you", "difficulty=easy")
+        ))
+        assertEquals(2, pairs.size)
+        assertEquals("Hello", pairs[0].english)
+        assertEquals("Thank you", pairs[1].english)
+    }
+
+    @Test fun detectsEnglishFirstDataset() {
+        val pairs = DatasetParser.rowsToPairs(listOf(
+            listOf("English", "한국어", "메모"),
+            listOf("How are you?", "잘 지내세요?", "greeting"),
+            listOf("Thank you", "감사합니다", "easy")
+        ))
+        assertEquals(2, pairs.size)
+        assertEquals("잘 지내세요?", pairs[0].korean)
+        assertEquals("How are you?", pairs[0].english)
+        assertEquals("감사합니다", pairs[1].korean)
+        assertEquals("Thank you", pairs[1].english)
+    }
+
+    @Test fun readsSingleEnglishColumnAndSkipsHeader() {
+        val pairs = DatasetParser.rowsToPairs(listOf(
+            listOf("English"),
+            listOf("How are you?"),
+            listOf("Thank you")
+        ))
+        assertEquals(2, pairs.size)
+        assertEquals("", pairs[0].korean)
+        assertEquals("How are you?", pairs[0].english)
+        assertEquals("Thank you", pairs[1].english)
+    }
+}

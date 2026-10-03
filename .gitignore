@@ -1,0 +1,17 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+/build
+/captures
+.externalNativeBuild
+.cxx
+app/build
+gradle/gradle-daemon-jvm.properties
+__pycache__/
+*.pyc
+
+# Dictionary and example databases are generated in CI by tools/build_learning_data.py
+.learning_data/
+app/src/main/assets/word_dictionary.sqlite
+app/src/main/assets/bilingual_examples.sqlite
