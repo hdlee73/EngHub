@@ -19,3 +19,5 @@ Korean meanings are never machine-translated. Full details: `app/src/main/assets
 # Code origin
 
 This app merges the code of [SpeakFlow](https://github.com/hdlee73/SpeakFlow) (speaking practice) and [sajeon-app](https://github.com/hdlee73/sajeon-app) (dictionary and word list), both by the same author, and adds the flashcard and quiz features.
+
+The reading texts in `app/src/main/assets/reading_articles.txt` were written for this app as original learning material (feature-style explainers, not real news reports). Korean translations shown in the reading tab are produced on demand by Google Translate (automatic translation).

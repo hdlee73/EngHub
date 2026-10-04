@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hdlee73.englishstudy.dictionary.SavedWordsRepository
 import com.hdlee73.englishstudy.dictionary.WordEntry
+import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import com.hdlee73.englishstudy.speaking.data.DatasetStore
 import com.hdlee73.englishstudy.speaking.model.SentencePair
 import kotlinx.coroutines.Dispatchers
@@ -41,11 +44,9 @@ data class FlashcardUiState(
     val known: Int = 0,
     val remaining: Int = 0,
     val missedAnswers: Int = 0,
-    val missedWords: List<WordEntry> = emptyList()
-) {
-    /** Cards of a dataset are whole sentences, shown in a smaller type. */
-    val sentenceDeck: Boolean get() = sourceId != SAVED_SOURCE
-}
+    val missedWords: List<WordEntry> = emptyList(),
+    val message: String? = null
+)
 
 enum class QuizStage { SETUP, QUESTION, RESULT }
 
@@ -72,6 +73,7 @@ data class QuizUiState(
 class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SavedWordsRepository.get(application)
     private val datasetStore = DatasetStore(application)
+    private val flashStore = FlashDatasetStore(application)
     private val progress: ProgressStore = PrefsProgressStore(application)
 
     private val _flash = MutableStateFlow(FlashcardUiState())
@@ -82,10 +84,12 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private var flashSession: FlashcardSession? = null
     private var quizSession: QuizSession? = null
 
-    // The speaking datasets that have Korean translations, loaded in the background.
+    // The flashcard lists the learner added (own word lists, not shared with the speaking tab).
+    @Volatile private var flashNames: Map<String, String> = emptyMap()
+    @Volatile private var flashCards: Map<String, List<WordEntry>> = emptyMap()
+    // The speaking datasets that have Korean translations, used by the quiz; loaded in the background.
     @Volatile private var datasetNames: Map<String, String> = emptyMap()
     @Volatile private var datasetPairs: Map<String, List<SentencePair>> = emptyMap()
-    @Volatile private var datasetCards: Map<String, List<WordEntry>> = emptyMap()
     @Volatile private var datasetQuizCounts: Map<String, Int> = emptyMap()
 
     init {
@@ -106,7 +110,6 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadDatasets() {
         val names = LinkedHashMap<String, String>()
         val pairs = LinkedHashMap<String, List<SentencePair>>()
-        val cards = LinkedHashMap<String, List<WordEntry>>()
         val quizCounts = LinkedHashMap<String, Int>()
         // The "saved words" dataset of the speaking tab only repeats the saved words, so it is not offered again.
         for (dataset in datasetStore.list().filter { it.id != DatasetStore.SAVED_WORDS_ID }) {
@@ -117,25 +120,34 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             if (loaded.isEmpty()) continue
             names[dataset.id] = dataset.name.substringBeforeLast('.')
             pairs[dataset.id] = loaded
-            cards[dataset.id] = loaded.mapIndexed { i, p ->
-                WordEntry(id = i + 1L, word = p.english.trim(), ipa = "", korean = p.korean.trim(), english = "", examples = "")
-            }
             quizCounts[dataset.id] = SentenceQuizBuilder.eligible(loaded).size
         }
-        datasetNames = names; datasetPairs = pairs; datasetCards = cards; datasetQuizCounts = quizCounts
+        datasetNames = names; datasetPairs = pairs; datasetQuizCounts = quizCounts
+
+        val fNames = LinkedHashMap<String, String>()
+        val fCards = LinkedHashMap<String, List<WordEntry>>()
+        for (dataset in flashStore.list()) {
+            val loaded = runCatching { flashStore.load(dataset) }.getOrNull().orEmpty()
+                .distinctBy { it.english.trim().lowercase(Locale.ROOT) }
+            fNames[dataset.id] = dataset.name.substringBeforeLast('.')
+            fCards[dataset.id] = loaded.mapIndexed { i, p ->
+                WordEntry(id = i + 1L, word = p.english.trim(), ipa = "", korean = p.korean.trim(), english = "", examples = "")
+            }
+        }
+        flashNames = fNames; flashCards = fCards
     }
 
     private fun cardsFor(sourceId: String): List<WordEntry> =
-        if (sourceId == SAVED_SOURCE) words() else datasetCards[sourceId].orEmpty()
+        if (sourceId == SAVED_SOURCE) words() else flashCards[sourceId].orEmpty()
 
     private fun updateSetup() {
         val all = words()
         val map = progress.all()
         val flashSources = listOf(StudySource(SAVED_SOURCE, "저장 단어", all.size)) +
-            datasetCards.map { (id, cards) -> StudySource(id, datasetNames[id].orEmpty(), cards.size) }
+            flashCards.map { (id, cards) -> StudySource(id, flashNames[id].orEmpty(), cards.size) }
         _flash.update { state ->
             val id = state.sourceId.takeIf { chosen -> flashSources.any { it.id == chosen } } ?: SAVED_SOURCE
-            val cards = if (id == SAVED_SOURCE) all else datasetCards[id].orEmpty()
+            val cards = if (id == SAVED_SOURCE) all else flashCards[id].orEmpty()
             state.copy(
                 sources = flashSources, sourceId = id, cardCount = cards.size,
                 masteredCount = cards.count { (map[progressKey(it.word)] ?: WordProgress()).mastered },
@@ -151,6 +163,47 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ---- flashcards ----
+
+    fun clearFlashMessage() = _flash.update { it.copy(message = null) }
+
+    /** Adds the chosen Excel / CSV files as flashcard word lists. */
+    fun importFlashDatasets(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolver = getApplication<Application>().contentResolver
+            var added = 0
+            var lastError: String? = null
+            var lastId: String? = null
+            for (uri in uris) {
+                runCatching {
+                    val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                        if (it.moveToFirst()) it.getString(0) else null
+                    } ?: "words.xlsx"
+                    runCatching { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                    flashStore.import(uri, name)
+                }.onSuccess { added++; lastId = it.id }.onFailure { lastError = it.message ?: "파일을 읽지 못했습니다." }
+            }
+            loadDatasets()
+            lastId?.let { id -> _flash.update { it.copy(sourceId = id) } }
+            updateSetup()
+            _flash.update {
+                it.copy(message = when {
+                    added == 0 -> lastError ?: "파일을 읽지 못했습니다."
+                    lastError != null -> "${added}개를 추가했습니다. 일부 파일은 읽지 못했습니다: $lastError"
+                    else -> "${added}개 단어장을 추가했습니다."
+                })
+            }
+        }
+    }
+
+    fun deleteFlashDataset(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            flashStore.delete(id)
+            // Progress of its cards stays in the store; it is harmless and returns if the same list is added again.
+            loadDatasets()
+            updateSetup()
+        }
+    }
 
     fun setFlashSource(id: String) { _flash.update { it.copy(sourceId = id) }; updateSetup() }
     fun setFilter(filter: DeckFilter) = _flash.update { it.copy(filter = filter) }

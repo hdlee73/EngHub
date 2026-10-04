@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
@@ -105,7 +106,14 @@ fun StartButton(text: String, enabled: Boolean, onClick: () -> Unit, modifier: M
 
 /** Cards for choosing what to study: the saved words or a speaking dataset. Scrolls sideways when there are many. */
 @Composable
-fun SourcePicker(sources: List<com.hdlee73.englishstudy.study.StudySource>, selectedId: String, unit: String, onSelect: (String) -> Unit) {
+fun SourcePicker(
+    sources: List<com.hdlee73.englishstudy.study.StudySource>,
+    selectedId: String,
+    unit: String,
+    onSelect: (String) -> Unit,
+    onAdd: (() -> Unit)? = null,
+    onDelete: ((String) -> Unit)? = null
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("학습 자료", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -122,7 +130,25 @@ fun SourcePicker(sources: List<com.hdlee73.englishstudy.study.StudySource>, sele
                         (if (source.id == com.hdlee73.englishstudy.study.SAVED_SOURCE) "⭐ " else "🗂 ") + source.label,
                         color = if (selected) Blue else Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2, minLines = 2
                     )
-                    Text("${source.count}$unit", color = Muted, fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${source.count}$unit", color = Muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        if (onDelete != null && source.id != com.hdlee73.englishstudy.study.SAVED_SOURCE) {
+                            Text(
+                                "삭제", color = Miss, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { onDelete(source.id) }.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            if (onAdd != null) {
+                Column(
+                    Modifier.width(120.dp).height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, Blue, RoundedCornerShape(16.dp)).clickable { onAdd() }.padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+                ) {
+                    Text("＋", color = Blue, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text("단어장 추가", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

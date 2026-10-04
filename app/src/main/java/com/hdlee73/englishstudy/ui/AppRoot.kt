@@ -20,6 +20,7 @@ enum class AppTab(val label: String, val emoji: String) {
     DICTIONARY("사전", "📖"),
     FLASHCARDS("암기", "🃏"),
     QUIZ("퀴즈", "✏️"),
+    READING("리딩", "📰"),
     SPEAKING("스피킹", "🎤")
 }
 

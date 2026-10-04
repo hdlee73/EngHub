@@ -30,6 +30,7 @@ import androidx.work.workDataOf
 import com.hdlee73.englishstudy.dictionary.DictionaryViewModel
 import com.hdlee73.englishstudy.dictionary.ExportWorker
 import com.hdlee73.englishstudy.dictionary.WordSpeaker
+import com.hdlee73.englishstudy.reading.ReadingViewModel
 import com.hdlee73.englishstudy.speaking.LearningViewModel
 import com.hdlee73.englishstudy.speaking.model.LearningMode
 import com.hdlee73.englishstudy.speaking.model.LessonPhase
@@ -45,11 +46,13 @@ import com.hdlee73.englishstudy.ui.AppTab
 import com.hdlee73.englishstudy.ui.DictionaryScreen
 import com.hdlee73.englishstudy.ui.FlashcardScreen
 import com.hdlee73.englishstudy.ui.QuizScreen
+import com.hdlee73.englishstudy.ui.ReadingScreen
 
 class MainActivity : ComponentActivity() {
     private val learningVm: LearningViewModel by viewModels()
     private val dictionaryVm: DictionaryViewModel by viewModels()
     private val studyVm: StudyViewModel by viewModels()
+    private val readingVm: ReadingViewModel by viewModels()
     private lateinit var speech: SpeechEngine
     private lateinit var wordSpeaker: WordSpeaker
 
@@ -79,6 +82,7 @@ class MainActivity : ComponentActivity() {
             val saved by dictionaryVm.savedWords.collectAsStateWithLifecycle()
             val flash by studyVm.flashcards.collectAsStateWithLifecycle()
             val quiz by studyVm.quiz.collectAsStateWithLifecycle()
+            val reading by readingVm.state.collectAsStateWithLifecycle()
 
             var tabIndex by rememberSaveable { mutableStateOf(0) }
             val tab = AppTab.values()[tabIndex.coerceIn(0, AppTab.values().size - 1)]
@@ -99,6 +103,9 @@ class MainActivity : ComponentActivity() {
                     ?: (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
                 if (microphoneGranted) learningVm.retryListening()
                 else learningVm.onRecognitionUnavailable("마이크 권한이 거부되었습니다.")
+            }
+            val flashListPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+                studyVm.importFlashDatasets(uris)
             }
             val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
             val exportLauncher = rememberLauncherForActivityResult(
@@ -187,6 +194,7 @@ class MainActivity : ComponentActivity() {
                     if (next != AppTab.DICTIONARY) wordSpeaker.stop()
                     // Words saved or datasets loaded since the last visit show up in the study setup screens.
                     if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
+                    if (next == AppTab.READING) readingVm.refresh()
                     tabIndex = next.ordinal
                 }
             ) { selected ->
@@ -227,6 +235,11 @@ class MainActivity : ComponentActivity() {
                     AppTab.FLASHCARDS -> FlashcardScreen(
                         state = flash,
                         onSource = studyVm::setFlashSource,
+                        onAddList = {
+                            flashListPicker.launch(arrayOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/csv", "text/comma-separated-values", "application/vnd.ms-excel"))
+                        },
+                        onDeleteList = studyVm::deleteFlashDataset,
+                        onMessageDismiss = studyVm::clearFlashMessage,
                         onFilter = studyVm::setFilter,
                         onShuffle = studyVm::setShuffle,
                         onFrontIsWord = studyVm::setFrontIsWord,
@@ -247,6 +260,20 @@ class MainActivity : ComponentActivity() {
                         onRetryWrong = studyVm::retryWrong,
                         onEnd = studyVm::endQuiz,
                         onSpeak = wordSpeaker::speak
+                    )
+                    AppTab.READING -> ReadingScreen(
+                        state = reading,
+                        onOpen = readingVm::open,
+                        onClose = readingVm::close,
+                        onToggleTranslation = readingVm::toggleTranslation,
+                        onLookup = { word ->
+                            // Search the tapped word in the dictionary tab.
+                            dictionaryVm.pickSuggestion(word)
+                            wordSpeaker.stop()
+                            tabIndex = AppTab.DICTIONARY.ordinal
+                        },
+                        onSpeak = wordSpeaker::speak,
+                        onMessageDismiss = readingVm::clearMessage
                     )
                     AppTab.SPEAKING -> SpeakFlowApp(
                         state = learning,

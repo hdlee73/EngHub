@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,7 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +55,9 @@ import com.hdlee73.englishstudy.study.StudyStage
 fun FlashcardScreen(
     state: FlashcardUiState,
     onSource: (String) -> Unit,
+    onAddList: () -> Unit,
+    onDeleteList: (String) -> Unit,
+    onMessageDismiss: () -> Unit,
     onFilter: (DeckFilter) -> Unit,
     onShuffle: (Boolean) -> Unit,
     onFrontIsWord: (Boolean) -> Unit,
@@ -62,10 +68,13 @@ fun FlashcardScreen(
     onEnd: () -> Unit,
     onSpeak: (String) -> Unit
 ) {
-    when (state.stage) {
-        StudyStage.SETUP -> FlashcardSetup(state, onSource, onFilter, onShuffle, onFrontIsWord, onStart)
-        StudyStage.STUDY -> FlashcardStudy(state, onFlip, onAnswer, onEnd, onSpeak)
-        StudyStage.DONE -> FlashcardDone(state, onRetryMissed, onEnd)
+    Box(Modifier.fillMaxSize()) {
+        when (state.stage) {
+            StudyStage.SETUP -> FlashcardSetup(state, onSource, onAddList, onDeleteList, onFilter, onShuffle, onFrontIsWord, onStart)
+            StudyStage.STUDY -> FlashcardStudy(state, onFlip, onAnswer, onEnd, onSpeak)
+            StudyStage.DONE -> FlashcardDone(state, onRetryMissed, onEnd)
+        }
+        MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -73,25 +82,41 @@ fun FlashcardScreen(
 private fun FlashcardSetup(
     state: FlashcardUiState,
     onSource: (String) -> Unit,
+    onAddList: () -> Unit,
+    onDeleteList: (String) -> Unit,
     onFilter: (DeckFilter) -> Unit,
     onShuffle: (Boolean) -> Unit,
     onFrontIsWord: (Boolean) -> Unit,
     onStart: () -> Unit
 ) {
     val deckSize = state.deckCounts[state.filter] ?: 0
-    val nothingToStudy = state.sources.size == 1 && state.cardCount == 0
-    if (nothingToStudy) {
-        EmptyState("🃏", "암기할 카드가 없어요", "사전 탭에서 단어를 저장하거나, 스피킹 탭에서 한글 번역이 있는 데이터셋을 불러오면 여기서 암기할 수 있어요.")
-        return
+    var confirmDelete by remember { mutableStateOf<String?>(null) }
+    confirmDelete?.let { id ->
+        val label = state.sources.firstOrNull { it.id == id }?.label.orEmpty()
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text("‘$label’ 삭제") },
+            text = { Text("이 단어장을 삭제할까요? 원본 파일은 그대로 남습니다.") },
+            confirmButton = { TextButton(onClick = { onDeleteList(id); confirmDelete = null }) { Text("삭제", color = Miss) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("취소") } }
+        )
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Hero("🃏", "카드 암기", "카드를 넘기며 하나씩 외워요")
         // The start button comes first so it is always in reach.
         StartButton(
-            if (deckSize > 0) "▶  학습 시작 · ${deckSize}장" else "이 묶음에는 카드가 없어요",
+            when {
+                deckSize > 0 -> "▶  학습 시작 · ${deckSize}장"
+                state.cardCount == 0 -> "카드가 없어요 · 아래에서 단어장을 추가하세요"
+                else -> "이 묶음에는 카드가 없어요"
+            },
             enabled = deckSize > 0, onClick = onStart
         )
-        SourcePicker(state.sources, state.sourceId, "장", onSource)
+        SourcePicker(state.sources, state.sourceId, "장", onSource, onAdd = onAddList, onDelete = { confirmDelete = it })
+        Text(
+            "＋ 단어장 추가: 엑셀(.xlsx)·CSV 파일에서 영어 단어(또는 문장)와 한글 뜻을 두 열로 적어 불러오세요. 열 순서는 자동으로 인식합니다.",
+            color = Muted, fontSize = 12.sp, lineHeight = 17.sp
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatTile("${state.cardCount}", "전체", Blue, Modifier.weight(1f))
             StatTile("${state.masteredCount}", "외운 카드", Mint, Modifier.weight(1f))
@@ -113,9 +138,8 @@ private fun FlashcardSetup(
             Text(state.filter.description, color = Muted, fontSize = 13.sp)
             Text("카드 앞면", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val front = if (state.sentenceDeck) "영어 문장" else "영어 단어"
-                FilterChip(selected = state.frontIsWord, onClick = { onFrontIsWord(true) }, label = { Text("$front → 뜻") })
-                FilterChip(selected = !state.frontIsWord, onClick = { onFrontIsWord(false) }, label = { Text("뜻 → $front") })
+                FilterChip(selected = state.frontIsWord, onClick = { onFrontIsWord(true) }, label = { Text("영어 → 뜻") })
+                FilterChip(selected = !state.frontIsWord, onClick = { onFrontIsWord(false) }, label = { Text("뜻 → 영어") })
             }
             Text("순서", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -147,7 +171,7 @@ private fun FlashcardStudy(
             progress = { if (state.total == 0) 0f else state.known.toFloat() / state.total },
             modifier = Modifier.fillMaxWidth(), color = Mint
         )
-        FlipCard(card, state.flipped, state.frontIsWord, state.sentenceDeck, onFlip, onAnswer, onSpeak, Modifier.weight(1f).fillMaxWidth())
+        FlipCard(card, state.flipped, state.frontIsWord, card.word.length > 28, onFlip, onAnswer, onSpeak, Modifier.weight(1f).fillMaxWidth())
         if (state.flipped) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
