@@ -26,14 +26,21 @@ data class ReadingUiState(
     val translating: Boolean = false,
     /** Korean text per paragraph of the open article; a missing index is not translated yet. */
     val translations: Map<Int, String> = emptyMap(),
-    val message: String? = null
+    val message: String? = null,
+    /** The translation of the words the learner selected in the open article. */
+    val snippet: Snippet? = null
 ) {
     val open: ReadingArticle? get() = today.firstOrNull { it.id == openId }
 }
 
+/** A selected passage and its Korean translation ([korean] is null while loading or when it failed). */
+data class Snippet(val text: String, val korean: String?, val loading: Boolean)
+
 class ReadingViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("reading", Context.MODE_PRIVATE)
     private val translator = ReadingTranslator()
+    private val snippetTranslator = com.hdlee73.englishstudy.translate.OnlineTranslator()
+    private var snippetJob: Job? = null
     private val _state = MutableStateFlow(ReadingUiState())
     val state: StateFlow<ReadingUiState> = _state.asStateFlow()
 
@@ -72,12 +79,31 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
         val read = (prefs.getStringSet("read_$day", emptySet()).orEmpty() + id).toSet()
         prefs.edit().putStringSet("read_$day", read).apply()
         translateJob?.cancel()
-        _state.update { it.copy(openId = id, readIds = it.readIds + id, showTranslation = false, translating = false, translations = cached(id)) }
+        _state.update { it.copy(openId = id, readIds = it.readIds + id, showTranslation = false, translating = false, translations = cached(id), snippet = null) }
     }
 
     fun close() {
         translateJob?.cancel()
-        _state.update { it.copy(openId = null, showTranslation = false, translating = false, translations = emptyMap()) }
+        snippetJob?.cancel()
+        _state.update { it.copy(openId = null, showTranslation = false, translating = false, translations = emptyMap(), snippet = null) }
+    }
+
+    /** Translates the selected passage into Korean. */
+    fun translateSnippet(text: String) {
+        snippetJob?.cancel()
+        _state.update { it.copy(snippet = Snippet(text, null, true)) }
+        snippetJob = viewModelScope.launch(Dispatchers.IO) {
+            val korean = snippetTranslator.translate(text, com.hdlee73.englishstudy.translate.Direction.EN_KO)
+            _state.update {
+                if (it.snippet?.text != text) it
+                else it.copy(snippet = Snippet(text, korean, false), message = if (korean == null) "번역을 가져오지 못했습니다. 인터넷 연결을 확인해 주세요." else it.message)
+            }
+        }
+    }
+
+    fun clearSnippet() {
+        snippetJob?.cancel()
+        _state.update { if (it.snippet == null) it else it.copy(snippet = null) }
     }
 
     fun clearMessage() = _state.update { it.copy(message = null) }

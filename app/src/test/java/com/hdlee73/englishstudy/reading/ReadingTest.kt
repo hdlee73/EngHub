@@ -88,4 +88,42 @@ class ReadingTest {
         assertEquals(text, parts.joinToString(" "))
         assertEquals(listOf("Short text."), TextChunks.split("Short text."))
     }
+
+    private val para = "Cats sleep a lot. They don't hunt all day, though! Do dogs? Yes."
+    private fun cut(r: IntRange?) = r?.let { para.substring(it.first, it.last + 1) }
+
+    @Test fun sentenceRangeCoversTheSentenceWithItsPunctuation() {
+        assertEquals("Cats sleep a lot.", cut(ReadingWords.sentenceRange(para, 3)))
+        assertEquals("They don't hunt all day, though!", cut(ReadingWords.sentenceRange(para, 25)))
+        assertEquals("Do dogs?", cut(ReadingWords.sentenceRange(para, 52)))
+        assertEquals("Yes.", cut(ReadingWords.sentenceRange(para, para.length - 1)))
+        assertNull(ReadingWords.sentenceRange("  ", 0))
+    }
+
+    @Test fun selectionCanBeSpannedExtendedAndShrunk() {
+        val sleep = ReadingWords.rangeAt(para, 7)!!
+        val lot = ReadingWords.rangeAt(para, 14)!!
+        val both = ReadingWords.span(lot, sleep)
+        assertEquals("sleep a lot", cut(both))
+        assertEquals("Cats sleep a lot", cut(ReadingWords.extendLeft(para, both)))
+        assertEquals("sleep a", cut(ReadingWords.shrink(para, both)))
+        assertEquals("sleep", cut(ReadingWords.shrink(para, sleep)))
+        assertEquals(sleep, ReadingWords.shrink(para, sleep))
+        val first = ReadingWords.rangeAt(para, 1)!!
+        assertEquals(first, ReadingWords.extendLeft(para, first))
+        val last = ReadingWords.rangeAt(para, para.length - 2)!!
+        assertEquals(last, ReadingWords.extendRight(para, last))
+    }
+
+    @Test fun extendRightTakesTheNextWordAcrossPunctuation() {
+        val lot = ReadingWords.rangeAt(para, 14)!!
+        assertEquals("lot. They", cut(ReadingWords.extendRight(para, lot)))
+    }
+
+    @Test fun lookupTextCleansPhrases() {
+        assertEquals("give up", ReadingWords.lookupText("give  up,"))
+        assertEquals("Gutenberg", ReadingWords.lookupText("Gutenberg's"))
+        assertEquals("a lot of people", ReadingWords.lookupText("“a lot of people.”"))
+    }
 }
+
