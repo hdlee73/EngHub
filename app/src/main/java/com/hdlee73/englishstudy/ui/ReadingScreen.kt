@@ -128,6 +128,8 @@ private fun ArticleView(
     var selected by remember(article.id) { mutableStateOf<Pair<Int, IntRange>?>(null) }
     val selectedText = selected?.let { (p, range) -> article.paragraphs[p].substring(range.first, range.last + 1) }
     LaunchedEffect(selectedText) { onClearSnippet() }
+    // While a range is being dragged the panel stays away, so the text does not move under the finger.
+    var dragging by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -139,15 +141,16 @@ private fun ArticleView(
                 colors = ButtonDefaults.buttonColors(containerColor = if (state.showTranslation) SoftBlue else Blue, contentColor = if (state.showTranslation) Blue else Color.White)
             ) { Text(if (state.showTranslation) "번역 숨기기" else "🇰🇷 전체 번역", fontSize = 14.sp) }
         }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(article.topic, color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text(article.title, color = Ink, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 32.sp)
             Text("단어를 누르거나, 길게 누른 채 끌어 구·문장을 고르세요 · 약 ${article.minutes}분", color = Muted, fontSize = 12.sp)
             article.paragraphs.forEachIndexed { index, paragraph ->
-                TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second) { range -> selected = index to range }
+                TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, { dragging = it }) { range -> selected = index to range }
                 if (state.showTranslation) {
                     val korean = state.translations[index]
                     Text(
@@ -156,15 +159,16 @@ private fun ArticleView(
                     )
                 }
             }
-            Spacer(Modifier.height(if (selectedText != null) 260.dp else 24.dp))
+            // Constant room at the end, so showing or hiding the panel never moves the text.
+            Spacer(Modifier.height(280.dp))
         }
         val current = selected
-        if (selectedText != null && current != null) {
+        if (selectedText != null && current != null && !dragging) {
             val (paragraphIndex, range) = current
             val paragraph = article.paragraphs[paragraphIndex]
             val query = ReadingWords.lookupText(selectedText)
             val snippet = state.snippet?.takeIf { it.text == selectedText }
-            Surface(shadowElevation = 12.dp, color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
+            Surface(Modifier.align(Alignment.BottomCenter), shadowElevation = 12.dp, color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -202,12 +206,13 @@ private fun ArticleView(
                 }
             }
         }
+        }
     }
 }
 
 /** A paragraph whose words can be tapped, or selected as a range by long-pressing and dragging; the selection is highlighted. */
 @Composable
-private fun TappableParagraph(text: String, highlight: IntRange?, onSelect: (IntRange) -> Unit) {
+private fun TappableParagraph(text: String, highlight: IntRange?, onDragging: (Boolean) -> Unit, onSelect: (IntRange) -> Unit) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val styled = remember(text, highlight) {
         buildAnnotatedString {
@@ -231,7 +236,9 @@ private fun TappableParagraph(text: String, highlight: IntRange?, onSelect: (Int
             .pointerInput(text) {
                 var anchor: IntRange? = null
                 detectDragGesturesAfterLongPress(
-                    onDragStart = { position -> anchor = wordAt(position); anchor?.let(onSelect) },
+                    onDragStart = { position -> onDragging(true); anchor = wordAt(position); anchor?.let(onSelect) },
+                    onDragEnd = { onDragging(false) },
+                    onDragCancel = { onDragging(false) },
                     onDrag = { change, _ ->
                         change.consume()
                         val start = anchor
