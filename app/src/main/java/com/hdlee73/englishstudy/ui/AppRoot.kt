@@ -105,7 +105,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                 if (!barVisible) {
                     // A thin strip above the system bar: dragging it upward brings the tab bar up. Its handle shows where.
                     Box(
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
+                        Modifier.align(Alignment.BottomCenter).size(width = 180.dp, height = 64.dp)
                             .pointerInput(Unit) {
                                 var travelled = 0f
                                 detectVerticalDragGestures(
@@ -122,7 +122,17 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { barVisible = true },
                         contentAlignment = Alignment.BottomCenter
                     ) {
-                        Box(Modifier.padding(bottom = 6.dp).size(width = 44.dp, height = 5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x66285BE6)))
+                        // A "^" button well above the phone's own navigation gesture line, so the two are never confused.
+                        Box(
+                            Modifier.padding(bottom = 22.dp).size(width = 56.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xE6FFFFFF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DrawCanvas(Modifier.size(width = 22.dp, height = 12.dp)) {
+                                val stroke = 3.dp.toPx()
+                                drawLine(Blue, Offset(stroke / 2, size.height - stroke / 2), Offset(size.width / 2, stroke / 2), stroke, StrokeCap.Round)
+                                drawLine(Blue, Offset(size.width / 2, stroke / 2), Offset(size.width - stroke / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
+                            }
+                        }
                     }
                 }
             }
