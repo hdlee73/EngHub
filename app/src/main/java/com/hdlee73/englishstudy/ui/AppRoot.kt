@@ -100,12 +100,12 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                 }
             }
         ) { inner: PaddingValues ->
-            Box(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding()) {
-                content(tab)
+            Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) { content(tab) }
                 if (!barVisible) {
-                    // A thin strip above the system bar: dragging it upward brings the tab bar up. Its handle shows where.
+                    // A strip across the whole width, above the phone's own navigation bar: swipe up on it, or tap the "^", to show the tab bar.
                     Box(
-                        Modifier.align(Alignment.BottomCenter).size(width = 180.dp, height = 64.dp)
+                        Modifier.fillMaxWidth().height(40.dp)
                             .pointerInput(Unit) {
                                 var travelled = 0f
                                 detectVerticalDragGestures(
@@ -120,11 +120,10 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                                 )
                             }
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { barVisible = true },
-                        contentAlignment = Alignment.BottomCenter
+                        contentAlignment = Alignment.Center
                     ) {
-                        // A "^" button well above the phone's own navigation gesture line, so the two are never confused.
                         Box(
-                            Modifier.padding(bottom = 22.dp).size(width = 56.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xE6FFFFFF)),
+                            Modifier.size(width = 56.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xE6FFFFFF)),
                             contentAlignment = Alignment.Center
                         ) {
                             DrawCanvas(Modifier.size(width = 22.dp, height = 12.dp)) {

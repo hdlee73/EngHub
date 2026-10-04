@@ -1,7 +1,14 @@
 package com.hdlee73.englishstudy.reading
 
 /** One reading text: a topic, a title and its paragraphs. [id] is the position in the library file ("a001"…). */
-data class ReadingArticle(val id: String, val topic: String, val title: String, val paragraphs: List<String>) {
+data class ReadingArticle(
+    val id: String, val topic: String, val title: String, val paragraphs: List<String>,
+    /** "중급" / "고급", or empty for the bundled texts. */
+    val level: String = "",
+    /** Where a downloaded text comes from and under which license; empty for the bundled texts. */
+    val credit: String = "",
+    val url: String = ""
+) {
     val wordCount: Int get() = paragraphs.sumOf { p -> p.split(Regex("\\s+")).count { it.isNotBlank() } }
     /** Reading time at a comfortable learner's pace of about 150 words a minute. */
     val minutes: Int get() = maxOf(1, (wordCount + 74) / 150)

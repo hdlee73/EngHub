@@ -173,3 +173,14 @@ fun copyToClipboard(context: android.content.Context, text: String) {
     manager?.setPrimaryClip(android.content.ClipData.newPlainText("English Study", text))
     android.widget.Toast.makeText(context, "복사했습니다", android.widget.Toast.LENGTH_SHORT).show()
 }
+
+/** A bar at the top of a screen that takes the learner back to where they came from. */
+@Composable
+fun ReturnBar(label: String, onClick: () -> Unit) {
+    androidx.compose.foundation.layout.Row(
+        Modifier.fillMaxWidth().background(SoftBlue).clickable { onClick() }.padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("←  $label", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+    }
+}
