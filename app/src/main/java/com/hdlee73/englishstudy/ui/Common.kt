@@ -100,29 +100,29 @@ fun Hero(
  * [progress] runs from 0 to 1.
  */
 @Composable
-fun StudyTopBar(title: String, primary: String, secondary: String, progress: Float, accent: Color, onClose: () -> Unit) {
+fun StudyTopBar(title: String, primary: String, secondary: String, progress: Float, accent: Color, onClose: () -> Unit, compact: Boolean = false) {
     val animated by androidx.compose.animation.core.animateFloatAsState(progress.coerceIn(0f, 1f), label = "progress")
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White).padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(if (compact) 16.dp else 22.dp)).background(Color.White).padding(horizontal = 10.dp, vertical = if (compact) 6.dp else 10.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
-                Modifier.size(38.dp).clip(RoundedCornerShape(19.dp)).background(SoftBlue).clickable { onClose() },
+                Modifier.size(if (compact) 30.dp else 38.dp).clip(RoundedCornerShape(19.dp)).background(SoftBlue).clickable { onClose() },
                 contentAlignment = Alignment.Center
             ) { Text("✕", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
             Text(title, color = Ink, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
             Text(
                 primary, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(accent).padding(horizontal = 12.dp, vertical = 5.dp)
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(accent).padding(horizontal = 12.dp, vertical = if (compact) 3.dp else 5.dp)
             )
             Text(
                 secondary, color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(accent.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 5.dp)
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(accent.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = if (compact) 3.dp else 5.dp)
             )
         }
-        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE3EAF8))) {
-            Box(Modifier.fillMaxWidth(animated).height(8.dp).clip(RoundedCornerShape(4.dp)).background(accent))
+        Box(Modifier.fillMaxWidth().height(if (compact) 6.dp else 8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE3EAF8))) {
+            Box(Modifier.fillMaxWidth(animated).height(if (compact) 6.dp else 8.dp).clip(RoundedCornerShape(4.dp)).background(accent))
         }
     }
 }

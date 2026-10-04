@@ -131,27 +131,31 @@ private fun QuizQuestionView(
     val question = state.question ?: return
     val selected = state.selected
     val answered = selected != null
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+    // The cover screen of a folded foldable is short: smaller bars, text and choices keep the whole question in view.
+    val tight = maxHeight < 600.dp
+    val choiceHeight = if (tight) 42.dp else 50.dp
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = if (tight) 4.dp else 8.dp)) {
         StudyTopBar(
             title = "퀴즈", primary = "${state.index + 1} / ${state.total}", secondary = "정답 ${state.correct}",
-            progress = if (state.total == 0) 0f else (state.index + if (answered) 1 else 0).toFloat() / state.total, accent = Blue, onClose = onEnd
+            progress = if (state.total == 0) 0f else (state.index + if (answered) 1 else 0).toFloat() / state.total, accent = Blue, onClose = onEnd, compact = tight
         )
         // Question and choices scroll if the screen is very short; the two buttons below never move.
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = if (tight) 6.dp else 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (tight) 6.dp else 8.dp)
         ) {
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(if (tight) 12.dp else 16.dp),
+                verticalArrangement = Arrangement.spacedBy(if (tight) 4.dp else 6.dp)
             ) {
                 if (answered) {
-                    Text(highlighted(question.sentence, question.word), color = Ink, fontSize = 19.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
+                    Text(highlighted(question.sentence, question.word), color = Ink, fontSize = if (tight) 17.sp else 19.sp, lineHeight = if (tight) 23.sp else 26.sp, fontWeight = FontWeight.SemiBold)
                 } else {
-                    Text(question.blankedSentence, color = Ink, fontSize = 19.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
+                    Text(question.blankedSentence, color = Ink, fontSize = if (tight) 17.sp else 19.sp, lineHeight = if (tight) 23.sp else 26.sp, fontWeight = FontWeight.SemiBold)
                 }
                 if (question.translation.isNotBlank()) {
-                    Text(question.translation, color = Muted, fontSize = 15.sp, lineHeight = 21.sp)
+                    Text(question.translation, color = Muted, fontSize = if (tight) 13.sp else 15.sp, lineHeight = if (tight) 18.sp else 21.sp)
                 } else if (question.meaningHint.isNotBlank()) {
                     Text("뜻: ${question.meaningHint}", color = Muted, fontSize = 15.sp)
                 }
@@ -174,7 +178,7 @@ private fun QuizQuestionView(
                 }
                 Button(
                     onClick = { onChoose(index) },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    modifier = Modifier.fillMaxWidth().height(choiceHeight),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = container, contentColor = if (marked) Color.White else Ink,
@@ -188,14 +192,15 @@ private fun QuizQuestionView(
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = { onSpeak(question.sentence) }, enabled = answered,
-                modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.weight(1f).height(choiceHeight), shape = RoundedCornerShape(14.dp)
             ) { Text("🔊 예문 듣기", fontSize = 15.sp, maxLines = 1) }
             Button(
                 onClick = onNext, enabled = answered,
-                modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f).height(choiceHeight), shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Blue)
             ) { Text(if (state.index + 1 >= state.total) "결과 보기" else "다음 문제", fontSize = 15.sp, maxLines = 1) }
         }
+    }
     }
 }
 

@@ -12,7 +12,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -60,6 +66,28 @@ enum class AppTab(val label: String, val emoji: String) {
     SPEAKING("스피킹", "🎤")
 }
 
+/** The tab bar: a slim row of icons with small labels, above the phone's own navigation bar. */
+@Composable
+private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 4.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        AppTab.values().forEach { item ->
+            val selected = item == tab
+            Column(
+                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp))
+                    .background(if (selected) SoftBlue else Color.Transparent)
+                    .selectable(selected = selected, role = Role.Tab, onClick = { onTab(item) }),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+            ) {
+                Text(item.emoji, fontSize = 18.sp, lineHeight = 22.sp)
+                Text(item.label, fontSize = 11.sp, lineHeight = 13.sp, color = if (selected) Blue else Muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+            }
+        }
+    }
+}
+
 private const val HINT_PREFS = "ui"
 private const val HINT_KEY = "menu_hint_seen"
 
@@ -80,7 +108,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                 if (barVisible) Column {
                     // A small "v" above the bar folds it away (the "^" at the bottom of the screen brings it back).
                     Box(
-                        Modifier.fillMaxWidth().height(22.dp).background(Color.White)
+                        Modifier.fillMaxWidth().height(18.dp).background(Color.White)
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 barVisible = false
                                 // The first time, a picture shows how to bring the bar back.
@@ -88,23 +116,13 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        DrawCanvas(Modifier.size(width = 20.dp, height = 10.dp)) {
-                            val stroke = 2.6.dp.toPx()
+                        DrawCanvas(Modifier.size(width = 18.dp, height = 8.dp)) {
+                            val stroke = 2.4.dp.toPx()
                             drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
                             drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
                         }
                     }
-                    NavigationBar(containerColor = Color.White) {
-                        AppTab.values().forEach { item ->
-                            NavigationBarItem(
-                                selected = item == tab,
-                                onClick = { onTab(item) },
-                                icon = { Text(item.emoji, fontSize = 20.sp) },
-                                label = { Text(item.label) },
-                                colors = NavigationBarItemDefaults.colors(indicatorColor = SoftBlue)
-                            )
-                        }
-                    }
+                    TabBar(tab, onTab)
                 } else {
                     // Keeps the screen above the phone's navigation bar while the tab bar is away.
                     Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars))
