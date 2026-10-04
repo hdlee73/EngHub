@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBar
@@ -69,13 +70,27 @@ enum class AppTab(val label: String, val emoji: String) {
 
 /** The tab bar: a slim row of icons with small labels, above the phone's own navigation bar. */
 @Composable
-private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit) {
+private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onHide: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 4.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         AppTab.values().forEach { item ->
             val selected = item == tab
+            // The fold-away arrow sits in its own narrow slot between 퀴즈 and 리딩, inside the bar.
+            if (item == AppTab.READING) {
+                Box(
+                    Modifier.width(30.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onHide),
+                    contentAlignment = Alignment.Center
+                ) {
+                    DrawCanvas(Modifier.size(width = 18.dp, height = 9.dp)) {
+                        val stroke = 2.6.dp.toPx()
+                        drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
+                        drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
+                    }
+                }
+            }
             Column(
                 Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp))
                     .background(if (selected) SoftBlue else Color.Transparent)
@@ -94,7 +109,7 @@ private const val HINT_KEY = "menu_hint_seen"
 
 /**
  * The tabs of the app; the screen of the selected tab is drawn by [content].
- * The tab bar can be folded away with the small "v" above it; swipe up on the strip at the bottom (or tap the "^") to bring it back.
+ * The tab bar can be folded away with the small "v" inside it, between 퀴즈 and 리딩; swipe up on the strip at the bottom (or tap the "^") to bring it back.
  * It never covers the phone's own navigation bar.
  */
 @Composable
@@ -106,24 +121,12 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
         Scaffold(
             containerColor = Canvas,
             bottomBar = {
-                if (barVisible) Column {
-                    // A small "v" above the bar folds it away (the "^" at the bottom of the screen brings it back).
-                    Box(
-                        Modifier.fillMaxWidth().height(18.dp).background(Color.White)
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                barVisible = false
-                                // The first time, a picture shows how to bring the bar back.
-                                if (!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) showHint = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        DrawCanvas(Modifier.size(width = 18.dp, height = 8.dp)) {
-                            val stroke = 2.4.dp.toPx()
-                            drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
-                            drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
-                        }
-                    }
-                    TabBar(tab, onTab)
+                if (barVisible) {
+                    TabBar(tab, onTab, onHide = {
+                        barVisible = false
+                        // The first time, a picture shows how to bring the bar back.
+                        if (!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) showHint = true
+                    })
                 } else {
                     // Keeps the screen above the phone's navigation bar while the tab bar is away.
                     Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars))
