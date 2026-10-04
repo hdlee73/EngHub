@@ -26,6 +26,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,22 +71,58 @@ fun meaningLines(korean: String): List<String> = korean.lines().map { it.trim() 
 private val HeroStart = Color(0xFF4F7CFF)
 private val HeroEnd = Color(0xFF8B5CF6)
 
-/** The colourful banner at the top of the study setup screens. */
+/** The colourful banner at the top of every screen. [trailing] puts buttons at its right end; [compact] makes it slimmer. */
 @Composable
-fun Hero(emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier) {
+fun Hero(
+    emoji: String, title: String, subtitle: String, modifier: Modifier = Modifier,
+    compact: Boolean = false, trailing: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null
+) {
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+        modifier.fillMaxWidth().clip(RoundedCornerShape(if (compact) 20.dp else 24.dp))
             .background(Brush.linearGradient(listOf(HeroStart, HeroEnd)))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = if (compact) 8.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(Color.White.copy(alpha = 0.22f)),
+            Modifier.size(if (compact) 38.dp else 46.dp).clip(RoundedCornerShape(if (compact) 12.dp else 15.dp)).background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center
-        ) { Text(emoji, fontSize = 24.sp) }
-        Column(Modifier.padding(start = 14.dp)) {
-            Text(title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-            Text(subtitle, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
+        ) { Text(emoji, fontSize = if (compact) 20.sp else 24.sp) }
+        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+            Text(title, color = Color.White, fontSize = if (compact) 19.sp else 21.sp, fontWeight = FontWeight.ExtraBold)
+            if (!compact) Text(subtitle, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
+        }
+        trailing?.invoke(this)
+    }
+}
+
+/**
+ * The top of a running study screen: a round close button, the title, two small stat pills and a rounded progress bar.
+ * [progress] runs from 0 to 1.
+ */
+@Composable
+fun StudyTopBar(title: String, primary: String, secondary: String, progress: Float, accent: Color, onClose: () -> Unit) {
+    val animated by androidx.compose.animation.core.animateFloatAsState(progress.coerceIn(0f, 1f), label = "progress")
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier.size(38.dp).clip(RoundedCornerShape(19.dp)).background(SoftBlue).clickable { onClose() },
+                contentAlignment = Alignment.Center
+            ) { Text("✕", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            Text(title, color = Ink, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            Text(
+                primary, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(accent).padding(horizontal = 12.dp, vertical = 5.dp)
+            )
+            Text(
+                secondary, color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(accent.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 5.dp)
+            )
+        }
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE3EAF8))) {
+            Box(Modifier.fillMaxWidth(animated).height(8.dp).clip(RoundedCornerShape(4.dp)).background(accent))
         }
     }
 }

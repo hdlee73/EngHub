@@ -82,7 +82,9 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
         }
     }
 
-    fun speak(text: String) {
+    fun speak(raw: String) {
+        // Never read pronunciation symbols aloud ("remnant [rémnənt]" is spoken as "remnant").
+        val text = com.hdlee73.englishstudy.study.WordIpa.speakable(raw)
         if (closed || text.isBlank()) return
         if (!ready) {
             pending = text

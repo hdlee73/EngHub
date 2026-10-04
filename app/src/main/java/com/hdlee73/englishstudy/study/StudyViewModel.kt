@@ -131,7 +131,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
                 .distinctBy { it.english.trim().lowercase(Locale.ROOT) }
             fNames[dataset.id] = dataset.name.substringBeforeLast('.')
             fCards[dataset.id] = loaded.mapIndexed { i, p ->
-                WordEntry(id = i + 1L, word = p.english.trim(), ipa = "", korean = p.korean.trim(), english = "", examples = "")
+                WordIpa.split(p.english).let { (word, ipa) -> WordEntry(id = i + 1L, word = word, ipa = ipa, korean = p.korean.trim(), english = "", examples = "") }
             }
         }
         flashNames = fNames; flashCards = fCards

@@ -132,16 +132,9 @@ private fun QuizQuestionView(
     val selected = state.selected
     val answered = selected != null
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onEnd) { Text("← 그만하기") }
-            Text(
-                "${state.index + 1} / ${state.total} · 정답 ${state.correct}",
-                color = Muted, fontSize = 14.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f)
-            )
-        }
-        LinearProgressIndicator(
-            progress = { if (state.total == 0) 0f else (state.index + if (answered) 1 else 0).toFloat() / state.total },
-            modifier = Modifier.fillMaxWidth(), color = Blue
+        StudyTopBar(
+            title = "퀴즈", primary = "${state.index + 1} / ${state.total}", secondary = "정답 ${state.correct}",
+            progress = if (state.total == 0) 0f else (state.index + if (answered) 1 else 0).toFloat() / state.total, accent = Blue, onClose = onEnd
         )
         // Question and choices scroll if the screen is very short; the two buttons below never move.
         Column(

@@ -101,12 +101,8 @@ fun DictionaryScreen(
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            // Title banner
-            Box(
-                Modifier.padding(top = 10.dp, bottom = 12.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFFE3EDF5), Color(0xFFEEEAF5))))
-                    .padding(horizontal = 18.dp, vertical = 12.dp)
-            ) { Text("영어단어장", color = DictDark, fontSize = 23.sp, fontWeight = FontWeight.Bold) }
+            // The same banner as the other tabs.
+            Hero("📖", "영어단어장", "단어·숙어·구동사를 찾고 저장해요", Modifier.padding(top = 10.dp, bottom = 12.dp))
 
             // Search field: results appear while typing, so there is no search button.
             Row(
