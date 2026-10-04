@@ -79,6 +79,21 @@ internal object ReadingWords {
         return i
     }
 
+    /** Start of the first word at or after the cursor [offset]; null when no word follows. */
+    fun wordStartFrom(text: String, offset: Int): Int? {
+        val i = wordStartAfter(text, offset.coerceIn(0, text.length))
+        if (i >= text.length) return null
+        return rangeAt(text, i)?.first
+    }
+
+    /** End (inclusive) of the last word that ends at or before the cursor [offset]; null when no word precedes. */
+    fun wordEndBefore(text: String, offset: Int): Int? {
+        var i = offset.coerceIn(0, text.length) - 1
+        while (i >= 0 && !isLetter(text[i])) i--
+        if (i < 0) return null
+        return rangeAt(text, i)?.last
+    }
+
     /** The sentence that contains [offset] (up to and including its closing punctuation). */
     fun sentenceRange(text: String, offset: Int): IntRange? {
         if (text.isBlank()) return null
