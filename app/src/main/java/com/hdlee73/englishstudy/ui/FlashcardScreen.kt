@@ -160,16 +160,9 @@ private fun FlashcardStudy(
 ) {
     val card = state.card ?: return
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onEnd) { Text("← 그만하기") }
-            Text(
-                "${state.known} / ${state.total} · 남은 카드 ${state.remaining}",
-                color = Muted, fontSize = 14.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f)
-            )
-        }
-        LinearProgressIndicator(
-            progress = { if (state.total == 0) 0f else state.known.toFloat() / state.total },
-            modifier = Modifier.fillMaxWidth(), color = Mint
+        StudyTopBar(
+            title = "카드 암기", primary = "${state.known} / ${state.total}", secondary = "남은 ${state.remaining}",
+            progress = if (state.total == 0) 0f else state.known.toFloat() / state.total, accent = Mint, onClose = onEnd
         )
         FlipCard(card, state.flipped, state.frontIsWord, card.word.length > 28, onFlip, onAnswer, onSpeak, Modifier.weight(1f).fillMaxWidth())
         if (state.flipped) {

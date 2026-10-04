@@ -109,20 +109,25 @@ fun SpeakFlowApp(
 
 @Composable
 private fun TopBar(state: LearningUiState, compact: Boolean, onImport: () -> Unit, onSettings: () -> Unit) {
-    Surface(color = Color.White.copy(alpha = .72f), shadowElevation = 2.dp) {
-        Row(
-            Modifier.fillMaxWidth().height(if (compact) 52.dp else 66.dp).padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilledTonalButton(onClick = onImport, contentPadding = PaddingValues(horizontal = 12.dp), shape = RoundedCornerShape(14.dp)) {
-                Icon(painterResource(R.drawable.ic_database), null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("데이터")
+    // The same banner as the other tabs, with the two buttons at its right end.
+    Box(Modifier.padding(horizontal = 16.dp).padding(top = if (compact) 6.dp else 10.dp, bottom = 6.dp)) {
+        com.hdlee73.englishstudy.ui.Hero(
+            "🎤", "문장 말하기", "듣고 따라 말해요", compact = compact,
+            trailing = {
+                BannerButton(R.drawable.ic_database, "데이터", onImport)
+                Spacer(Modifier.width(8.dp))
+                BannerButton(R.drawable.ic_settings, "설정", onSettings)
             }
-            Text("문장 말하기", Modifier.weight(1f), textAlign = TextAlign.Center, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Ink)
-            FilledTonalButton(onClick = onSettings, contentPadding = PaddingValues(horizontal = 12.dp), shape = RoundedCornerShape(14.dp)) {
-                Icon(painterResource(R.drawable.ic_settings), null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("설정")
-            }
-        }
+        )
     }
+}
+
+@Composable
+private fun BannerButton(iconRes: Int, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.22f)).clickable(onClickLabel = description) { onClick() },
+        contentAlignment = Alignment.Center
+    ) { Icon(painterResource(iconRes), description, Modifier.size(21.dp), tint = Color.White) }
 }
 
 /** Starts speaking practice with the example sentences of the words saved in the dictionary. */

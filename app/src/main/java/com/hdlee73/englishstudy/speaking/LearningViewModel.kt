@@ -61,8 +61,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
                     datasetName = selected.joinToString(" → ") { dataset -> dataset.name },
                     activeDatasetId = selected.singleOrNull()?.id ?: "playlist",
                     phase = if (saved.completed) LessonPhase.COMPLETE else LessonPhase.PAUSED,
-                    message = if (saved.completed) "지난 학습을 완료했습니다. 처음부터 버튼으로 다시 시작할 수 있어요."
-                        else "마지막 학습 위치를 불러왔습니다. 재생 버튼을 누르면 이어집니다.") }
+                    message = null) }
                 true
             }.getOrDefault(false)
         } ?: false
