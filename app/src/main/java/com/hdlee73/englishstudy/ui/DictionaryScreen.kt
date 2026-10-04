@@ -2,6 +2,7 @@ package com.hdlee73.englishstudy.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -22,30 +24,51 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hdlee73.englishstudy.dictionary.DictionaryUiState
 import com.hdlee73.englishstudy.dictionary.SavedSort
 import com.hdlee73.englishstudy.dictionary.WordEntry
 import com.hdlee73.englishstudy.dictionary.displayExamples
+import com.hdlee73.englishstudy.dictionary.examplePairs
+import kotlin.math.abs
+
+// The look of the original dictionary app: soft blue-grey cards, lavender 듣기 and green 저장 buttons.
+private val DictBlue = Color(0xFF486A90)
+private val DictDark = Color(0xFF182230)
+private val DictGrey = Color(0xFF526174)
+private val ListenFill = Color(0xFFEEE9F7)
+private val ListenInk = Color(0xFF655880)
+private val SaveFill = Color(0xFFDFF0E7)
+private val SaveInk = Color(0xFF386752)
+private val TabOn = Color(0xFFDCE8F2)
+private val TabOff = Color(0xFFEDF0F4)
 
 private val ExportFormats = listOf(
     "단어·뜻·영어 예문(한글 해석 병기)",
@@ -72,32 +95,47 @@ fun DictionaryScreen(
     var sortOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<WordEntry?>(null) }
-    var confirmDelete by remember { mutableStateOf<WordEntry?>(null) }
     val sorted = remember(saved, state.sort) { state.sort.apply(saved, { it.word }, { it.id }) }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            ScreenTitle("영어 사전", Modifier.padding(top = 12.dp, bottom = 8.dp))
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text("영어 단어나 숙어 (예: look forward to)") },
-                trailingIcon = {
-                    if (state.query.isNotEmpty()) TextButton(onClick = { onQueryChange("") }) { Text("✕") }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() })
-            )
-            Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !state.showSaved, onClick = { onShowSaved(false) }, label = { Text("검색 결과") })
-                FilterChip(selected = state.showSaved, onClick = { onShowSaved(true) }, label = { Text("저장 단어 (${saved.size})") })
+            // Title banner
+            Box(
+                Modifier.padding(top = 10.dp, bottom = 12.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFFE3EDF5), Color(0xFFEEEAF5))))
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
+            ) { Text("영어단어장", color = DictDark, fontSize = 23.sp, fontWeight = FontWeight.Bold) }
+
+            // Search field: results appear while typing, so there is no search button.
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(Color.White).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = state.query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = { Text("단어, 숙어 또는 구동사") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearch() })
+                )
+                if (state.query.isNotEmpty()) TextButton(onClick = { onQueryChange("") }) { Text("✕", color = DictGrey) }
             }
+
+            Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TabButton("검색 결과", !state.showSaved, Modifier.weight(1f)) { onShowSaved(false) }
+                TabButton("저장 단어", state.showSaved, Modifier.weight(1f)) { onShowSaved(true) }
+            }
+
             if (state.showSaved) {
                 SavedList(
                     sorted, state.sort, onSortClick = { sortOpen = true }, onExportClick = { exportOpen = true },
-                    onOpen = { detail = it }, onSpeak = onSpeak
+                    onOpen = { detail = it }, onResearch = onPickSuggestion, onDelete = onDelete
                 )
             } else {
                 SearchResult(state, saved, onPickSuggestion, onSave, onSpeak, onOpenUrl)
@@ -109,7 +147,7 @@ fun DictionaryScreen(
     if (sortOpen) {
         AlertDialog(
             onDismissRequest = { sortOpen = false },
-            title = { Text("정렬") },
+            title = { Text("저장 단어 정렬") },
             text = {
                 Column {
                     SavedSort.values().forEach { option ->
@@ -117,8 +155,8 @@ fun DictionaryScreen(
                             Modifier.fillMaxWidth().clickable { onSort(option); sortOpen = false }.padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(if (option == state.sort) "●  " else "○  ", color = Blue)
-                            Text(option.title, color = Ink)
+                            Text(if (option == state.sort) "●  " else "○  ", color = DictBlue)
+                            Text(option.title, color = DictDark)
                         }
                     }
                 }
@@ -129,12 +167,12 @@ fun DictionaryScreen(
     if (exportOpen) {
         AlertDialog(
             onDismissRequest = { exportOpen = false },
-            title = { Text("엑셀 내보내기 형식") },
+            title = { Text("내보내기 형식") },
             text = {
                 Column {
                     ExportFormats.forEachIndexed { index, label ->
                         Text(
-                            label, color = Ink,
+                            label, color = DictDark,
                             modifier = Modifier.fillMaxWidth().clickable { exportOpen = false; onExport(index + 1) }.padding(vertical = 14.dp)
                         )
                     }
@@ -148,18 +186,57 @@ fun DictionaryScreen(
         val current = saved.firstOrNull { it.id == entry.id }
         if (current == null) detail = null else AlertDialog(
             onDismissRequest = { detail = null },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) { EntryBody(current, onSpeak, onOpenUrl) } },
+            title = { Text(current.word + if (current.ipa.isBlank()) "" else "  " + current.ipa) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Section("한글 의미", current.korean)
+                    if (current.english.isNotBlank()) Section("English definition", current.english)
+                    val examples = displayExamples(current.examples)
+                    if (examples.isNotBlank()) Section("예문", examples)
+                }
+            },
             confirmButton = { TextButton(onClick = { detail = null }) { Text("닫기") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = current }) { Text("삭제", color = Miss) } }
+            dismissButton = { TextButton(onClick = { onSpeak(current.word) }) { Text("🔊 듣기") } }
         )
     }
-    confirmDelete?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { confirmDelete = null },
-            title = { Text("‘${entry.word}’ 삭제") },
-            text = { Text("저장한 단어를 삭제할까요? 암기·퀴즈 기록도 더는 쓰이지 않습니다.") },
-            confirmButton = { TextButton(onClick = { onDelete(entry); confirmDelete = null; detail = null }) { Text("삭제", color = Miss) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("취소") } }
+}
+
+@Composable
+private fun TabButton(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Button(
+        onClick = onClick, modifier = modifier.height(40.dp), shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = if (selected) TabOn else TabOff, contentColor = if (selected) DictBlue else Color(0xFF667384)),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        elevation = null
+    ) { Text(text, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
+}
+
+/** A small rounded action button like the original app's 듣기 / 저장 buttons. */
+@Composable
+private fun PillButton(text: String, fill: Color, ink: Color, width: androidx.compose.ui.unit.Dp, enabled: Boolean = true, onClick: () -> Unit) {
+    Button(
+        onClick = onClick, enabled = enabled, modifier = Modifier.width(width).height(40.dp), shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = fill, contentColor = ink, disabledContainerColor = fill, disabledContentColor = ink),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), elevation = null
+    ) { Text(text, fontSize = 12.sp, maxLines = 1) }
+}
+
+@Composable
+private fun Section(title: String, value: String) {
+    Text(title, color = DictBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, bottom = 3.dp))
+    Text(value.trim(), color = DictDark, fontSize = 16.sp, lineHeight = 22.sp)
+}
+
+/** Calls [onSwipe] when the finger is dragged sideways far enough (the original app's swipe gesture). */
+private fun Modifier.horizontalSwipe(key: Any?, onSwipe: () -> Unit): Modifier = composed {
+    val current by rememberUpdatedState(onSwipe)
+    pointerInput(key) {
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onDragEnd = { if (abs(total) > 160f) current(); total = 0f },
+            onDragCancel = { total = 0f },
+            onHorizontalDrag = { _, amount -> total += amount }
         )
     }
 }
@@ -175,52 +252,83 @@ private fun SearchResult(
 ) {
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state.searching) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                if (state.searching) Spacer(Modifier.size(8.dp))
-                Text(state.status, color = Muted, fontSize = 14.sp)
+            Row(Modifier.padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (state.searching) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+                Text(state.status, color = Color(0xFF5D6877), fontSize = 14.sp)
             }
         }
         if (state.suggestions.isNotEmpty()) {
             item {
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.padding(14.dp)) {
-                        if (state.suggestionTitle.isNotBlank()) Text(state.suggestionTitle, color = Muted, fontSize = 13.sp)
-                        state.suggestions.forEach { word ->
-                            Text(
-                                word, color = Blue, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.fillMaxWidth().clickable { onPickSuggestion(word) }.padding(vertical = 10.dp)
-                            )
-                        }
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(14.dp)) {
+                    if (state.suggestionTitle.isNotBlank()) Text(state.suggestionTitle, color = DictGrey, fontSize = 13.sp)
+                    state.suggestions.forEach { word ->
+                        Text(
+                            "$word   ›", color = DictBlue, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.fillMaxWidth().clickable { onPickSuggestion(word) }.padding(vertical = 10.dp)
+                        )
                     }
                 }
             }
         }
         state.entry?.let { entry ->
             item {
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(Modifier.padding(16.dp)) {
-                        EntryBody(entry, onSpeak, onOpenUrl)
-                        val alreadySaved = saved.any { it.word.equals(entry.word, ignoreCase = true) }
-                        Button(
-                            onClick = onSave,
-                            enabled = state.canSave,
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Blue)
-                        ) {
-                            Text(
-                                when {
-                                    !state.canSave -> "불러오는 중…"
-                                    alreadySaved -> "저장됨 · 다시 저장해 갱신"
-                                    else -> "★ 단어장에 저장"
-                                }
-                            )
-                        }
-                    }
-                }
+                val alreadySaved = saved.any { it.word.equals(entry.word, ignoreCase = true) }
+                EntryCard(entry, state.canSave, alreadySaved, onSave, onSpeak, onOpenUrl)
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+/** Word and pronunciation with 듣기 and 저장 right next to it, then meanings, examples and source. */
+@Composable
+private fun EntryCard(
+    entry: WordEntry,
+    canSave: Boolean,
+    alreadySaved: Boolean,
+    onSave: () -> Unit,
+    onSpeak: (String) -> Unit,
+    onOpenUrl: (String) -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White)
+            .horizontalSwipe(entry.word) { if (canSave) onSave() }.padding(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(entry.word, color = DictDark, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                if (entry.ipa.isNotBlank()) Text(entry.ipa, color = DictGrey, fontSize = 15.sp)
+            }
+            PillButton("🔊 듣기", ListenFill, ListenInk, 78.dp) { onSpeak(entry.word) }
+            Spacer(Modifier.width(6.dp))
+            PillButton(
+                if (alreadySaved) "✓ 저장" else "🔖 저장", SaveFill, SaveInk, 72.dp,
+                enabled = canSave && !alreadySaved, onClick = onSave
+            )
+        }
+        Section("한글 의미", entry.korean)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val encoded = java.net.URLEncoder.encode(entry.word, "UTF-8").replace("+", "%20")
+            Text("네이버 ", color = Color(0xFF64748B), fontSize = 12.sp)
+            Text(
+                "영한", color = DictBlue, fontSize = 12.sp, textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable { onOpenUrl("https://en.dict.naver.com/#/search?query=$encoded") }.padding(horizontal = 4.dp, vertical = 8.dp)
+            )
+            Text(" · ", color = Color(0xFF64748B), fontSize = 12.sp)
+            Text(
+                "영영", color = DictBlue, fontSize = 12.sp, textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable { onOpenUrl("https://dict.naver.com/enendict/#/search?query=$encoded") }.padding(horizontal = 4.dp, vertical = 8.dp)
+            )
+        }
+        if (entry.english.isNotBlank()) Section("English definition", entry.english)
+        val pairs = examplePairs(entry.examples)
+        if (pairs.isNotEmpty()) {
+            Section(if (pairs.any { it.second.isNotBlank() }) "예문 · 한국어 해석" else "영어 예문", displayExamples(entry.examples))
+        }
+        Text(
+            entry.source.ifBlank { "의미별 자체 정리 · 직접 작성한 한영 예문" }, color = Color(0xFF64748B), fontSize = 10.sp,
+            modifier = Modifier.padding(top = 12.dp)
+        )
     }
 }
 
@@ -231,58 +339,59 @@ private fun SavedList(
     onSortClick: () -> Unit,
     onExportClick: () -> Unit,
     onOpen: (WordEntry) -> Unit,
-    onSpeak: (String) -> Unit
+    onResearch: (String) -> Unit,
+    onDelete: (WordEntry) -> Unit
 ) {
     if (words.isEmpty()) {
-        EmptyState("⭐", "저장한 단어가 없어요", "단어를 검색한 뒤 ‘단어장에 저장’을 누르면 암기·퀴즈·스피킹에서 쓸 수 있어요.")
+        Text(
+            "아직 저장한 단어가 없습니다. 검색 결과에서 원하는 단어만 저장할 수 있어요.",
+            color = Color(0xFF5D6877), fontSize = 15.sp, modifier = Modifier.padding(4.dp, 14.dp)
+        )
         return
     }
-    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onSortClick, modifier = Modifier.weight(1f)) { Text("정렬: ${sort.title.substringBefore(" (")}", maxLines = 1) }
-        OutlinedButton(onClick = onExportClick, modifier = Modifier.weight(1f)) { Text("↗ 엑셀 내보내기", maxLines = 1) }
+    Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = onSortClick, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = TabOn, contentColor = DictBlue), elevation = null
+        ) { Text("정렬: " + sort.title.substringBefore(" ("), maxLines = 1, fontSize = 14.sp) }
+        Button(
+            onClick = onExportClick, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = SaveFill, contentColor = SaveInk), elevation = null
+        ) { Text("↗ 엑셀 내보내기", maxLines = 1, fontSize = 13.sp) }
     }
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(words, key = { it.id }) { entry ->
-            Card(Modifier.fillMaxWidth().clickable { onOpen(entry) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(entry.word, color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        val first = meaningLines(entry.korean).firstOrNull().orEmpty()
-                        if (first.isNotEmpty()) Text(first, color = Muted, fontSize = 14.sp, maxLines = 1)
+            var menuOpen by remember { mutableStateOf(false) }
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White)
+                    .horizontalSwipe(entry.id) { onDelete(entry) }
+                    .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f).clickable { onOpen(entry) }) {
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(entry.word) }
+                            if (entry.ipa.isNotBlank()) append("  " + entry.ipa)
+                        },
+                        color = DictDark, fontSize = 18.sp
+                    )
+                    Text(entry.korean.trim(), color = DictGrey, fontSize = 14.sp, maxLines = 2)
+                }
+                PillButton("보기", TabOff, DictBlue, 56.dp) { onOpen(entry) }
+                Box {
+                    Button(
+                        onClick = { menuOpen = true }, modifier = Modifier.padding(start = 4.dp).size(40.dp), shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = TabOff, contentColor = DictBlue),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), elevation = null
+                    ) { Text("⋯", fontSize = 22.sp) }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(text = { Text("다시 검색") }, onClick = { menuOpen = false; onResearch(entry.word) })
+                        DropdownMenuItem(text = { Text("삭제") }, onClick = { menuOpen = false; onDelete(entry) })
                     }
-                    TextButton(onClick = { onSpeak(entry.word) }) { Text("🔊", fontSize = 20.sp) }
                 }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
-    }
-}
-
-/** Word, pronunciation, Korean and English meanings, examples and links to the Naver dictionaries. */
-@Composable
-fun EntryBody(entry: WordEntry, onSpeak: (String) -> Unit, onOpenUrl: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(entry.word, color = Ink, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-                if (entry.ipa.isNotBlank()) Text(entry.ipa, color = Muted, fontSize = 15.sp)
-            }
-            TextButton(onClick = { onSpeak(entry.word) }) { Text("🔊", fontSize = 24.sp) }
-        }
-        if (entry.korean.isNotBlank()) Text(entry.korean.trim(), color = Ink, fontSize = 16.sp, lineHeight = 22.sp)
-        if (entry.english.isNotBlank()) {
-            Text("영어 풀이", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(entry.english.trim(), color = Ink, fontSize = 15.sp, lineHeight = 21.sp)
-        }
-        val examples = displayExamples(entry.examples)
-        if (examples.isNotBlank()) {
-            Text("예문", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(examples.trim(), color = Ink, fontSize = 15.sp, lineHeight = 21.sp)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val encoded = java.net.URLEncoder.encode(entry.word, "UTF-8").replace("+", "%20")
-            OutlinedButton(onClick = { onOpenUrl("https://en.dict.naver.com/#/search?query=$encoded") }) { Text("영한 ↗", fontSize = 13.sp) }
-            OutlinedButton(onClick = { onOpenUrl("https://dict.naver.com/enendict/#/search?query=$encoded") }) { Text("영영 ↗", fontSize = 13.sp) }
-        }
     }
 }

@@ -5,22 +5,35 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hdlee73.englishstudy.dictionary.SavedWordsRepository
 import com.hdlee73.englishstudy.dictionary.WordEntry
+import com.hdlee73.englishstudy.speaking.data.DatasetStore
+import com.hdlee73.englishstudy.speaking.model.SentencePair
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
+
+/** Id of the source that stands for the words saved in the dictionary. */
+const val SAVED_SOURCE = "saved"
+
+/** Something to study: the saved words, or one speaking dataset. [count] is how many cards or questions it offers. */
+data class StudySource(val id: String, val label: String, val count: Int)
 
 enum class StudyStage { SETUP, STUDY, DONE }
 
 data class FlashcardUiState(
     val stage: StudyStage = StudyStage.SETUP,
-    val savedCount: Int = 0,
+    val sources: List<StudySource> = listOf(StudySource(SAVED_SOURCE, "저장 단어", 0)),
+    val sourceId: String = SAVED_SOURCE,
+    /** Cards in the chosen source. */
+    val cardCount: Int = 0,
     val masteredCount: Int = 0,
     val deckCounts: Map<DeckFilter, Int> = emptyMap(),
     val filter: DeckFilter = DeckFilter.TO_LEARN,
     val shuffle: Boolean = true,
-    /** true: the word is on the front and the meaning on the back; false: the other way round. */
+    /** true: the word (or English sentence) is on the front and the meaning on the back; false: the other way round. */
     val frontIsWord: Boolean = true,
     val card: WordEntry? = null,
     val flipped: Boolean = false,
@@ -29,14 +42,18 @@ data class FlashcardUiState(
     val remaining: Int = 0,
     val missedAnswers: Int = 0,
     val missedWords: List<WordEntry> = emptyList()
-)
+) {
+    /** Cards of a dataset are whole sentences, shown in a smaller type. */
+    val sentenceDeck: Boolean get() = sourceId != SAVED_SOURCE
+}
 
 enum class QuizStage { SETUP, QUESTION, RESULT }
 
 data class QuizUiState(
     val stage: QuizStage = QuizStage.SETUP,
-    val savedCount: Int = 0,
-    /** Saved words that have an example sentence the quiz can use. */
+    val sources: List<StudySource> = listOf(StudySource(SAVED_SOURCE, "저장 단어", 0)),
+    val sourceId: String = SAVED_SOURCE,
+    /** Questions the chosen source can offer (saved words need an example sentence; sentences need a Korean translation). */
     val eligibleCount: Int = 0,
     val requestedCount: Int = 10,
     val question: QuizQuestion? = null,
@@ -51,9 +68,10 @@ data class QuizUiState(
     val effectiveCount: Int get() = minOf(requestedCount, eligibleCount)
 }
 
-/** Flashcard and quiz sessions over the saved words. All rules live in the tested session classes. */
+/** Flashcard and quiz sessions over the saved words or a speaking dataset. All rules live in the tested session classes. */
 class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SavedWordsRepository.get(application)
+    private val datasetStore = DatasetStore(application)
     private val progress: ProgressStore = PrefsProgressStore(application)
 
     private val _flash = MutableStateFlow(FlashcardUiState())
@@ -64,35 +82,84 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private var flashSession: FlashcardSession? = null
     private var quizSession: QuizSession? = null
 
+    // The speaking datasets that have Korean translations, loaded in the background.
+    @Volatile private var datasetNames: Map<String, String> = emptyMap()
+    @Volatile private var datasetPairs: Map<String, List<SentencePair>> = emptyMap()
+    @Volatile private var datasetCards: Map<String, List<WordEntry>> = emptyMap()
+    @Volatile private var datasetQuizCounts: Map<String, Int> = emptyMap()
+
     init {
         viewModelScope.launch { repository.words.collect { refreshSetup() } }
     }
 
     private fun words(): List<WordEntry> = repository.words.value
 
-    /** Counts shown on the setup screens; also reflects words saved or deleted while the app is open. */
+    /** Counts shown on the setup screens; also reflects words saved and datasets added while the app is open. */
     fun refreshSetup() {
+        updateSetup()
+        viewModelScope.launch(Dispatchers.IO) {
+            loadDatasets()
+            updateSetup()
+        }
+    }
+
+    private fun loadDatasets() {
+        val names = LinkedHashMap<String, String>()
+        val pairs = LinkedHashMap<String, List<SentencePair>>()
+        val cards = LinkedHashMap<String, List<WordEntry>>()
+        val quizCounts = LinkedHashMap<String, Int>()
+        // The "saved words" dataset of the speaking tab only repeats the saved words, so it is not offered again.
+        for (dataset in datasetStore.list().filter { it.id != DatasetStore.SAVED_WORDS_ID }) {
+            // Sentences without a Korean translation cannot be studied here (nothing to put on the other side).
+            val loaded = runCatching { datasetStore.load(dataset) }.getOrNull().orEmpty()
+                .filter { it.korean.isNotBlank() && it.english.isNotBlank() }
+                .distinctBy { it.english.trim().lowercase(Locale.ROOT) }
+            if (loaded.isEmpty()) continue
+            names[dataset.id] = dataset.name.substringBeforeLast('.')
+            pairs[dataset.id] = loaded
+            cards[dataset.id] = loaded.mapIndexed { i, p ->
+                WordEntry(id = i + 1L, word = p.english.trim(), ipa = "", korean = p.korean.trim(), english = "", examples = "")
+            }
+            quizCounts[dataset.id] = SentenceQuizBuilder.eligible(loaded).size
+        }
+        datasetNames = names; datasetPairs = pairs; datasetCards = cards; datasetQuizCounts = quizCounts
+    }
+
+    private fun cardsFor(sourceId: String): List<WordEntry> =
+        if (sourceId == SAVED_SOURCE) words() else datasetCards[sourceId].orEmpty()
+
+    private fun updateSetup() {
         val all = words()
         val map = progress.all()
-        _flash.update {
-            it.copy(
-                savedCount = all.size,
-                masteredCount = all.count { w -> (map[progressKey(w.word)] ?: WordProgress()).mastered },
-                deckCounts = DeckFilter.values().associateWith { f -> FlashcardDeck.count(all, map, f) }
+        val flashSources = listOf(StudySource(SAVED_SOURCE, "저장 단어", all.size)) +
+            datasetCards.map { (id, cards) -> StudySource(id, datasetNames[id].orEmpty(), cards.size) }
+        _flash.update { state ->
+            val id = state.sourceId.takeIf { chosen -> flashSources.any { it.id == chosen } } ?: SAVED_SOURCE
+            val cards = if (id == SAVED_SOURCE) all else datasetCards[id].orEmpty()
+            state.copy(
+                sources = flashSources, sourceId = id, cardCount = cards.size,
+                masteredCount = cards.count { (map[progressKey(it.word)] ?: WordProgress()).mastered },
+                deckCounts = DeckFilter.values().associateWith { f -> FlashcardDeck.count(cards, map, f) }
             )
         }
-        _quiz.update { it.copy(savedCount = all.size, eligibleCount = QuizBuilder.eligible(all).size) }
+        val quizSources = listOf(StudySource(SAVED_SOURCE, "저장 단어", QuizBuilder.eligible(all).size)) +
+            datasetQuizCounts.filterValues { it > 0 }.map { (id, count) -> StudySource(id, datasetNames[id].orEmpty(), count) }
+        _quiz.update { state ->
+            val id = state.sourceId.takeIf { chosen -> quizSources.any { it.id == chosen } } ?: SAVED_SOURCE
+            state.copy(sources = quizSources, sourceId = id, eligibleCount = quizSources.first { it.id == id }.count)
+        }
     }
 
     // ---- flashcards ----
 
+    fun setFlashSource(id: String) { _flash.update { it.copy(sourceId = id) }; updateSetup() }
     fun setFilter(filter: DeckFilter) = _flash.update { it.copy(filter = filter) }
     fun setShuffle(shuffle: Boolean) = _flash.update { it.copy(shuffle = shuffle) }
     fun setFrontIsWord(value: Boolean) = _flash.update { it.copy(frontIsWord = value) }
 
     fun startFlashcards() {
         val s = _flash.value
-        val deck = FlashcardDeck.build(words(), progress.all(), s.filter, s.shuffle)
+        val deck = FlashcardDeck.build(cardsFor(s.sourceId), progress.all(), s.filter, s.shuffle)
         if (deck.isEmpty()) return
         beginFlashcards(deck)
     }
@@ -120,13 +187,13 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         val card = session.answer(knows) ?: return
         progress.update(card.word) { Leitner.afterCard(it, knows, System.currentTimeMillis()) }
         publishFlash(if (session.finished) StudyStage.DONE else StudyStage.STUDY)
-        if (session.finished) refreshSetup()
+        if (session.finished) updateSetup()
     }
 
     /** A new round with only the cards missed in the round that just ended. */
     fun retryMissedCards() {
         val ids = _flash.value.missedWords.map { it.id }.toSet()
-        val deck = words().filter { it.id in ids }
+        val deck = cardsFor(_flash.value.sourceId).filter { it.id in ids }
         if (deck.isEmpty()) return
         beginFlashcards(deck)
     }
@@ -134,17 +201,22 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     fun endFlashcards() {
         flashSession = null
         _flash.update { it.copy(stage = StudyStage.SETUP, card = null, flipped = false) }
-        refreshSetup()
+        updateSetup()
     }
 
     // ---- quiz ----
 
+    fun setQuizSource(id: String) { _quiz.update { it.copy(sourceId = id) }; updateSetup() }
     fun setQuizCount(count: Int) = _quiz.update { it.copy(requestedCount = count) }
 
     fun startQuiz() {
-        val count = _quiz.value.effectiveCount
+        val s = _quiz.value
+        val count = s.effectiveCount
         if (count <= 0) return
-        beginQuiz(QuizBuilder.build(words(), count))
+        beginQuiz(
+            if (s.sourceId == SAVED_SOURCE) QuizBuilder.build(words(), count)
+            else SentenceQuizBuilder.build(datasetPairs[s.sourceId].orEmpty(), count)
+        )
     }
 
     private fun beginQuiz(questions: List<QuizQuestion>) {
@@ -168,7 +240,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         val session = quizSession ?: return
         val question = session.current ?: return
         val right = session.choose(choice) ?: return
-        progress.update(question.word) { Leitner.afterQuiz(it, right, System.currentTimeMillis()) }
+        if (question.trackProgress) progress.update(question.word) { Leitner.afterQuiz(it, right, System.currentTimeMillis()) }
         publishQuiz()
     }
 
@@ -176,19 +248,22 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         val session = quizSession ?: return
         session.next()
         publishQuiz()
-        if (session.finished) refreshSetup()
+        if (session.finished) updateSetup()
     }
 
-    /** A new quiz made only from the words answered wrongly. */
+    /** A new quiz made only from the questions answered wrongly. */
     fun retryWrong() {
-        val ids = _quiz.value.wrong.map { it.wordId }.toSet()
-        val entries = words().filter { it.id in ids }
-        beginQuiz(QuizBuilder.build(entries, entries.size))
+        val wrong = _quiz.value.wrong
+        val ids = wrong.filter { it.trackProgress }.map { it.wordId }.toSet()
+        // Saved words get a fresh example sentence; dataset sentences are asked again with the choices reshuffled.
+        val fromSaved = QuizBuilder.build(words().filter { it.id in ids }, ids.size)
+        val fromDataset = wrong.filterNot { it.trackProgress }.map { it.reshuffled() }
+        beginQuiz((fromSaved + fromDataset).shuffled())
     }
 
     fun endQuiz() {
         quizSession = null
         _quiz.update { it.copy(stage = QuizStage.SETUP, question = null, selected = null) }
-        refreshSetup()
+        updateSetup()
     }
 }

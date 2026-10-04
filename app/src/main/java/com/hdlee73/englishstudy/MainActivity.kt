@@ -185,6 +185,8 @@ class MainActivity : ComponentActivity() {
                         speech.stop()
                     }
                     if (next != AppTab.DICTIONARY) wordSpeaker.stop()
+                    // Words saved or datasets loaded since the last visit show up in the study setup screens.
+                    if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
                     tabIndex = next.ordinal
                 }
             ) { selected ->
@@ -224,6 +226,7 @@ class MainActivity : ComponentActivity() {
                     )
                     AppTab.FLASHCARDS -> FlashcardScreen(
                         state = flash,
+                        onSource = studyVm::setFlashSource,
                         onFilter = studyVm::setFilter,
                         onShuffle = studyVm::setShuffle,
                         onFrontIsWord = studyVm::setFrontIsWord,
@@ -236,6 +239,7 @@ class MainActivity : ComponentActivity() {
                     )
                     AppTab.QUIZ -> QuizScreen(
                         state = quiz,
+                        onSource = studyVm::setQuizSource,
                         onCount = studyVm::setQuizCount,
                         onStart = studyVm::startQuiz,
                         onChoose = studyVm::chooseAnswer,

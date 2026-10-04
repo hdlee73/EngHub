@@ -22,9 +22,17 @@ data class QuizQuestion(
     /** First Korean meaning of the word, offered as the clue when [translation] is empty. */
     val meaningHint: String,
     val choices: List<String>,
-    val answerIndex: Int
+    val answerIndex: Int,
+    /** false for questions made from a speaking dataset: they are not tied to a saved word's progress. */
+    val trackProgress: Boolean = true
 ) {
     fun isCorrect(choice: Int): Boolean = choice == answerIndex
+
+    /** The same question with the choices in a new order. */
+    fun reshuffled(random: Random = Random.Default): QuizQuestion {
+        val shuffled = choices.shuffled(random)
+        return copy(choices = shuffled, answerIndex = shuffled.indexOf(choices[answerIndex]))
+    }
 }
 
 internal object QuizBuilder {

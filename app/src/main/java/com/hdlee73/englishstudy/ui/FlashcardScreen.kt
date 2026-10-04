@@ -2,7 +2,11 @@ package com.hdlee73.englishstudy.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +51,7 @@ import com.hdlee73.englishstudy.study.StudyStage
 @Composable
 fun FlashcardScreen(
     state: FlashcardUiState,
+    onSource: (String) -> Unit,
     onFilter: (DeckFilter) -> Unit,
     onShuffle: (Boolean) -> Unit,
     onFrontIsWord: (Boolean) -> Unit,
@@ -58,7 +63,7 @@ fun FlashcardScreen(
     onSpeak: (String) -> Unit
 ) {
     when (state.stage) {
-        StudyStage.SETUP -> FlashcardSetup(state, onFilter, onShuffle, onFrontIsWord, onStart)
+        StudyStage.SETUP -> FlashcardSetup(state, onSource, onFilter, onShuffle, onFrontIsWord, onStart)
         StudyStage.STUDY -> FlashcardStudy(state, onFlip, onAnswer, onEnd, onSpeak)
         StudyStage.DONE -> FlashcardDone(state, onRetryMissed, onEnd)
     }
@@ -67,48 +72,57 @@ fun FlashcardScreen(
 @Composable
 private fun FlashcardSetup(
     state: FlashcardUiState,
+    onSource: (String) -> Unit,
     onFilter: (DeckFilter) -> Unit,
     onShuffle: (Boolean) -> Unit,
     onFrontIsWord: (Boolean) -> Unit,
     onStart: () -> Unit
 ) {
-    if (state.savedCount == 0) {
-        EmptyState("🃏", "저장한 단어가 없어요", "사전 탭에서 단어를 저장하면 플래시카드로 암기할 수 있어요.")
+    val deckSize = state.deckCounts[state.filter] ?: 0
+    val nothingToStudy = state.sources.size == 1 && state.cardCount == 0
+    if (nothingToStudy) {
+        EmptyState("🃏", "암기할 카드가 없어요", "사전 탭에서 단어를 저장하거나, 스피킹 탭에서 한글 번역이 있는 데이터셋을 불러오면 여기서 암기할 수 있어요.")
         return
     }
-    val deckSize = state.deckCounts[state.filter] ?: 0
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        ScreenTitle("단어 암기")
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(Modifier.padding(16.dp)) {
-                Text("저장 단어 ${state.savedCount}개", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("외운 단어 ${state.masteredCount}개 · 외우는 중 ${state.savedCount - state.masteredCount}개", color = Muted, fontSize = 14.sp)
+        Hero("🃏", "카드 암기", "카드를 넘기며 하나씩 외워요")
+        // The start button comes first so it is always in reach.
+        StartButton(
+            if (deckSize > 0) "▶  학습 시작 · ${deckSize}장" else "이 묶음에는 카드가 없어요",
+            enabled = deckSize > 0, onClick = onStart
+        )
+        SourcePicker(state.sources, state.sourceId, "장", onSource)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatTile("${state.cardCount}", "전체", Blue, Modifier.weight(1f))
+            StatTile("${state.masteredCount}", "외운 카드", Mint, Modifier.weight(1f))
+            StatTile("${state.cardCount - state.masteredCount}", "외우는 중", Color(0xFFF59E0B), Modifier.weight(1f))
+        }
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("학습 범위", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DeckFilter.values().forEach { filter ->
+                    FilterChip(
+                        selected = filter == state.filter, onClick = { onFilter(filter) },
+                        label = { Text("${filter.label} ${state.deckCounts[filter] ?: 0}") }
+                    )
+                }
+            }
+            Text(state.filter.description, color = Muted, fontSize = 13.sp)
+            Text("카드 앞면", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val front = if (state.sentenceDeck) "영어 문장" else "영어 단어"
+                FilterChip(selected = state.frontIsWord, onClick = { onFrontIsWord(true) }, label = { Text("$front → 뜻") })
+                FilterChip(selected = !state.frontIsWord, onClick = { onFrontIsWord(false) }, label = { Text("뜻 → $front") })
+            }
+            Text("순서", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = state.shuffle, onClick = { onShuffle(true) }, label = { Text("섞어서") })
+                FilterChip(selected = !state.shuffle, onClick = { onShuffle(false) }, label = { Text("알파벳순") })
             }
         }
-        Text("학습할 단어", color = Ink, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DeckFilter.values().forEach { filter ->
-                FilterChip(
-                    selected = filter == state.filter, onClick = { onFilter(filter) },
-                    label = { Text("${filter.label} ${state.deckCounts[filter] ?: 0}") }
-                )
-            }
-        }
-        Text(state.filter.description, color = Muted, fontSize = 14.sp)
-        Text("카드 앞면", color = Ink, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = state.frontIsWord, onClick = { onFrontIsWord(true) }, label = { Text("영어 단어 → 뜻") })
-            FilterChip(selected = !state.frontIsWord, onClick = { onFrontIsWord(false) }, label = { Text("뜻 → 영어 단어") })
-        }
-        Text("순서", color = Ink, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = state.shuffle, onClick = { onShuffle(true) }, label = { Text("섞어서") })
-            FilterChip(selected = !state.shuffle, onClick = { onShuffle(false) }, label = { Text("알파벳순") })
-        }
-        Button(
-            onClick = onStart, enabled = deckSize > 0, modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Blue)
-        ) { Text(if (deckSize > 0) "시작하기 · ${deckSize}장" else "이 묶음에는 단어가 없어요", fontSize = 16.sp) }
     }
 }
 
@@ -133,7 +147,7 @@ private fun FlashcardStudy(
             progress = { if (state.total == 0) 0f else state.known.toFloat() / state.total },
             modifier = Modifier.fillMaxWidth(), color = Mint
         )
-        FlipCard(card, state.flipped, state.frontIsWord, onFlip, onAnswer, onSpeak, Modifier.weight(1f).fillMaxWidth())
+        FlipCard(card, state.flipped, state.frontIsWord, state.sentenceDeck, onFlip, onAnswer, onSpeak, Modifier.weight(1f).fillMaxWidth())
         if (state.flipped) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
@@ -157,6 +171,7 @@ private fun FlipCard(
     card: WordEntry,
     flipped: Boolean,
     frontIsWord: Boolean,
+    sentence: Boolean,
     onFlip: () -> Unit,
     onAnswer: (Boolean) -> Unit,
     onSpeak: (String) -> Unit,
@@ -188,12 +203,12 @@ private fun FlipCard(
     ) {
         if (!showBack) {
             Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
-                if (frontIsWord) WordFace(card, onSpeak) else MeaningFace(card, showExamples = false)
+                if (frontIsWord) WordFace(card, onSpeak, sentence = sentence) else MeaningFace(card, showExamples = false)
             }
         } else {
             // Mirror the back so its text is not drawn reversed.
             Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }.padding(20.dp), contentAlignment = Alignment.Center) {
-                if (frontIsWord) MeaningFace(card, showExamples = true) else WordFace(card, onSpeak, withExamples = true)
+                if (frontIsWord) MeaningFace(card, showExamples = true) else WordFace(card, onSpeak, withExamples = true, sentence = sentence)
             }
         }
     }
@@ -202,9 +217,13 @@ private fun FlipCard(
 private const val SWIPE_DISTANCE = 120f
 
 @Composable
-private fun WordFace(card: WordEntry, onSpeak: (String) -> Unit, withExamples: Boolean = false) {
+private fun WordFace(card: WordEntry, onSpeak: (String) -> Unit, withExamples: Boolean = false, sentence: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(card.word, color = Ink, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+        Text(
+            card.word, color = Ink, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
+            fontSize = if (sentence) (if (card.word.length > 80) 20.sp else 24.sp) else 34.sp,
+            lineHeight = if (sentence) 32.sp else 40.sp
+        )
         if (card.ipa.isNotBlank()) Text(card.ipa, color = Muted, fontSize = 17.sp)
         TextButton(onClick = { onSpeak(card.word) }) { Text("🔊 발음 듣기", fontSize = 16.sp) }
         if (withExamples) {
