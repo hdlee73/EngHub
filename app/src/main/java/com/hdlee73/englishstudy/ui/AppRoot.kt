@@ -1,6 +1,18 @@
 package com.hdlee73.englishstudy.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,10 +40,22 @@ enum class AppTab(val label: String, val emoji: String) {
 /** The tabs of the app; the screen of the selected tab is drawn by [content]. */
 @Composable
 fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) -> Unit) {
+    // The tab bar can be folded away to give the screen more room; a slim handle stays to bring it back.
+    var barHidden by rememberSaveable { mutableStateOf(false) }
     EnglishStudyTheme {
         Scaffold(
             containerColor = Canvas,
             bottomBar = {
+                if (barHidden) {
+                    Box(
+                        Modifier.fillMaxWidth().background(Color.White).clickable { barHidden = false }.navigationBarsPadding().height(26.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("︿  메뉴 보이기", color = Muted, fontSize = 12.sp) }
+                } else Column {
+                    Box(
+                        Modifier.fillMaxWidth().background(Color.White).clickable { barHidden = true }.height(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("﹀  메뉴 숨기기", color = Muted, fontSize = 12.sp) }
                 NavigationBar(containerColor = Color.White) {
                     AppTab.values().forEach { item ->
                         NavigationBarItem(
@@ -42,6 +66,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                             colors = NavigationBarItemDefaults.colors(indicatorColor = SoftBlue)
                         )
                     }
+                }
                 }
             }
         ) { inner: PaddingValues ->
