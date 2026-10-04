@@ -15,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -89,6 +90,8 @@ class MainActivity : ComponentActivity() {
             val translation by translateVm.state.collectAsStateWithLifecycle()
 
             var tabIndex by rememberSaveable { mutableStateOf(0) }
+            // The tab a dictionary lookup was started from, so the dictionary can offer a way back to it.
+            var returnTab by rememberSaveable { mutableStateOf<Int?>(null) }
             val tab = AppTab.values()[tabIndex.coerceIn(0, AppTab.values().size - 1)]
             var settingsOpen by rememberSaveable { mutableStateOf(false) }
             var datasetsOpen by rememberSaveable { mutableStateOf(false) }
@@ -199,11 +202,21 @@ class MainActivity : ComponentActivity() {
                     // Words saved or datasets loaded since the last visit show up in the study setup screens.
                     if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
                     if (next == AppTab.READING) readingVm.refresh()
+                    returnTab = null
                     tabIndex = next.ordinal
                 }
             ) { selected ->
                 when (selected) {
-                    AppTab.DICTIONARY -> DictionaryScreen(
+                    AppTab.DICTIONARY -> androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+                      val back = returnTab?.let { AppTab.values().getOrNull(it) }
+                      if (back != null) {
+                          com.hdlee73.englishstudy.ui.ReturnBar("${back.label}(으)로 돌아가기") {
+                              wordSpeaker.stop()
+                              returnTab = null
+                              tabIndex = back.ordinal
+                          }
+                      }
+                      androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.weight(1f)) { DictionaryScreen(
                         state = dictionary,
                         saved = saved,
                         onQueryChange = dictionaryVm::onQueryChange,
@@ -236,6 +249,8 @@ class MainActivity : ComponentActivity() {
                         onOpenUrl = ::openUrl,
                         onMessageDismiss = dictionaryVm::clearMessage
                     )
+                      }
+                    }
                     AppTab.FLASHCARDS -> FlashcardScreen(
                         state = flash,
                         onSource = studyVm::setFlashSource,
@@ -269,11 +284,13 @@ class MainActivity : ComponentActivity() {
                         state = reading,
                         onOpen = readingVm::open,
                         onClose = readingVm::close,
-                        onToggleTranslation = readingVm::toggleTranslation,
+                        onMode = readingVm::setMode,
+                        onSaveExpression = readingVm::saveExpression,
                         onLookup = { word ->
                             // Search the tapped word in the dictionary tab.
                             dictionaryVm.pickSuggestion(word)
                             wordSpeaker.stop()
+                            returnTab = AppTab.READING.ordinal
                             tabIndex = AppTab.DICTIONARY.ordinal
                         },
                         onSpeak = wordSpeaker::speak,
@@ -290,6 +307,7 @@ class MainActivity : ComponentActivity() {
                         onLookup = { text ->
                             dictionaryVm.pickSuggestion(text)
                             wordSpeaker.stop()
+                            returnTab = AppTab.TRANSLATE.ordinal
                             tabIndex = AppTab.DICTIONARY.ordinal
                         },
                         onSpeak = wordSpeaker::speak,

@@ -31,6 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -55,7 +56,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hdlee73.englishstudy.reading.ExpressionItem
 import com.hdlee73.englishstudy.reading.ReadingArticle
+import com.hdlee73.englishstudy.reading.ReadingMode
 import com.hdlee73.englishstudy.reading.ReadingUiState
 import com.hdlee73.englishstudy.reading.ReadingWords
 
@@ -66,7 +69,8 @@ fun ReadingScreen(
     state: ReadingUiState,
     onOpen: (String) -> Unit,
     onClose: () -> Unit,
-    onToggleTranslation: () -> Unit,
+    onMode: (ReadingMode) -> Unit,
+    onSaveExpression: (Int) -> Unit,
     onLookup: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onTranslateSnippet: (String) -> Unit,
@@ -78,7 +82,7 @@ fun ReadingScreen(
         if (article == null) {
             ReadingList(state, onOpen)
         } else {
-            ArticleView(article, state, onClose, onToggleTranslation, onLookup, onSpeak, onTranslateSnippet, onClearSnippet)
+            ArticleView(article, state, onClose, onMode, onSaveExpression, onLookup, onSpeak, onTranslateSnippet, onClearSnippet)
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
     }
@@ -88,6 +92,12 @@ fun ReadingScreen(
 private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Hero("📰", "오늘의 리딩", if (state.loaded) "${state.dateLabel} · 오늘 ${state.readIds.size}/${state.today.size} 읽음" else "불러오는 중…")
+        if (state.fetching) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text("오늘의 뉴스를 가져오는 중…", color = Muted, fontSize = 13.sp)
+            }
+        }
         if (state.loaded && state.today.isEmpty()) {
             Text("읽을 글을 불러오지 못했습니다.", color = Muted)
         }
@@ -100,7 +110,7 @@ private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${index + 1}  ·  ${article.topic}", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        "${article.level.ifBlank { "${index + 1}" }}  ·  ${article.topic}", color = if (article.level == "고급") Miss else Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
                     if (read) Text("✓ 읽음", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -110,11 +120,12 @@ private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
                     article.paragraphs.first(), color = Muted, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
-                Text("약 ${article.wordCount}단어 · ${article.minutes}분 · 중급", color = Muted, fontSize = 12.sp)
+                Text("약 ${article.wordCount}단어 · ${article.minutes}분" + if (article.credit.isNotBlank()) " · ${article.credit}" else "", color = Muted, fontSize = 12.sp)
             }
         }
         Text(
-            "글은 영어 학습용으로 새로 작성한 설명·특집 기사이며 실제 뉴스 보도가 아닙니다. 단어를 누르거나 길게 눌러 끌면 단어·구·문장을 골라 사전 검색·번역·복사를 할 수 있고, 번역 버튼으로 전체를 한국어로 볼 수 있어요. 새 글 3편은 매일 바뀝니다.",
+            if (state.fromWeb) "실제 영어 뉴스(Wikinews, CC BY 2.5)에서 매일 중급·고급 한 편씩 순서대로 가져옵니다. 읽기 좋은 길이로 앞부분만 싣고, 원문 링크는 글 아래에 있어요."
+            else "인터넷에 연결되면 실제 영어 뉴스로 바뀝니다. 지금은 앱에 들어 있는 학습용 글을 보여 드려요.",
             color = Muted, fontSize = 12.sp, lineHeight = 17.sp
         )
     }
@@ -125,7 +136,8 @@ private fun ArticleView(
     article: ReadingArticle,
     state: ReadingUiState,
     onClose: () -> Unit,
-    onToggleTranslation: () -> Unit,
+    onMode: (ReadingMode) -> Unit,
+    onSaveExpression: (Int) -> Unit,
     onLookup: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onTranslateSnippet: (String) -> Unit,
@@ -143,11 +155,12 @@ private fun ArticleView(
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onClose) { Text("← 목록") }
             Spacer(Modifier.weight(1f))
-            if (state.translating) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
-            Button(
-                onClick = onToggleTranslation, shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (state.showTranslation) SoftBlue else Blue, contentColor = if (state.showTranslation) Blue else Color.White)
-            ) { Text(if (state.showTranslation) "번역 숨기기" else "🇰🇷 전체 번역", fontSize = 14.sp) }
+            if (state.translating || state.loadingExpressions) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = state.mode == ReadingMode.TEXT, onClick = { onMode(ReadingMode.TEXT) }, label = { Text("원문") })
+            FilterChip(selected = state.mode == ReadingMode.TRANSLATION, onClick = { onMode(ReadingMode.TRANSLATION) }, label = { Text("🇰🇷 번역") })
+            FilterChip(selected = state.mode == ReadingMode.EXPRESSIONS, onClick = { onMode(ReadingMode.EXPRESSIONS) }, label = { Text("💡 주요 표현") })
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
@@ -156,8 +169,13 @@ private fun ArticleView(
         ) {
             Text(article.topic, color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text(article.title, color = Ink, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 32.sp)
-            Text("약 ${article.minutes}분", color = Muted, fontSize = 12.sp)
-            article.paragraphs.forEachIndexed { index, paragraph ->
+            Text(
+                (if (article.level.isNotBlank()) "${article.level} · " else "") + "약 ${article.wordCount}단어 · ${article.minutes}분",
+                color = if (article.level == "고급") Miss else Muted, fontSize = 12.sp
+            )
+            if (state.mode == ReadingMode.EXPRESSIONS) {
+                ExpressionList(state.expressions, state.loadingExpressions, onSaveExpression, onSpeak)
+            } else article.paragraphs.forEachIndexed { index, paragraph ->
                 TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, { dragging = it }) { range -> selected = index to range }
                 if (state.showTranslation) {
                     val korean = state.translations[index]
@@ -167,11 +185,17 @@ private fun ArticleView(
                     )
                 }
             }
+            if (article.credit.isNotBlank() && state.mode != ReadingMode.EXPRESSIONS) {
+                Text(
+                    "출처: ${article.credit}" + if (article.url.isNotBlank()) "\n${article.url}" else "",
+                    color = Muted, fontSize = 11.sp, lineHeight = 15.sp
+                )
+            }
             // Constant room at the end, so showing or hiding the panel never moves the text.
             Spacer(Modifier.height(280.dp))
         }
         val current = selected
-        if (selectedText != null && current != null && !dragging) {
+        if (selectedText != null && current != null && !dragging && state.mode != ReadingMode.EXPRESSIONS) {
             val query = ReadingWords.lookupText(selectedText)
             val snippet = state.snippet?.takeIf { it.text == selectedText }
             Surface(Modifier.align(Alignment.BottomCenter), shadowElevation = 12.dp, color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
@@ -330,4 +354,42 @@ private fun SelectionHandle(rect: Rect, isStart: Boolean, onBegin: () -> Unit, o
             drawCircle(Blue, knobPx, Offset(cx, size.height - knobPx))
         }
     }
+}
+
+/** The key expressions of the open text: meaning, the sentence they come from with its translation, and a save button. */
+@Composable
+private fun ExpressionList(items: List<ExpressionItem>, loading: Boolean, onSave: (Int) -> Unit, onSpeak: (String) -> Unit) {
+    if (items.isEmpty()) {
+        Text(if (loading) "주요 표현을 고르는 중…" else "이 글에서 고른 주요 표현이 없어요.", color = Muted, fontSize = 14.sp)
+        return
+    }
+    Text("글 속 핵심 표현이에요. 저장하면 단어장(암기·퀴즈)에서 바로 쓸 수 있어요.", color = Muted, fontSize = 12.sp)
+    items.forEachIndexed { index, item ->
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.expression, color = Ink, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                TextButton(onClick = { onSpeak(item.expression) }) { Text("🔊") }
+            }
+            Text(item.meaning ?: "뜻을 불러오는 중…", color = if (item.meaning == null) Muted else Ink, fontSize = 15.sp, lineHeight = 22.sp)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SoftBlue).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(highlightExpression(item.sentence, item.expression), color = Ink, fontSize = 14.sp, lineHeight = 21.sp)
+                Text(item.sentenceKo ?: "해석을 불러오는 중…", color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
+            }
+            Button(
+                onClick = { onSave(index) }, enabled = item.meaning != null && !item.saved, shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) { Text(if (item.saved) "✓ 단어장에 저장됨" else "⭐ 단어장에 저장", fontSize = 14.sp) }
+        }
+    }
+}
+
+private fun highlightExpression(sentence: String, expression: String) = buildAnnotatedString {
+    val at = sentence.indexOf(expression, ignoreCase = true)
+    if (at < 0) { append(sentence); return@buildAnnotatedString }
+    append(sentence.substring(0, at))
+    withStyle(SpanStyle(background = Highlight, fontWeight = FontWeight.Bold)) { append(sentence.substring(at, at + expression.length)) }
+    append(sentence.substring(at + expression.length))
 }

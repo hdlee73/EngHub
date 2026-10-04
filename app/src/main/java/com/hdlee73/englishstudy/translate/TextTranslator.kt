@@ -85,3 +85,20 @@ internal class OnlineTranslator {
         }
     }
 }
+
+/** A plain GET of [address] as text, or null on any network problem or non-2xx answer. Blocks; call off the main thread. */
+internal fun httpGet(address: String, readTimeoutMs: Int = 9000): String? {
+    val connection = try { URL(address).openConnection() as HttpURLConnection } catch (_: IOException) { return null }
+    return try {
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 6000
+        connection.readTimeout = readTimeoutMs
+        connection.setRequestProperty("User-Agent", "EnglishStudy/1.0 (Android; learning app)")
+        if (connection.responseCode !in 200..299) null
+        else connection.inputStream.bufferedReader().use { it.readText() }
+    } catch (_: IOException) {
+        null
+    } finally {
+        connection.disconnect()
+    }
+}
