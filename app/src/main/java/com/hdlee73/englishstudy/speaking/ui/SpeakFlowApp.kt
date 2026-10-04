@@ -85,7 +85,7 @@ fun SpeakFlowApp(
                 // the fixed-height parts shrink so the sentence keeps room.
                 val compact = maxHeight < 760.dp
                 // A folded foldable's cover screen: everything fixed-size gets smaller so the sentence and its buttons fit.
-                val tight = maxHeight < 560.dp
+                val tight = maxHeight < 700.dp
                 Column(Modifier.fillMaxSize()) {
                     TopBar(state, tight, onDatasetsOpen, onSettingsOpen)
                     SavedWordsBar(savedSentenceCount, state.activeDatasetId == DatasetStore.SAVED_WORDS_ID, tight, onStudySavedWords)
@@ -219,7 +219,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
             }
             Column(
                 Modifier.fillMaxWidth()
-                    .then(if (tight) Modifier.heightIn(max = 96.dp) else Modifier.height(if (expanded) 150.dp else if (compact) 88.dp else 140.dp))
+                    .heightIn(max = if (tight) 110.dp else if (expanded) 170.dp else if (compact) 130.dp else 160.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -242,7 +242,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                 state.score?.let {
                     if (state.heardText.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
-                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = if (tight) 2 else Int.MAX_VALUE, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = if (tight) 2 else 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
