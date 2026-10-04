@@ -166,3 +166,10 @@ fun StatTile(value: String, caption: String, tint: Color, modifier: Modifier = M
         Text(caption, color = Muted, fontSize = 12.sp)
     }
 }
+
+/** Puts [text] on the clipboard and says so. */
+fun copyToClipboard(context: android.content.Context, text: String) {
+    val manager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    manager?.setPrimaryClip(android.content.ClipData.newPlainText("English Study", text))
+    android.widget.Toast.makeText(context, "복사했습니다", android.widget.Toast.LENGTH_SHORT).show()
+}

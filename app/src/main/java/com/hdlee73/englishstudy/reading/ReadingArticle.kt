@@ -73,6 +73,62 @@ internal object ReadingWords {
         return start..end
     }
 
+    private fun wordStartAfter(text: String, from: Int): Int {
+        var i = from
+        while (i < text.length && !isLetter(text[i])) i++
+        return i
+    }
+
+    /** The sentence that contains [offset] (up to and including its closing punctuation). */
+    fun sentenceRange(text: String, offset: Int): IntRange? {
+        if (text.isBlank()) return null
+        val o = offset.coerceIn(0, text.length - 1)
+        var start = o
+        while (start > 0 && !(text[start - 1].isWhitespace() && start >= 2 && text[start - 2] in ".!?")) start--
+        while (start < text.length - 1 && text[start].isWhitespace()) start++
+        var end = o
+        while (end < text.length - 1 && !(text[end] in ".!?" && text[end + 1].isWhitespace())) end++
+        return if (end >= start) start..end else null
+    }
+
+    /** The range from the first to the last of two ranges, in either order. */
+    fun span(a: IntRange, b: IntRange): IntRange = minOf(a.first, b.first)..maxOf(a.last, b.last)
+
+    /** [range] with the word before it added; unchanged at the start of the text. */
+    fun extendLeft(text: String, range: IntRange): IntRange {
+        var i = range.first - 1
+        while (i >= 0 && !isLetter(text[i])) i--
+        if (i < 0) return range
+        return (rangeAt(text, i) ?: return range).first..range.last
+    }
+
+    /** [range] with the word after it added; unchanged at the end of the text. */
+    fun extendRight(text: String, range: IntRange): IntRange {
+        val i = wordStartAfter(text, range.last + 1)
+        if (i >= text.length) return range
+        return range.first..(rangeAt(text, i) ?: return range).last
+    }
+
+    /** [range] without its last word; a single word stays as it is. */
+    fun shrink(text: String, range: IntRange): IntRange {
+        var j = range.last
+        while (j >= range.first && !isLetter(text[j])) j--
+        if (j < range.first) return range
+        val lastWord = rangeAt(text, j) ?: return range
+        if (lastWord.first <= range.first) return range
+        var k = lastWord.first - 1
+        while (k >= range.first && !isLetter(text[k])) k--
+        if (k < range.first) return range
+        return range.first..(rangeAt(text, k) ?: return range).last
+    }
+
+    /** What to look up for a selection: one word as [lookupForm], a phrase without edge punctuation and extra spaces. */
+    fun lookupText(selection: String): String {
+        val trimmed = selection.trim()
+        if (trimmed.none { it.isWhitespace() }) return lookupForm(trimmed)
+        return trimmed.trim { !isLetter(it) && !it.isDigit() }.replace('’', '\'').replace(Regex("\\s+"), " ")
+    }
+
     /** What to look up for a tapped word: "Gutenberg's" → "Gutenberg". */
     fun lookupForm(word: String): String =
         word.replace('’', '\'').removeSuffix("'s").removeSuffix("'").trim()

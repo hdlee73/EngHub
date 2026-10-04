@@ -31,6 +31,8 @@ import com.hdlee73.englishstudy.dictionary.DictionaryViewModel
 import com.hdlee73.englishstudy.dictionary.ExportWorker
 import com.hdlee73.englishstudy.dictionary.WordSpeaker
 import com.hdlee73.englishstudy.reading.ReadingViewModel
+import com.hdlee73.englishstudy.translate.TranslateViewModel
+import com.hdlee73.englishstudy.ui.TranslateScreen
 import com.hdlee73.englishstudy.speaking.LearningViewModel
 import com.hdlee73.englishstudy.speaking.model.LearningMode
 import com.hdlee73.englishstudy.speaking.model.LessonPhase
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private val dictionaryVm: DictionaryViewModel by viewModels()
     private val studyVm: StudyViewModel by viewModels()
     private val readingVm: ReadingViewModel by viewModels()
+    private val translateVm: TranslateViewModel by viewModels()
     private lateinit var speech: SpeechEngine
     private lateinit var wordSpeaker: WordSpeaker
 
@@ -83,6 +86,7 @@ class MainActivity : ComponentActivity() {
             val flash by studyVm.flashcards.collectAsStateWithLifecycle()
             val quiz by studyVm.quiz.collectAsStateWithLifecycle()
             val reading by readingVm.state.collectAsStateWithLifecycle()
+            val translation by translateVm.state.collectAsStateWithLifecycle()
 
             var tabIndex by rememberSaveable { mutableStateOf(0) }
             val tab = AppTab.values()[tabIndex.coerceIn(0, AppTab.values().size - 1)]
@@ -273,7 +277,23 @@ class MainActivity : ComponentActivity() {
                             tabIndex = AppTab.DICTIONARY.ordinal
                         },
                         onSpeak = wordSpeaker::speak,
+                        onTranslateSnippet = readingVm::translateSnippet,
+                        onClearSnippet = readingVm::clearSnippet,
                         onMessageDismiss = readingVm::clearMessage
+                    )
+                    AppTab.TRANSLATE -> TranslateScreen(
+                        state = translation,
+                        onInput = translateVm::setInput,
+                        onTranslate = translateVm::translate,
+                        onSwap = translateVm::swap,
+                        onClear = translateVm::clear,
+                        onLookup = { text ->
+                            dictionaryVm.pickSuggestion(text)
+                            wordSpeaker.stop()
+                            tabIndex = AppTab.DICTIONARY.ordinal
+                        },
+                        onSpeak = wordSpeaker::speak,
+                        onMessageDismiss = translateVm::clearMessage
                     )
                     AppTab.SPEAKING -> SpeakFlowApp(
                         state = learning,

@@ -21,10 +21,11 @@ enum class AppTab(val label: String, val emoji: String) {
     FLASHCARDS("암기", "🃏"),
     QUIZ("퀴즈", "✏️"),
     READING("리딩", "📰"),
+    TRANSLATE("번역", "🌐"),
     SPEAKING("스피킹", "🎤")
 }
 
-/** The four tabs of the app; the screen of the selected tab is drawn by [content]. */
+/** The tabs of the app; the screen of the selected tab is drawn by [content]. */
 @Composable
 fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) -> Unit) {
     EnglishStudyTheme {
