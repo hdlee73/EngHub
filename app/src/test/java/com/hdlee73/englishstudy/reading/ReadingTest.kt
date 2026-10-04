@@ -125,5 +125,16 @@ class ReadingTest {
         assertEquals("Gutenberg", ReadingWords.lookupText("Gutenberg's"))
         assertEquals("a lot of people", ReadingWords.lookupText("“a lot of people.”"))
     }
+
+    @Test fun handlesSnapToWordBoundaries() {
+        // para = "Cats sleep a lot. They don't hunt all day, though! Do dogs? Yes."
+        assertEquals(5, ReadingWords.wordStartFrom(para, 5))      // at the start of "sleep"
+        assertEquals(5, ReadingWords.wordStartFrom(para, 7))      // inside "sleep"
+        assertEquals(18, ReadingWords.wordStartFrom(para, 17))    // after "lot" → next word "They"
+        assertNull(ReadingWords.wordStartFrom("end.", 3))
+        assertEquals(9, ReadingWords.wordEndBefore(para, 10))     // just after "sleep"
+        assertEquals(9, ReadingWords.wordEndBefore(para, 7))      // inside "sleep" → rangeAt(…).last
+        assertNull(ReadingWords.wordEndBefore(" .", 2))
+    }
 }
 

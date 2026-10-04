@@ -2,7 +2,15 @@ package com.hdlee73.englishstudy.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas as DrawCanvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.LaunchedEffect
@@ -148,7 +156,7 @@ private fun ArticleView(
         ) {
             Text(article.topic, color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text(article.title, color = Ink, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 32.sp)
-            Text("단어를 누르거나, 길게 누른 채 끌어 구·문장을 고르세요 · 약 ${article.minutes}분", color = Muted, fontSize = 12.sp)
+            Text("약 ${article.minutes}분", color = Muted, fontSize = 12.sp)
             article.paragraphs.forEachIndexed { index, paragraph ->
                 TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, { dragging = it }) { range -> selected = index to range }
                 if (state.showTranslation) {
@@ -164,8 +172,6 @@ private fun ArticleView(
         }
         val current = selected
         if (selectedText != null && current != null && !dragging) {
-            val (paragraphIndex, range) = current
-            val paragraph = article.paragraphs[paragraphIndex]
             val query = ReadingWords.lookupText(selectedText)
             val snippet = state.snippet?.takeIf { it.text == selectedText }
             Surface(Modifier.align(Alignment.BottomCenter), shadowElevation = 12.dp, color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
@@ -197,12 +203,6 @@ private fun ArticleView(
                         OutlinedButton(onClick = { copyToClipboard(context, selectedText) }, shape = RoundedCornerShape(12.dp)) { Text("📋 복사", fontSize = 14.sp, maxLines = 1) }
                         OutlinedButton(onClick = { onSpeak(selectedText) }, shape = RoundedCornerShape(12.dp)) { Text("🔊", fontSize = 14.sp) }
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { selected = paragraphIndex to ReadingWords.extendLeft(paragraph, range) }) { Text("← 앞 단어", fontSize = 13.sp) }
-                        TextButton(onClick = { selected = paragraphIndex to ReadingWords.extendRight(paragraph, range) }) { Text("뒤 단어 →", fontSize = 13.sp) }
-                        TextButton(onClick = { selected = paragraphIndex to ReadingWords.shrink(paragraph, range) }) { Text("− 줄이기", fontSize = 13.sp) }
-                        TextButton(onClick = { ReadingWords.sentenceRange(paragraph, range.first)?.let { selected = paragraphIndex to it } }) { Text("문장 전체", fontSize = 13.sp) }
-                    }
                 }
             }
         }
@@ -210,7 +210,10 @@ private fun ArticleView(
     }
 }
 
-/** A paragraph whose words can be tapped, or selected as a range by long-pressing and dragging; the selection is highlighted. */
+/**
+ * A paragraph that is selected like text on an iPhone: tap a word, double-tap a sentence, or long-press and drag; the selection
+ * then has a handle at each end that can be dragged to widen or narrow it freely (words, phrases, whole sentences).
+ */
 @Composable
 private fun TappableParagraph(text: String, highlight: IntRange?, onDragging: (Boolean) -> Unit, onSelect: (IntRange) -> Unit) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -220,32 +223,111 @@ private fun TappableParagraph(text: String, highlight: IntRange?, onDragging: (B
                 append(text)
             } else {
                 append(text.substring(0, highlight.first))
-                withStyle(SpanStyle(background = Highlight, fontWeight = FontWeight.Bold)) { append(text.substring(highlight.first, highlight.last + 1)) }
+                // Only the background changes, so the lines never re-wrap while the selection is being resized.
+                withStyle(SpanStyle(background = Highlight)) { append(text.substring(highlight.first, highlight.last + 1)) }
                 append(text.substring(highlight.last + 1))
             }
         }
     }
-    fun wordAt(position: Offset): IntRange? = layout?.let { ReadingWords.rangeAt(text, it.getOffsetForPosition(position)) }
-    Text(
-        styled, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
-        onTextLayout = { layout = it },
-        modifier = Modifier.fillMaxWidth()
-            .pointerInput(text) {
-                detectTapGestures { position -> wordAt(position)?.let(onSelect) }
-            }
-            .pointerInput(text) {
-                var anchor: IntRange? = null
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { position -> onDragging(true); anchor = wordAt(position); anchor?.let(onSelect) },
-                    onDragEnd = { onDragging(false) },
-                    onDragCancel = { onDragging(false) },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        val start = anchor
-                        val here = wordAt(change.position)
-                        if (start != null && here != null) onSelect(ReadingWords.span(start, here))
+    val latestHighlight by rememberUpdatedState(highlight)
+    val latestSelect by rememberUpdatedState(onSelect)
+    val latestDragging by rememberUpdatedState(onDragging)
+    fun offsetAt(position: Offset): Int? = layout?.getOffsetForPosition(position)
+    fun wordAt(position: Offset): IntRange? = offsetAt(position)?.let { ReadingWords.rangeAt(text, it) }
+
+    Box(Modifier.fillMaxWidth()) {
+        Text(
+            styled, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
+            onTextLayout = { layout = it },
+            modifier = Modifier.fillMaxWidth()
+                .pointerInput(text) {
+                    detectTapGestures(
+                        onDoubleTap = { position -> offsetAt(position)?.let { ReadingWords.sentenceRange(text, it) }?.let { latestSelect(it) } },
+                        onTap = { position -> wordAt(position)?.let { latestSelect(it) } }
+                    )
+                }
+                .pointerInput(text) {
+                    var anchor: IntRange? = null
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { position -> latestDragging(true); anchor = wordAt(position); anchor?.let { latestSelect(it) } },
+                        onDragEnd = { latestDragging(false) },
+                        onDragCancel = { latestDragging(false) },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val start = anchor
+                            val here = wordAt(change.position)
+                            if (start != null && here != null) latestSelect(ReadingWords.span(start, here))
+                        }
+                    )
+                }
+        )
+        val l = layout
+        val h = highlight
+        if (l != null && h != null && h.last < text.length) {
+            SelectionHandle(
+                rect = l.getCursorRect(h.first), isStart = true,
+                onBegin = { latestDragging(true) }, onEnd = { latestDragging(false) },
+                onMove = { position ->
+                    val current = latestHighlight
+                    val offset = layout?.getOffsetForPosition(position)
+                    if (current != null && offset != null) {
+                        val start = ReadingWords.wordStartFrom(text, offset)
+                        val lastWordStart = ReadingWords.rangeAt(text, current.last)?.first ?: current.first
+                        if (start != null) latestSelect(minOf(start, lastWordStart)..current.last)
                     }
+                }
+            )
+            SelectionHandle(
+                rect = l.getCursorRect(h.last + 1), isStart = false,
+                onBegin = { latestDragging(true) }, onEnd = { latestDragging(false) },
+                onMove = { position ->
+                    val current = latestHighlight
+                    val offset = layout?.getOffsetForPosition(position)
+                    if (current != null && offset != null) {
+                        val end = ReadingWords.wordEndBefore(text, offset)
+                        val firstWordEnd = ReadingWords.rangeAt(text, current.first)?.last ?: current.last
+                        if (end != null) latestSelect(current.first..maxOf(end, firstWordEnd))
+                    }
+                }
+            )
+        }
+    }
+}
+
+/** A selection handle: a thin line along the selection edge with a round knob (top for the start, bottom for the end). */
+@Composable
+private fun SelectionHandle(rect: Rect, isStart: Boolean, onBegin: () -> Unit, onEnd: () -> Unit, onMove: (Offset) -> Unit) {
+    val density = LocalDensity.current
+    val knob = 8.dp
+    val touch = 40.dp
+    val latestRect by rememberUpdatedState(rect)
+    val latestMove by rememberUpdatedState(onMove)
+    val knobPx = with(density) { knob.toPx() }
+    val touchPx = with(density) { touch.toPx() }
+    val heightDp = with(density) { rect.height.toDp() } + knob * 2
+    DrawCanvas(
+        Modifier
+            .offset { IntOffset((rect.left - touchPx / 2).roundToInt(), (if (isStart) rect.top - knobPx * 2 else rect.top).roundToInt()) }
+            .size(touch, heightDp)
+            .pointerInput(Unit) {
+                // The finger moves the line's middle; the text under that point decides the new edge.
+                var position = Offset.Zero
+                detectDragGestures(
+                    onDragStart = { onBegin(); position = Offset(latestRect.left, (latestRect.top + latestRect.bottom) / 2) },
+                    onDragEnd = { onEnd() },
+                    onDragCancel = { onEnd() },
+                    onDrag = { change, amount -> change.consume(); position += amount; latestMove(position) }
                 )
             }
-    )
+    ) {
+        val cx = size.width / 2
+        val stroke = 2.dp.toPx()
+        if (isStart) {
+            drawLine(Blue, Offset(cx, knobPx * 2), Offset(cx, size.height), stroke)
+            drawCircle(Blue, knobPx, Offset(cx, knobPx))
+        } else {
+            drawLine(Blue, Offset(cx, 0f), Offset(cx, size.height - knobPx * 2), stroke)
+            drawCircle(Blue, knobPx, Offset(cx, size.height - knobPx))
+        }
+    }
 }
