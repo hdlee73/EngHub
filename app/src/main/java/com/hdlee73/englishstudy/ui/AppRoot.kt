@@ -33,7 +33,6 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +50,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 
 enum class AppTab(val label: String, val emoji: String) {
     DICTIONARY("사전", "📖"),
@@ -67,27 +65,40 @@ private const val HINT_KEY = "menu_hint_seen"
 
 /**
  * The tabs of the app; the screen of the selected tab is drawn by [content].
- * The tab bar is hidden to give the screen all the room: swipe up from the bottom edge (or tap the small handle) to show it.
- * It folds away again after a choice is made or after a few idle seconds. It never covers the phone's own navigation bar.
+ * The tab bar can be folded away with the small "v" above it; swipe up on the strip at the bottom (or tap the "^") to bring it back.
+ * It never covers the phone's own navigation bar.
  */
 @Composable
 fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) -> Unit) {
     val context = LocalContext.current
-    var barVisible by remember { mutableStateOf(false) }
-    var showHint by remember { mutableStateOf(!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) }
-    LaunchedEffect(barVisible) {
-        if (barVisible) { delay(6000); barVisible = false }
-    }
+    var barVisible by remember { mutableStateOf(true) }
+    var showHint by remember { mutableStateOf(false) }
     EnglishStudyTheme {
         Scaffold(
             containerColor = Canvas,
             bottomBar = {
-                if (barVisible) {
+                if (barVisible) Column {
+                    // A small "v" above the bar folds it away (the "^" at the bottom of the screen brings it back).
+                    Box(
+                        Modifier.fillMaxWidth().height(22.dp).background(Color.White)
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                barVisible = false
+                                // The first time, a picture shows how to bring the bar back.
+                                if (!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) showHint = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DrawCanvas(Modifier.size(width = 20.dp, height = 10.dp)) {
+                            val stroke = 2.6.dp.toPx()
+                            drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
+                            drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
+                        }
+                    }
                     NavigationBar(containerColor = Color.White) {
                         AppTab.values().forEach { item ->
                             NavigationBarItem(
                                 selected = item == tab,
-                                onClick = { onTab(item); barVisible = false },
+                                onClick = { onTab(item) },
                                 icon = { Text(item.emoji, fontSize = 20.sp) },
                                 label = { Text(item.label) },
                                 colors = NavigationBarItemDefaults.colors(indicatorColor = SoftBlue)
