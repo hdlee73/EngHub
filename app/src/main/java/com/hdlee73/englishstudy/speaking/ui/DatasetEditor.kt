@@ -18,8 +18,8 @@ internal fun DatasetEditor(dataset: SavedDataset, rows: List<SentencePair>, onCl
     var editing by remember(dataset.id) { mutableStateOf<Int?>(null) }
     var english by remember { mutableStateOf("") }
     var korean by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).padding(20.dp)) {
+    SheetDialog(onDismiss = onClose, heightFraction = .94f) {
+        Column(Modifier.fillMaxSize().padding(20.dp)) {
             Text("데이터셋 문장 편집", fontSize = 22.sp)
             Text(dataset.name, fontSize = 12.sp)
             OutlinedTextField(query, { query = it }, label = { Text("영어·해석 검색") }, modifier = Modifier.fillMaxWidth())

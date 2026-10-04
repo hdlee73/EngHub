@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
@@ -92,6 +93,7 @@ fun DictionaryScreen(
     onOpenUrl: (String) -> Unit,
     onMessageDismiss: () -> Unit
 ) {
+    val focus = LocalFocusManager.current
     var sortOpen by remember { mutableStateOf(false) }
     var exportOpen by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<WordEntry?>(null) }
@@ -122,7 +124,8 @@ fun DictionaryScreen(
                         focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onSearch() })
+                    // Enter searches at once and puts the keyboard away so the result is fully visible.
+                    keyboardActions = KeyboardActions(onSearch = { onSearch(); focus.clearFocus() })
                 )
                 if (state.query.isNotEmpty()) TextButton(onClick = { onQueryChange("") }) { Text("✕", color = DictGrey) }
             }
@@ -138,7 +141,7 @@ fun DictionaryScreen(
                     onOpen = { detail = it }, onResearch = onPickSuggestion, onDelete = onDelete
                 )
             } else {
-                SearchResult(state, saved, onPickSuggestion, onSave, onSpeak, onOpenUrl)
+                SearchResult(state, saved, { word -> focus.clearFocus(); onPickSuggestion(word) }, onSave, onSpeak, onOpenUrl)
             }
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))

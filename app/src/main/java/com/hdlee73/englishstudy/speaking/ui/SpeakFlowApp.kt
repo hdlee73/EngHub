@@ -348,8 +348,8 @@ private fun DatasetSheet(
 ) {
     var selected by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingDelete by remember { mutableStateOf<SavedDataset?>(null) }
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+    SheetDialog(onDismiss = onClose, heightFraction = .9f) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             Text("내 데이터셋", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
             Text("저장된 파일을 선택하면 바로 학습할 수 있어요.", color = Color(0xFF667085), fontSize = 13.sp)
             Spacer(Modifier.height(16.dp))
@@ -494,8 +494,8 @@ private fun RoundButton(iconRes: Int, description: String, buttonSize: Int, onCl
 @Composable
 private fun SettingsSheet(current: LearningSettings, bluetoothDevices: List<BluetoothChoice>, onOpenUpdate: () -> Unit, onClose: () -> Unit, onSave: (LearningSettings) -> Unit, onStatistics: () -> Unit) {
     var draft by remember { mutableStateOf(current) }
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.92f).navigationBarsPadding().padding(horizontal = 24.dp)) {
+    SheetDialog(onDismiss = onClose) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 20.dp)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 Text("학습 설정", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
                 Spacer(Modifier.height(20.dp))
