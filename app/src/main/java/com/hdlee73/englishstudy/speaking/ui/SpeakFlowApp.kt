@@ -110,9 +110,10 @@ fun SpeakFlowApp(
 @Composable
 private fun TopBar(state: LearningUiState, compact: Boolean, onImport: () -> Unit, onSettings: () -> Unit) {
     // The same banner as the other tabs, with the two buttons at its right end.
-    Box(Modifier.padding(horizontal = 16.dp).padding(top = if (compact) 6.dp else 10.dp, bottom = 6.dp)) {
+    // Same size and spacing as the banner of every other tab, whatever the screen height.
+    Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
         com.hdlee73.englishstudy.ui.Hero(
-            "🎤", "문장 말하기", "듣고 따라 말해요", compact = compact,
+            "🎤", "문장 말하기", "듣고 따라 말해요",
             trailing = {
                 BannerButton(R.drawable.ic_database, "데이터", onImport)
                 Spacer(Modifier.width(8.dp))
