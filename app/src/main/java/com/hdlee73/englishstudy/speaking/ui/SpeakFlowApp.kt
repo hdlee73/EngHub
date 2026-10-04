@@ -84,9 +84,11 @@ fun SpeakFlowApp(
                 // The tab bar and the saved-words bar take space the standalone app did not have; on short screens
                 // the fixed-height parts shrink so the sentence keeps room.
                 val compact = maxHeight < 760.dp
+                // A folded foldable's cover screen: everything fixed-size gets smaller so the sentence and its buttons fit.
+                val tight = maxHeight < 560.dp
                 Column(Modifier.fillMaxSize()) {
-                    TopBar(state, compact, onDatasetsOpen, onSettingsOpen)
-                    SavedWordsBar(savedSentenceCount, state.activeDatasetId == DatasetStore.SAVED_WORDS_ID, onStudySavedWords)
+                    TopBar(state, tight, onDatasetsOpen, onSettingsOpen)
+                    SavedWordsBar(savedSentenceCount, state.activeDatasetId == DatasetStore.SAVED_WORDS_ID, tight, onStudySavedWords)
                     LinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
@@ -94,9 +96,9 @@ fun SpeakFlowApp(
                     )
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         if (state.items.isEmpty()) EmptyState(onImport)
-                        else LessonCard(state, expanded, compact, onReplay, onRestart, onRetry, onNext)
+                        else LessonCard(state, expanded, compact, tight, onReplay, onRestart, onRetry, onNext)
                     }
-                    PlayerControls(state, onPrevious, onPlayPause, onNext, onToggleRecording)
+                    PlayerControls(state, tight, onPrevious, onPlayPause, onNext, onToggleRecording)
                 }
             }
         }
@@ -111,9 +113,9 @@ fun SpeakFlowApp(
 private fun TopBar(state: LearningUiState, compact: Boolean, onImport: () -> Unit, onSettings: () -> Unit) {
     // The same banner as the other tabs, with the two buttons at its right end.
     // Same size and spacing as the banner of every other tab, whatever the screen height.
-    Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)) {
+    Box(Modifier.padding(start = 16.dp, end = 16.dp, top = if (compact) 8.dp else 16.dp, bottom = if (compact) 4.dp else 8.dp)) {
         com.hdlee73.englishstudy.ui.Hero(
-            "🎤", "문장 말하기", "듣고 따라 말해요",
+            "🎤", "문장 말하기", "듣고 따라 말해요", compact = compact,
             trailing = {
                 BannerButton(R.drawable.ic_database, "데이터", onImport)
                 Spacer(Modifier.width(8.dp))
@@ -133,11 +135,11 @@ private fun BannerButton(iconRes: Int, description: String, onClick: () -> Unit)
 
 /** Starts speaking practice with the example sentences of the words saved in the dictionary. */
 @Composable
-private fun SavedWordsBar(sentenceCount: Int, active: Boolean, onClick: () -> Unit) {
+private fun SavedWordsBar(sentenceCount: Int, active: Boolean, tight: Boolean, onClick: () -> Unit) {
     Surface(color = Color.White.copy(alpha = .72f)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (tight) 0.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
             FilledTonalButton(
-                onClick = onClick, enabled = sentenceCount > 0, modifier = Modifier.weight(1f).height(38.dp),
+                onClick = onClick, enabled = sentenceCount > 0, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 shape = RoundedCornerShape(14.dp)
             ) {
@@ -177,7 +179,7 @@ private fun EmptyState(onImport: () -> Unit) {
 }
 
 @Composable
-private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boolean, onReplay: () -> Unit, onRestart: () -> Unit, onRetry: () -> Unit, onNext: () -> Unit) {
+private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boolean, tight: Boolean, onReplay: () -> Unit, onRestart: () -> Unit, onRetry: () -> Unit, onNext: () -> Unit) {
     val item = state.current ?: return
     val translation = state.settings.mode == LearningMode.TRANSLATION
     val statusColor = when (state.phase) {
@@ -186,16 +188,16 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
         else -> Blue
     }
     Card(
-        Modifier.padding(horizontal = if (expanded) 20.dp else 12.dp, vertical = if (compact) 6.dp else 10.dp)
+        Modifier.padding(horizontal = if (expanded) 20.dp else 12.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 10.dp)
             .widthIn(max = if (expanded) 860.dp else 520.dp).fillMaxHeight()
             .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = statusColor.copy(alpha = .18f)),
         shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = if (expanded) 32.dp else 18.dp, vertical = if (compact) 8.dp else 14.dp),
+            Modifier.fillMaxSize().padding(horizontal = if (expanded) 32.dp else 18.dp, vertical = if (tight) 4.dp else if (compact) 8.dp else 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            LessonStatusHeader(state, statusColor)
+            LessonStatusHeader(state, statusColor, tight)
             Text("문장 ${state.position / state.settings.repeatCount + 1}/${state.items.size} · 반복 ${state.repeatNumber}/${state.settings.repeatCount}", fontSize = 12.sp, color = Blue)
             if (!compact) Text(state.microphoneLabel, color = Color(0xFF667085), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(if (compact) 2.dp else 8.dp))
@@ -216,10 +218,12 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                 }
             }
             Column(
-                Modifier.fillMaxWidth().height(if (expanded) 150.dp else if (compact) 88.dp else 140.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth()
+                    .then(if (tight) Modifier.heightIn(max = 96.dp) else Modifier.height(if (expanded) 150.dp else if (compact) 88.dp else 140.dp))
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(Modifier.fillMaxWidth().height(24.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().height(if (tight) 18.dp else 24.dp), contentAlignment = Alignment.Center) {
                     if (state.phase == LessonPhase.LISTENING) {
                         Text("남은 시간 ${state.remainingSeconds}초", color = Blue, fontWeight = FontWeight.SemiBold)
                     }
@@ -238,7 +242,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                 state.score?.let {
                     if (state.heardText.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
-                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center)
+                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = if (tight) 2 else Int.MAX_VALUE, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -288,9 +292,9 @@ private fun AutoFitText(text: AnnotatedString, maxSp: Int, weight: FontWeight, c
 }
 
 @Composable
-private fun LessonStatusHeader(state: LearningUiState, statusColor: Color) {
+private fun LessonStatusHeader(state: LearningUiState, statusColor: Color, tight: Boolean = false) {
     Row(
-        Modifier.fillMaxWidth().height(40.dp),
+        Modifier.fillMaxWidth().height(if (tight) 30.dp else 40.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -427,21 +431,21 @@ private fun statusLabel(state: LearningUiState) = when (state.phase) {
 }
 
 @Composable
-private fun PlayerControls(state: LearningUiState, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit, onToggleRecording: () -> Unit) {
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp, top = 4.dp)) {
+private fun PlayerControls(state: LearningUiState, tight: Boolean, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit, onToggleRecording: () -> Unit) {
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = if (tight) 2.dp else 8.dp, top = if (tight) 2.dp else 4.dp)) {
         Row(
             Modifier.align(Alignment.Center),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
         ) {
-            RoundButton(R.drawable.ic_previous, "이전 문장", 48, onPrevious, state.position > 0)
+            RoundButton(R.drawable.ic_previous, "이전 문장", if (tight) 40 else 48, onPrevious, state.position > 0)
             Spacer(Modifier.width(14.dp))
             RoundButton(
                 if (state.phase == LessonPhase.PAUSED || state.phase == LessonPhase.IDLE || state.phase == LessonPhase.COMPLETE) R.drawable.ic_play else R.drawable.ic_pause,
                 if (state.phase == LessonPhase.PAUSED || state.phase == LessonPhase.IDLE || state.phase == LessonPhase.COMPLETE) "재생" else "일시 정지",
-                62, onPlayPause, state.items.isNotEmpty(), primary = true
+                if (tight) 50 else 62, onPlayPause, state.items.isNotEmpty(), primary = true
             )
             Spacer(Modifier.width(14.dp))
-            RoundButton(R.drawable.ic_next, "다음 문장", 48, onNext, state.position <= state.order.lastIndex)
+            RoundButton(R.drawable.ic_next, "다음 문장", if (tight) 40 else 48, onNext, state.position <= state.order.lastIndex)
         }
         RecordButton(state.recordingStartedAt, onToggleRecording, Modifier.align(Alignment.CenterEnd).padding(end = 20.dp))
     }
