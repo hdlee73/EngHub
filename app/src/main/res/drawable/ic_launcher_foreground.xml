@@ -1,8 +1,27 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#F7FAFF" android:pathData="M20,23 C20,20 23,18 27,18 L49,18 C56,18 61,21 64,25 C67,21 72,18 79,18 L84,18 C87,18 89,20 89,23 L89,77 C89,80 87,82 84,82 L77,82 C70,82 66,85 64,89 C62,85 58,82 51,82 L25,82 C22,82 20,80 20,77 Z" />
-    <path android:fillColor="#193A63" android:pathData="M26,25 L48,25 C54,25 58,27 61,31 L61,75 C58,72 54,70 48,70 L26,70 Z" />
-    <path android:fillColor="#2E5FA8" android:pathData="M67,31 C70,27 74,25 80,25 L83,25 L83,70 L77,70 C72,70 69,72 67,75 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M40,38 L47,38 L52,57 L47,57 L46,53 L40,53 L39,57 L34,57 Z M41,49 L45,49 L43,42 Z" />
-    <path android:fillColor="#75D8D0" android:pathData="M73,41 L77,41 L77,54 L73,54 Z M80,37 L84,37 L84,58 L80,58 Z" />
+    <!-- back card -->
+    <path android:fillColor="#59FFFFFF"
+        android:pathData="M42,38 L76,38 C82,38 86,42 86,48 L86,66 C86,72 82,76 76,76 L42,76 C36,76 32,72 32,66 L32,48 C32,42 36,38 42,38 Z" />
+    <!-- speech bubble -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M38,26 L70,26 C77,26 82,31 82,38 L82,50 C82,57 77,62 70,62 L51,62 L36,74 L39,62 L38,62 C31,62 26,57 26,50 L26,38 C26,31 31,26 38,26 Z" />
+    <!-- letter A -->
+    <path android:fillType="evenOdd" android:pathData="M51,32 L57,32 L65,56 L59.5,56 L58,51 L50,51 L48.5,56 L43,56 Z M54,38 L51.4,46.5 L56.6,46.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="43" android:startY="32" android:endX="65" android:endY="56">
+                <item android:offset="0" android:color="#FF4F7CFF" />
+                <item android:offset="1" android:color="#FF9B5CF0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- sound waves -->
+    <path android:strokeColor="#FF4F7CFF" android:strokeWidth="2.4" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M69,40 C71.5,43 71.5,47 69,50" />
+    <path android:strokeColor="#FF9B5CF0" android:strokeWidth="2.4" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M73,37 C77,42 77,48 73,53" />
+    <!-- sparkles -->
+    <path android:fillColor="#FFFFD76A" android:pathData="M80,12 L82.4,19.6 L90,22 L82.4,24.4 L80,32 L77.6,24.4 L70,22 L77.6,19.6 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M30,80 L31.4,84.6 L36,86 L31.4,87.4 L30,92 L28.6,87.4 L24,86 L28.6,84.6 Z" />
 </vector>

@@ -41,7 +41,7 @@ internal object Blanker {
     private fun isConsonant(c: Char) = c in 'a'..'z' && c !in vowels
 
     /** The word itself plus the regular and irregular inflections it can take in a sentence. */
-    private fun variants(token: String): Set<String> {
+    internal fun variants(token: String): Set<String> {
         val t = token.lowercase(Locale.ROOT)
         val out = linkedSetOf(t)
         // Contractions, hyphenated words and one-letter words are matched exactly.
