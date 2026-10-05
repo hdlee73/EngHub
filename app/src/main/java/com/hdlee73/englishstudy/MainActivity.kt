@@ -31,6 +31,9 @@ import androidx.work.workDataOf
 import com.hdlee73.englishstudy.dictionary.DictionaryViewModel
 import com.hdlee73.englishstudy.dictionary.ExportWorker
 import com.hdlee73.englishstudy.dictionary.WordSpeaker
+import com.hdlee73.englishstudy.docvoice.DocVoiceLink
+import com.hdlee73.englishstudy.docvoice.DocVoiceViewModel
+import com.hdlee73.englishstudy.docvoice.ui.DocVoiceScreen
 import com.hdlee73.englishstudy.listening.ListeningLink
 import com.hdlee73.englishstudy.listening.ListeningScreen
 import com.hdlee73.englishstudy.reading.ReadingViewModel
@@ -59,18 +62,22 @@ class MainActivity : AppCompatActivity() {
     private val studyVm: StudyViewModel by viewModels()
     private val readingVm: ReadingViewModel by viewModels()
     private val translateVm: TranslateViewModel by viewModels()
+    private val docVoiceVm: DocVoiceViewModel by viewModels()
     private lateinit var speech: SpeechEngine
     private lateinit var wordSpeaker: WordSpeaker
 
     private var currentTab = AppTab.DICTIONARY
     /** An audio file opened from elsewhere, or a widget / notification tap: the Listening tab takes it over. */
     private var listeningIntent by mutableStateOf<Intent?>(null)
+    /** Bumped when a DocVoice notification is tapped, so the DocVoice tab comes to the front. */
+    private var docVoiceRequest by mutableStateOf(0)
     private var hasOpenDialog = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null && ListeningLink.isForListening(intent)) listeningIntent = intent
+        if (savedInstanceState == null && DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
         wordSpeaker = WordSpeaker(this) { notice(it) }
         speech = SpeechEngine(
             context = this,
@@ -97,6 +104,15 @@ class MainActivity : AppCompatActivity() {
             var tabIndex by rememberSaveable { mutableStateOf(0) }
             // The tab a dictionary lookup was started from, so the dictionary can offer a way back to it.
             var returnTab by rememberSaveable { mutableStateOf<Int?>(null) }
+            LaunchedEffect(docVoiceRequest) {
+                if (docVoiceRequest > 0) {
+                    if (tabIndex == AppTab.SPEAKING.ordinal) {
+                        learningVm.pauseForBackground()
+                        speech.stop()
+                    }
+                    tabIndex = AppTab.DOCVOICE.ordinal
+                }
+            }
             LaunchedEffect(listeningIntent) {
                 if (listeningIntent != null) {
                     if (tabIndex == AppTab.SPEAKING.ordinal) {
@@ -359,6 +375,7 @@ class MainActivity : AppCompatActivity() {
                         onToggleRecording = learningVm::toggleRecording,
                         onMessageDismiss = learningVm::clearMessage
                     )
+                    AppTab.DOCVOICE -> DocVoiceScreen(docVoiceVm)
                     AppTab.LISTENING -> ListeningScreen(
                         pendingIntent = listeningIntent,
                         onIntentConsumed = { listeningIntent = null }
@@ -372,6 +389,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (ListeningLink.isForListening(intent)) listeningIntent = intent
+        if (DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
     }
 
     private fun notice(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_SHORT).show()
