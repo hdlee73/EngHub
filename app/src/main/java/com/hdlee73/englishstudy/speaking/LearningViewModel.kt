@@ -30,15 +30,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 class LearningViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val SUCCESS_RESULT_DISPLAY_MILLIS = 3_000L
+        const val FAVORITES_ID = "favorites"
     }
     private val prefs = application.getSharedPreferences("learning", 0)
+    private val favoritePrefs = application.getSharedPreferences("favorite_sentences", 0)
     private val datasetStore = DatasetStore(application)
     private val checkpointStore = LearningCheckpointStore(application)
     private var activeDatasetIds = emptyList<String>()
     private val statsStore = LearningStatsStore(application)
     private val recorder = PronunciationRecorder(application)
     private var attemptRecorded = false
-    private val _state = MutableStateFlow(LearningUiState(settings = loadSettingsWithMigration(), savedDatasets = datasetStore.list(), statistics = statsStore.list()))
+    private val _state = MutableStateFlow(LearningUiState(settings = loadSettingsWithMigration(), savedDatasets = datasetStore.list(), statistics = statsStore.list(), favorites = loadFavorites()))
     val state: StateFlow<LearningUiState> = _state.asStateFlow()
     private var timerJob: Job? = null
     private var advanceJob: Job? = null
@@ -289,6 +291,33 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(items = items, order = order, position = 0, phase = LessonPhase.IDLE, datasetName = name, activeDatasetId = id,
             heardText = "", liveText = "", retryText = null, matchedWords = emptyList(), score = null, allWordsMatched = false, remainingSeconds = 0, message = null) }
         saveCheckpointNow()
+    }
+
+    private fun loadFavorites(): List<SentencePair> =
+        (favoritePrefs.getStringSet("items", emptySet()) ?: emptySet()).mapNotNull { entry ->
+            val cut = entry.indexOf('\u001F')
+            if (cut < 0) null else SentencePair(entry.substring(cut + 1), entry.substring(0, cut))
+        }.sortedBy { it.english.lowercase() }
+
+    /** Stars or un-stars the sentence on screen. */
+    fun toggleFavorite() {
+        val item = _state.value.current ?: return
+        val entries = (favoritePrefs.getStringSet("items", emptySet()) ?: emptySet()).toMutableSet()
+        val existing = entries.firstOrNull { it.substringBefore('\u001F') == item.english }
+        if (existing != null) entries.remove(existing) else entries.add(item.english + "\u001F" + item.korean)
+        favoritePrefs.edit().putStringSet("items", entries).apply()
+        _state.update { it.copy(favorites = loadFavorites()) }
+    }
+
+    /** Practises only the starred sentences. */
+    fun studyFavorites() {
+        val items = _state.value.favorites
+        if (items.isEmpty()) {
+            _state.update { it.copy(message = "즐겨찾기한 문장이 없습니다. 문장 카드의 ☆를 눌러 추가하세요.") }
+            return
+        }
+        resetWith(items, "즐겨찾기", FAVORITES_ID)
+        restart()
     }
 
     fun updateSettings(settings: LearningSettings) {
