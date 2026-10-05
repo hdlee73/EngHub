@@ -328,7 +328,11 @@ class MainActivity : AppCompatActivity() {
                         onSpeak = wordSpeaker::speak,
                         onTranslateSnippet = readingVm::translateSnippet,
                         onClearSnippet = readingVm::clearSnippet,
-                        onMessageDismiss = readingVm::clearMessage
+                        onMessageDismiss = readingVm::clearMessage,
+                        savedScroll = readingVm.scrollPosition,
+                        onScroll = readingVm::saveScroll,
+                        savedSelection = readingVm.savedSelection,
+                        onSelection = readingVm::saveSelection
                     )
                     AppTab.TRANSLATE -> TranslateScreen(
                         state = translation,

@@ -115,7 +115,8 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
     private fun fetchToday(forDay: Long) {
         fetchJob = viewModelScope.launch(Dispatchers.IO) {
             _state.update { it.copy(fetching = true) }
-            val fetched = runCatching { downloadDaily(forDay) }.getOrNull()
+            // The Daily Upside first; Wikinews takes over when that is not reachable.
+            val fetched = runCatching { downloadDailyUpside(forDay) ?: downloadDaily(forDay) }.getOrNull()
             if (fetched != null && forDay == day) {
                 storeDaily(forDay, fetched)
                 _state.update {
@@ -130,7 +131,44 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Takes the next unread Wikinews articles in order (newest first, never the same one twice), trims them to reading
+     * One article of The Daily Upside for the day: the newest one not read before, taken whole. Null when the site gives no list, no
+     * readable page or only short pages (then the caller falls back to Wikinews).
+     */
+    private fun downloadDailyUpside(forDay: Long): List<ReadingArticle>? {
+        val seen = loadSeenUrls()
+        val agent = "EngHub/1.0 (Android reading app; personal study use)"
+        val links = LinkedHashSet<String>()
+        for (source in listOf(DailyUpsideSource.FEED, DailyUpsideSource.HOME)) {
+            httpGet(source, 12000, agent)?.let { links += DailyUpsideSource.articleLinks(it) }
+            if (links.any { it !in seen }) break
+        }
+        var tried = 0
+        for (url in links) {
+            if (url in seen) continue
+            if (tried++ >= 4) break
+            val html = httpGet(url, 15000, agent)
+            val paragraphs = html?.let { DailyUpsideSource.paragraphs(it) }.orEmpty()
+            val title = html?.let { DailyUpsideSource.title(it) }
+            seen += url
+            if (title == null || !DailyUpsideSource.isWorthReading(paragraphs)) continue
+            saveSeenUrls(seen)
+            return listOf(ReadingArticle("d${forDay}_1", DailyUpsideSource.topicOf(url), title, paragraphs.take(80), "", DailyUpsideSource.CREDIT, url))
+        }
+        saveSeenUrls(seen)
+        return null
+    }
+
+    private fun loadSeenUrls(): MutableSet<String> = runCatching {
+        val a = JSONArray(prefs.getString("du_seen", "[]"))
+        (0 until a.length()).mapTo(LinkedHashSet()) { a.getString(it) }
+    }.getOrDefault(LinkedHashSet())
+
+    private fun saveSeenUrls(seen: Set<String>) {
+        prefs.edit().putString("du_seen", JSONArray(seen.toList().takeLast(200)).toString()).apply()
+    }
+
+    /**
+     * Fallback: takes the next unread Wikinews articles in order (newest first, never the same one twice), trims them to reading
      * length and keeps the easiest as the intermediate text and the hardest as the advanced one.
      */
     private fun downloadDaily(forDay: Long): List<ReadingArticle>? {
@@ -193,7 +231,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
             val p = o.getJSONArray("paragraphs")
             ReadingArticle(o.getString("id"), o.getString("topic"), o.getString("title"), (0 until p.length()).map { p.getString(it) },
                 o.getString("level"), o.getString("credit"), o.getString("url"))
-        }.takeIf { it.size >= 2 }
+        }.takeIf { it.isNotEmpty() }
     }.getOrNull()
 
     /** Forgets what belongs to earlier days: read marks, downloaded texts, their translations and expressions. */
@@ -203,7 +241,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
             val old = when {
                 key.startsWith("read_") -> key.removePrefix("read_").toLongOrNull()?.let { it != day } ?: false
                 key.startsWith("daily_") -> key.removePrefix("daily_").toLongOrNull()?.let { it < day - 1 } ?: false
-                key.startsWith("tr_w") || key.startsWith("ex_w") -> key.substringAfter('w').substringBefore('_').toLongOrNull()?.let { it < day - 1 } ?: false
+                key.startsWith("tr_") || key.startsWith("ex_") -> Regex("^(?:tr|ex)_[wd](\\d+)_").find(key)?.groupValues?.get(1)?.toLongOrNull()?.let { it < day - 1 } ?: false
                 else -> false
             }
             if (old) editor.remove(key)
@@ -217,13 +255,23 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
         val read = (prefs.getStringSet("read_$day", emptySet()).orEmpty() + id).toSet()
         prefs.edit().putStringSet("read_$day", read).apply()
         translateJob?.cancel(); expressionJob?.cancel()
+        scrollPosition = 0; savedSelection = null
         _state.update {
             it.copy(openId = id, readIds = it.readIds + id, mode = ReadingMode.TEXT, translating = false, translations = cached(id),
                 expressions = emptyList(), loadingExpressions = false, snippet = null)
         }
     }
 
+    /** Where the open article was scrolled to and what was selected; kept while a word is looked up in the dictionary, so coming back lands on the same word. */
+    var scrollPosition = 0
+    /** Paragraph index and first / last character of the selected words, or null. */
+    var savedSelection: Triple<Int, Int, Int>? = null
+
+    fun saveScroll(value: Int) { scrollPosition = value }
+    fun saveSelection(value: Triple<Int, Int, Int>?) { savedSelection = value }
+
     fun close() {
+        scrollPosition = 0; savedSelection = null
         translateJob?.cancel(); snippetJob?.cancel(); expressionJob?.cancel()
         _state.update {
             it.copy(openId = null, mode = ReadingMode.TEXT, translating = false, translations = emptyMap(), expressions = emptyList(),
