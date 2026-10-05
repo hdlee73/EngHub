@@ -41,10 +41,10 @@ import com.hdlee73.englishstudy.speaking.data.DatasetStore
 import com.hdlee73.englishstudy.speaking.speech.SpeechScorer
 import kotlinx.coroutines.delay
 
-private val Blue = Color(0xFF285BE6)
-private val Mint = Color(0xFF43C6A4)
-private val Ink = Color(0xFF17243D)
-private val Canvas = Color(0xFFF4F7FF)
+private val Blue = Color(0xFF168C82)
+private val Mint = Color(0xFF1E9A8C)
+private val Ink = Color(0xFF172B2A)
+private val Canvas = Color(0xFFEAF3F1)
 private val Miss = Color(0xFFE5484D)
 
 @Composable
@@ -76,7 +76,7 @@ fun SpeakFlowApp(
     onMessageDismiss: () -> Unit
 ) {
     var statisticsOpen by remember { mutableStateOf(false) }
-    MaterialTheme(colorScheme = lightColorScheme(primary = Blue, background = Canvas, surface = Color.White)) {
+    MaterialTheme(colorScheme = lightColorScheme(primary = Blue, primaryContainer = Color(0xFFDDF1EC), secondaryContainer = Color(0xFFDDF1EC), background = Canvas, surface = Color.White)) {
         Scaffold(containerColor = Canvas, snackbarHost = {
             state.message?.let { message ->
                 Snackbar(modifier = Modifier.padding(16.dp), action = { TextButton(onClick = onMessageDismiss) { Text("확인") } }) { Text(message) }
@@ -94,7 +94,7 @@ fun SpeakFlowApp(
                     LinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
-                        color = Blue, trackColor = Color(0xFFDCE5FF)
+                        color = Blue, trackColor = Color(0xFFDDF1EC)
                     )
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         if (state.items.isEmpty()) EmptyState(onImport)
@@ -150,7 +150,7 @@ private fun EmptyState(onImport: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             Text("나만의 문장으로 말하기 연습", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center)
             Spacer(Modifier.height(10.dp))
-            Text("한글·영어 두 열 또는 영어 한 열로 된 Excel(.xlsx)·CSV 파일을 불러오세요. 열 순서는 자동으로 인식합니다.", color = Color(0xFF667085), textAlign = TextAlign.Center)
+            Text("한글·영어 두 열 또는 영어 한 열로 된 Excel(.xlsx)·CSV 파일을 불러오세요. 열 순서는 자동으로 인식합니다.", color = Color(0xFF6B7D7A), textAlign = TextAlign.Center)
             Spacer(Modifier.height(24.dp))
             Button(onClick = onImport, shape = RoundedCornerShape(14.dp)) { Text("데이터셋 불러오기") }
         }
@@ -178,7 +178,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
         ) {
             LessonStatusHeader(state, statusColor, tight, state.favorites.any { it.english == item.english }, onToggleFavorite)
             Text("문장 ${state.position / state.settings.repeatCount + 1}/${state.items.size} · 반복 ${state.repeatNumber}/${state.settings.repeatCount}", fontSize = 12.sp, color = Blue)
-            if (!compact) Text(state.microphoneLabel, color = Color(0xFF667085), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            if (!compact) Text(state.microphoneLabel, color = Color(0xFF6B7D7A), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(if (compact) 2.dp else 8.dp))
             val revealEnglish = !translation || item.korean.isBlank() || !state.retryText.isNullOrBlank() || state.phase in setOf(
                 LessonPhase.RETRYING, LessonPhase.CORRECT, LessonPhase.TIMED_OUT
@@ -211,7 +211,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                     LessonPhase.RETRYING, LessonPhase.CORRECT, LessonPhase.TIMED_OUT
                 )
                 if (translationVisible) {
-                    Text(item.korean, fontSize = if (item.korean.length > 70) 12.sp else 14.sp, lineHeight = 19.sp, color = Color(0xFF667085), textAlign = TextAlign.Center)
+                    Text(item.korean, fontSize = if (item.korean.length > 70) 12.sp else 14.sp, lineHeight = 19.sp, color = Color(0xFF6B7D7A), textAlign = TextAlign.Center)
                 }
                 if (state.phase == LessonPhase.LISTENING && !state.retryText.isNullOrBlank()) {
                     Spacer(Modifier.height(6.dp))
@@ -221,7 +221,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                 state.score?.let {
                     if (state.heardText.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
-                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("인식: ${state.heardText}", color = Color(0xFF6B7D7A), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -354,8 +354,8 @@ private fun DatasetSheet(
     SheetDialog(onDismiss = onClose, heightFraction = .9f) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = 22.dp, bottom = 32.dp)) {
             Text("내 데이터셋", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
-            Text("저장된 파일을 선택하면 바로 학습할 수 있어요.", color = Color(0xFF667085), fontSize = 13.sp)
-            Text("사전에서 저장한 단어의 예문과 책갈피 리본으로 즐겨찾기한 문장은 여기에 자동으로 모입니다.", color = Color(0xFF667085), fontSize = 12.sp)
+            Text("저장된 파일을 선택하면 바로 학습할 수 있어요.", color = Color(0xFF6B7D7A), fontSize = 13.sp)
+            Text("사전에서 저장한 단어의 예문과 책갈피 리본으로 즐겨찾기한 문장은 여기에 자동으로 모입니다.", color = Color(0xFF6B7D7A), fontSize = 12.sp)
             Spacer(Modifier.height(16.dp))
             Text("이어 학습할 파일을 체크하세요. 체크한 순서대로 이어집니다.", fontSize = 12.sp)
             Button(onClick = { onSequence(selected) }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
@@ -366,7 +366,7 @@ private fun DatasetSheet(
                     onClick = { onSelect(dataset) },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     shape = RoundedCornerShape(14.dp),
-                    color = if (dataset.id == state.activeDatasetId) Blue.copy(alpha = .10f) else Color(0xFFF5F7FA)
+                    color = if (dataset.id == state.activeDatasetId) Blue.copy(alpha = .10f) else Color(0xFFF1F6F5)
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = dataset.id in selected, onCheckedChange = { checked ->
@@ -376,7 +376,7 @@ private fun DatasetSheet(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(dataset.name, fontWeight = FontWeight.SemiBold, color = Ink)
-                            Text("${dataset.sentenceCount}개 문장", fontSize = 12.sp, color = Color(0xFF667085))
+                            Text("${dataset.sentenceCount}개 문장", fontSize = 12.sp, color = Color(0xFF6B7D7A))
                         }
                         if (dataset.id == state.activeDatasetId) Text("학습 중", color = Blue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         if (dataset.id != DatasetStore.SAVED_WORDS_ID && dataset.id != DatasetStore.FAVORITES_ID) {

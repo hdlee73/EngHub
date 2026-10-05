@@ -627,6 +627,7 @@ class ListeningController(
         val count = player.mediaItemCount
         val hasMedia = count > 0
 
+        if (SixMinuteEnglish.hasPending(ctx)) svc.importPending()
         val title = svc.currentTitle
         fileName.setIfChanged(title ?: "오디오 파일을 추가하세요")
         playlistSheet?.refreshIfChanged()
@@ -639,7 +640,7 @@ class ListeningController(
         }
         if (lastRepeatMode != svc.repeatMode) {
             lastRepeatMode = svc.repeatMode
-            repeatButton.setImageResource(if (svc.repeatMode == 1) R.drawable.ls_ic_repeat_one else R.drawable.ls_ic_repeat)
+            repeatButton.setImageResource(when (svc.repeatMode) { 1 -> R.drawable.ls_ic_repeat_one; 2 -> R.drawable.ls_ic_repeat_all; else -> R.drawable.ls_ic_repeat })
             repeatButton.isSelected = svc.repeatMode != 0
             repeatButton.imageTintList = ColorStateList.valueOf(ctx.getColor(if (svc.repeatMode == 0) R.color.ls_text_secondary else R.color.ls_teal_700))
             repeatButton.contentDescription = repeatLabel(svc)
