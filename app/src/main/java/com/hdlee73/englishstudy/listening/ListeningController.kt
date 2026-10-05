@@ -94,6 +94,10 @@ class ListeningController(
         addFiles(uris)
     }
 
+    private val pickFolder = activity.activityResultRegistry.register("ls_pick_folder", ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) importFolder(tree)
+    }
+
     private val pickSubtitle = activity.activityResultRegistry.register("ls_pick_subtitle", ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode != Activity.RESULT_OK || uri == null) return@register
@@ -239,6 +243,36 @@ class ListeningController(
         pendingAddGroup = group
         val intent = FilePick.intent(ctx, arrayOf("audio/*"), multiple = true)
         pickFiles.launch(intent)
+    }
+
+    /** Turns a device folder and its subfolders into playlist folders ("Root", "Root/Sub", ...). */
+    private fun importFolder(tree: Uri) {
+        val svc = playbackService ?: return
+        try {
+            ctx.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+        }
+        toast("폴더를 읽고 있어요…")
+        Thread {
+            val found = FolderImport.scan(ctx, tree)
+            handler.post {
+                if (playbackService == null) return@post
+                if (found.isEmpty()) {
+                    toast("이 폴더에는 오디오 파일이 없습니다.")
+                    return@post
+                }
+                var added = 0
+                found.forEach { f ->
+                    var index = svc.groups.indexOfFirst { it.name == f.path }
+                    if (index < 0) index = svc.createGroup(f.path)
+                    added += svc.addEntries(f.entries, index, startIfIdle = false)
+                }
+                toast(
+                    if (added == 0) "이미 모두 들어 있는 폴더입니다."
+                    else "폴더 ${found.size}개, ${added}곡을 재생목록에 추가했습니다."
+                )
+            }
+        }.start()
     }
 
     /** Picks from My Files come without a lasting grant, so those are copied into the app and played from the copy. */
@@ -558,7 +592,7 @@ class ListeningController(
 
     private fun showPlaylist() {
         val svc = playbackService ?: return
-        val sheet = PlaylistSheet(ctx, svc) { group -> openFilePicker(group) }
+        val sheet = PlaylistSheet(ctx, svc, { group -> openFilePicker(group) }, { pickFolder.launch(null) })
         playlistSheet = sheet
         sheet.show()
     }
