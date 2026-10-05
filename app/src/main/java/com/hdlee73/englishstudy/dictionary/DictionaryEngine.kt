@@ -62,7 +62,8 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
             io.execute { connection.disconnect(); connections.remove(id, connection) }
         }
         publish(SearchUpdate(null, "‘$q’ 검색 중…", false, emptyList(), "", searching = true))
-        val cached = ReviewedEntries.lookup(q) ?: synchronized(resultCache) { resultCache[q.lowercase(Locale.ROOT)] }
+        // Expressions are not cached: their list of similar expressions is looked up fresh each time.
+        val cached = ReviewedEntries.lookup(q) ?: if (' ' in q) null else synchronized(resultCache) { resultCache[q.lowercase(Locale.ROOT)] }
         if (cached != null) {
             publish(SearchUpdate(cached, "검색 결과", true, emptyList(), "", searching = false))
             return
@@ -83,18 +84,23 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
             val alsoForm = if (local != null) WordForms.irregular(q)?.let { form -> glossary.lookup(form.base)?.let { form to it } } else null
             // Rows such as "asked: ask의 과거형" get the base word's real senses underneath.
             val pointer = local?.let { WordForms.pointerBase(it.korean) }?.let { base -> glossary.lookup(base) }
-            val offlineKorean = when {
+            val rawOfflineKorean = when {
                 local != null && pointer != null -> local.korean.lines().filter { it.isNotBlank() }
                     .joinToString("\n") { "[변화형] " + it.replace(Regex("^\\s*\\d+[.)]\\s*"), "") } + "\n" + StudyMeanings.limit(pointer.korean)
-                local != null -> (alsoForm?.let { (form, base) -> form.note(base.korean) + "\n" } ?: "") + local.korean
-                baseForm != null && baseLocal != null -> baseForm.korean(baseLocal.korean)
+                local != null -> (alsoForm?.let { (form, base) -> form.note(base.korean) + "\n" } ?: "") + MeaningQuality.compact(local.korean)
+                baseForm != null && baseLocal != null -> baseForm.korean(MeaningQuality.compact(baseLocal.korean))
                 else -> null
             }
+            // For an expression the automatic translation of the whole phrase leads (a reverse index of a
+            // Korean dictionary can only guess at idioms); the dictionary's own words follow it.
+            val phraseAuto = if (rawOfflineKorean != null && ' ' in q) autoMeaning(q, requestId) else null
+            val offlineKorean = if (phraseAuto != null) MeaningQuality.merge(phraseAuto.text, rawOfflineKorean) else rawOfflineKorean
+            val similarPhrases = if (' ' in q) glossary.similar(q) else emptyList()
             val offlineCredit = when {
                 local != null -> localMeaningCredit(local, q)
                 baseLocal != null -> localMeaningCredit(baseLocal, baseForm!!.base)
                 else -> ""
-            }
+            } + if (phraseAuto != null) "\n" + MachineTranslation.CREDIT_MEANING else ""
             val exampleCandidates = exampleCorpus.lookup(q)
             // Examples are chosen to fit the Korean meanings shown, most common sense first.
             val humanExamples = ExampleSense.pick(exampleCandidates, offlineKorean.orEmpty())
@@ -111,13 +117,13 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
                 if (englishLocal.isNotBlank() && humanExamples.isNotEmpty()) {
                     // Complete offline entry: no network needed.
                     synchronized(resultCache) { resultCache[q.lowercase(Locale.ROOT)] = initial }
-                    present(initial, "검색 결과 · 기기 내 사전")
+                    present(initial, "검색 결과 · 기기 내 사전", suggestions = similarPhrases, suggestionTitle = "비슷한 표현")
                     // The bundled data has no pronunciation; add it when the online dictionary answers.
                     val ipa = try { fetchDictionary(q).ipa } catch (_: Exception) { "" }
                     if (ipa.isNotBlank() && !stale()) {
                         val withIpa = initial.copy(ipa = ipa)
                         synchronized(resultCache) { resultCache[q.lowercase(Locale.ROOT)] = withIpa }
-                        present(withIpa, "검색 결과 · 기기 내 사전")
+                        present(withIpa, "검색 결과 · 기기 내 사전", suggestions = similarPhrases, suggestionTitle = "비슷한 표현")
                     }
                     return@submit
                 }
@@ -138,7 +144,8 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
                     present(WordEntry(word = q, ipa = "", korean = offlineKorean,
                         english = englishLocal.ifBlank { "영어 풀이를 불러오지 못했습니다." }, examples = humanExampleText,
                         source = listOf(offlineCredit, humanCredit).filter { it.isNotBlank() }.joinToString("\n")),
-                        "기기 내 사전 뜻을 표시했습니다. 영어 풀이는 인터넷 연결 후 다시 검색해 주세요.")
+                        "기기 내 사전 뜻을 표시했습니다. 영어 풀이는 인터넷 연결 후 다시 검색해 주세요.",
+                        suggestions = similarPhrases, suggestionTitle = "비슷한 표현")
                 } else {
                     // Not in the English dictionary API either (phrases, names, rare words): try the
                     // automatic dictionary before giving up.
@@ -148,7 +155,7 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
                         val entry = WordEntry(word = q, ipa = "", korean = auto.text, english = "", examples = humanExampleText,
                             source = listOf(MachineTranslation.CREDIT_MEANING, humanCredit).filter { it.isNotBlank() }.joinToString("\n"))
                         synchronized(resultCache) { resultCache[q.lowercase(Locale.ROOT)] = entry }
-                        present(entry, "검색 결과 · 한글 뜻은 자동 번역입니다")
+                        present(entry, "검색 결과 · 한글 뜻은 자동 번역입니다", suggestions = similarPhrases, suggestionTitle = "비슷한 표현")
                         return@submit
                     }
                     val suggestions = (phraseCandidates + glossary.spellingCandidates(q) +
@@ -254,7 +261,8 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
                 missingTranslations > 0 -> "검색 결과 · 예문 해석을 불러오지 못했습니다. 다시 검색하면 해석이 추가됩니다."
                 usedAutoMeaning || machineExamples || supplementCredit.contains("자동 번역") -> "검색 결과 · 일부 자동 번역 포함"
                 else -> "검색 결과"
-            }, canSave = korean != null, suggestions = spelling)
+            }, canSave = korean != null, suggestions = if (spelling.isNotEmpty()) spelling else similarPhrases,
+                suggestionTitle = if (spelling.isNotEmpty()) "혹시 이 단어인가요?" else "비슷한 표현")
         }
     }
 

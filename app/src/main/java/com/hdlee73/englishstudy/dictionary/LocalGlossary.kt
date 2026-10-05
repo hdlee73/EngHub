@@ -37,6 +37,19 @@ internal class LocalGlossary(private val context: Context) {
             }
         } catch (_: Exception) { null }
     }
+    /** Expressions that resemble [query] when it has no entry of its own (inflections and "be/to/someone" are ignored). */
+    fun similar(query: String): List<String> {
+        val cache = HashMap<String, String>()
+        val lemma = { w: String -> cache.getOrPut(w) { WordForms.find(w) { contains(it) }?.base ?: w } }
+        val match = PhraseSimilarity.ftsQuery(PhraseSimilarity.tokens(query, lemma)) ?: return emptyList()
+        val db = open() ?: return emptyList()
+        return try {
+            val found = db.rawQuery(
+                "SELECT w.word FROM words_fts f JOIN words w ON w.rowid=f.docid WHERE words_fts MATCH ? LIMIT 400", arrayOf(match)
+            ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+            PhraseSimilarity.rank(query, found, lemma)
+        } catch (_: Exception) { emptyList() }
+    }
     fun suggest(query: String): List<String> {
         val terms = Regex("[a-z]+").findAll(query.lowercase(Locale.ROOT)).map { it.value + "*" }.toList()
         if (terms.isEmpty()) return emptyList()
