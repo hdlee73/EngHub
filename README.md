@@ -1,4 +1,4 @@
-# LexiFlow (영어 스터디)
+# EneHub (영어 스터디, 저장소 이름: LexiFlow)
 
 사전 · 단어 암기 · 예문 퀴즈 · 스피킹 연습을 한 앱에서 하는 Android 앱입니다.
 [SpeakFlow](https://github.com/hdlee73/SpeakFlow)와 [sajeon-app](https://github.com/hdlee73/sajeon-app)을 통합했습니다.
