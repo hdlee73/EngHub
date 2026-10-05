@@ -7,6 +7,10 @@ activityCompose = "1.11.0"
 composeBom = "2025.10.00"
 coroutines = "1.10.2"
 work = "2.10.0"
+appcompat = "1.7.1"
+material = "1.12.0"
+recyclerview = "1.4.0"
+media3 = "1.4.1"
 junit = "4.13.2"
 
 [libraries]
@@ -25,6 +29,11 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

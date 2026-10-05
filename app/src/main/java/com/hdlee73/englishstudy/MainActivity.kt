@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,6 +31,8 @@ import androidx.work.workDataOf
 import com.hdlee73.englishstudy.dictionary.DictionaryViewModel
 import com.hdlee73.englishstudy.dictionary.ExportWorker
 import com.hdlee73.englishstudy.dictionary.WordSpeaker
+import com.hdlee73.englishstudy.listening.ListeningLink
+import com.hdlee73.englishstudy.listening.ListeningScreen
 import com.hdlee73.englishstudy.reading.ReadingViewModel
 import com.hdlee73.englishstudy.translate.TranslateViewModel
 import com.hdlee73.englishstudy.ui.TranslateScreen
@@ -51,7 +53,7 @@ import com.hdlee73.englishstudy.ui.FlashcardScreen
 import com.hdlee73.englishstudy.ui.QuizScreen
 import com.hdlee73.englishstudy.ui.ReadingScreen
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val learningVm: LearningViewModel by viewModels()
     private val dictionaryVm: DictionaryViewModel by viewModels()
     private val studyVm: StudyViewModel by viewModels()
@@ -61,11 +63,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var wordSpeaker: WordSpeaker
 
     private var currentTab = AppTab.DICTIONARY
+    /** An audio file opened from elsewhere, or a widget / notification tap: the Listening tab takes it over. */
+    private var listeningIntent by mutableStateOf<Intent?>(null)
     private var hasOpenDialog = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null && ListeningLink.isForListening(intent)) listeningIntent = intent
         wordSpeaker = WordSpeaker(this) { notice(it) }
         speech = SpeechEngine(
             context = this,
@@ -92,6 +97,15 @@ class MainActivity : ComponentActivity() {
             var tabIndex by rememberSaveable { mutableStateOf(0) }
             // The tab a dictionary lookup was started from, so the dictionary can offer a way back to it.
             var returnTab by rememberSaveable { mutableStateOf<Int?>(null) }
+            LaunchedEffect(listeningIntent) {
+                if (listeningIntent != null) {
+                    if (tabIndex == AppTab.SPEAKING.ordinal) {
+                        learningVm.pauseForBackground()
+                        speech.stop()
+                    }
+                    tabIndex = AppTab.LISTENING.ordinal
+                }
+            }
             val tab = AppTab.values()[tabIndex.coerceIn(0, AppTab.values().size - 1)]
             var settingsOpen by rememberSaveable { mutableStateOf(false) }
             var datasetsOpen by rememberSaveable { mutableStateOf(false) }
@@ -212,7 +226,7 @@ class MainActivity : ComponentActivity() {
                     AppTab.DICTIONARY -> androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
                       val back = returnTab?.let { AppTab.values().getOrNull(it) }
                       if (back != null) {
-                          com.hdlee73.englishstudy.ui.ReturnBar("${back.label}(으)로 돌아가기") {
+                          com.hdlee73.englishstudy.ui.ReturnBar("${back.label} 탭으로 돌아가기") {
                               wordSpeaker.stop()
                               returnTab = null
                               tabIndex = back.ordinal
@@ -345,9 +359,19 @@ class MainActivity : ComponentActivity() {
                         onToggleRecording = learningVm::toggleRecording,
                         onMessageDismiss = learningVm::clearMessage
                     )
+                    AppTab.LISTENING -> ListeningScreen(
+                        pendingIntent = listeningIntent,
+                        onIntentConsumed = { listeningIntent = null }
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (ListeningLink.isForListening(intent)) listeningIntent = intent
     }
 
     private fun notice(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_SHORT).show()
