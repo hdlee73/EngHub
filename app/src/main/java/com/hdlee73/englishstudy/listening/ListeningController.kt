@@ -1,5 +1,6 @@
 package com.hdlee73.englishstudy.listening
 
+import com.hdlee73.englishstudy.ui.FilePick
 import com.hdlee73.englishstudy.R
 
 import android.Manifest
@@ -96,8 +97,7 @@ class ListeningController(
     private val pickSubtitle = activity.activityResultRegistry.register("ls_pick_subtitle", ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode != Activity.RESULT_OK || uri == null) return@register
-        takePersistable(uri)
-        playbackService?.setSubtitle(uri.toString())
+        playbackService?.setSubtitle(keepable(uri).toString())
         subtitleSheet?.reload()
     }
 
@@ -237,23 +237,25 @@ class ListeningController(
     /** One system picker covers Drive and device storage, and allows several files at once. */
     private fun openFilePicker(group: Int = playbackService?.activeGroup ?: 0) {
         pendingAddGroup = group
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("audio/*"))
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
+        val intent = FilePick.intent(ctx, arrayOf("audio/*"), multiple = true)
         pickFiles.launch(intent)
     }
 
+    /** Picks from My Files come without a lasting grant, so those are copied into the app and played from the copy. */
     private fun addFiles(uris: List<Uri>) {
         if (uris.isEmpty()) return
+        if (uris.all { isPersistable(it) }) { addPicked(uris.map { it to displayName(it) }); return }
+        toast("파일을 앱으로 가져오는 중…")
+        Thread {
+            val picked = uris.map { displayName(it).let { name -> keepable(it, name) to name } }
+            handler.post { addPicked(picked) }
+        }.start()
+    }
+
+    private fun addPicked(picked: List<Pair<Uri, String>>) {
         val svc = playbackService ?: return
-        val entries = uris.map {
-            takePersistable(it)
-            TrackStore.Entry(it.toString(), displayName(it))
-        }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+        val entries = picked.map { (uri, name) -> TrackStore.Entry(uri.toString(), name) }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         val group = pendingAddGroup.takeIf { it in svc.groups.indices } ?: svc.activeGroup
         pendingAddGroup = -1
         val added = svc.addEntries(entries, group, startIfIdle = group == svc.activeGroup)
@@ -261,6 +263,28 @@ class ListeningController(
             if (added == 0) "이미 그 그룹에 있는 파일입니다."
             else "${added}곡을 ‘${svc.groups[group].name}’ 그룹에 추가했습니다."
         )
+    }
+
+    private fun isPersistable(uri: Uri): Boolean {
+        if (uri.scheme == "file") return true
+        takePersistable(uri)
+        return ctx.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+    }
+
+    /** The uri itself when the app may keep reading it, otherwise a private copy under files/picked. */
+    private fun keepable(uri: Uri, name: String = displayName(uri)): Uri {
+        if (isPersistable(uri)) return uri
+        return runCatching {
+            val dir = java.io.File(ctx.filesDir, "picked").apply { mkdirs() }
+            val safe = name.replace(Regex("[^\\w.\\- ]+"), "_").take(120).ifBlank { "audio" }
+            val size = ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+            val same = dir.listFiles()?.firstOrNull { it.name.endsWith("_$safe") && size > 0 && it.length() == size }
+            val file = same ?: java.io.File(dir, "${System.currentTimeMillis()}_$safe").also { target ->
+                ctx.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } }
+                    ?: throw java.io.IOException("cannot open")
+            }
+            Uri.fromFile(file)
+        }.getOrElse { handler.post { toast("파일을 가져오지 못했습니다.") }; uri }
     }
 
     private fun takePersistable(uri: Uri) {
@@ -540,11 +564,7 @@ class ListeningController(
     }
 
     private fun openSubtitlePicker() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
+        val intent = FilePick.intent(ctx, arrayOf("*/*"), multiple = false)
         pickSubtitle.launch(intent)
     }
 
