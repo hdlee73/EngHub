@@ -98,7 +98,7 @@ fun SpeakFlowApp(
                         if (state.items.isEmpty()) EmptyState(onImport)
                         else LessonCard(state, expanded, compact, tight, onReplay, onRestart, onRetry, onNext)
                     }
-                    PlayerControls(state, tight, onPrevious, onPlayPause, onNext, onToggleRecording)
+                    PlayerControls(state, tight, onPrevious, onPlayPause, onNext, onToggleRecording) { onSettingsSave(state.settings.copy(autoAdvanceSentence = !state.settings.autoAdvanceSentence)) }
                 }
             }
         }
@@ -223,9 +223,9 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(Modifier.fillMaxWidth().height(if (tight) 18.dp else 24.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().heightIn(min = 22.dp), contentAlignment = Alignment.Center) {
                     if (state.phase == LessonPhase.LISTENING) {
-                        Text("남은 시간 ${state.remainingSeconds}초", color = Blue, fontWeight = FontWeight.SemiBold)
+                        Text("남은 시간 ${state.remainingSeconds}초", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp)
                     }
                 }
                 val translationVisible = item.korean.isNotBlank() && revealEnglish && state.phase in setOf(
@@ -431,7 +431,7 @@ private fun statusLabel(state: LearningUiState) = when (state.phase) {
 }
 
 @Composable
-private fun PlayerControls(state: LearningUiState, tight: Boolean, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit, onToggleRecording: () -> Unit) {
+private fun PlayerControls(state: LearningUiState, tight: Boolean, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit, onToggleRecording: () -> Unit, onToggleAuto: () -> Unit) {
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = if (tight) 2.dp else 8.dp, top = if (tight) 2.dp else 4.dp)) {
         Row(
             Modifier.align(Alignment.Center),
@@ -447,6 +447,7 @@ private fun PlayerControls(state: LearningUiState, tight: Boolean, onPrevious: (
             Spacer(Modifier.width(14.dp))
             RoundButton(R.drawable.ic_next, "다음 문장", if (tight) 40 else 48, onNext, state.position <= state.order.lastIndex)
         }
+        AutoButton(state.settings.autoAdvanceSentence, onToggleAuto, Modifier.align(Alignment.CenterStart).padding(start = 20.dp))
         RecordButton(state.recordingStartedAt, onToggleRecording, Modifier.align(Alignment.CenterEnd).padding(end = 20.dp))
     }
 }
@@ -462,23 +463,28 @@ private fun RecordButton(startedAt: Long?, onToggle: () -> Unit, modifier: Modif
         }
     }
     val recording = startedAt != null
-    Column(
-        modifier.semantics { contentDescription = if (recording) "녹음 종료" else "녹음 시작" },
-        horizontalAlignment = Alignment.CenterHorizontally
+    Surface(
+        onClick = onToggle, modifier = modifier.size(40.dp).semantics { contentDescription = if (recording) "녹음 종료" else "녹음 시작" },
+        shape = CircleShape, color = if (recording) Miss else Color.White, shadowElevation = 4.dp
     ) {
-        Surface(
-            onClick = onToggle, modifier = Modifier.size(40.dp), shape = CircleShape,
-            color = if (recording) Miss else Color.White, shadowElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (recording) Box(Modifier.size(14.dp).background(Color.White, RoundedCornerShape(3.dp)))
-                else Box(Modifier.size(14.dp).background(Miss, CircleShape))
-            }
+        Box(contentAlignment = Alignment.Center) {
+            if (recording) Text("%d:%02d".format(seconds / 60, seconds % 60), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            else Box(Modifier.size(14.dp).background(Miss, CircleShape))
         }
-        Text(
-            if (recording) "%d:%02d".format(seconds / 60, seconds % 60) else "녹음",
-            fontSize = 10.sp, color = if (recording) Miss else Color(0xFF667085), fontWeight = FontWeight.SemiBold
-        )
+    }
+}
+
+/** Small round switch: when on, the next sentence follows by itself after each one. */
+@Composable
+private fun AutoButton(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onToggle,
+        modifier = modifier.size(40.dp).semantics { contentDescription = if (on) "자동 넘김 켜짐" else "자동 넘김 꺼짐" },
+        shape = CircleShape, color = if (on) Blue else Color.White, shadowElevation = 4.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text("자동", fontSize = 11.sp, color = if (on) Color.White else Color(0xFF667085), fontWeight = FontWeight.Bold)
+        }
     }
 }
 
