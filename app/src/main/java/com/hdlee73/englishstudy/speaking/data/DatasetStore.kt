@@ -38,18 +38,26 @@ class DatasetStore(private val context: Context) {
      * no sentences. Sentence edits made in the dataset editor are discarded: the saved words are the
      * source of truth.
      */
-    fun syncSavedWords(pairs: List<SentencePair>): SavedDataset? {
-        val others = list().filterNot { it.id == SAVED_WORDS_ID }
-        val file = File(directory, "$SAVED_WORDS_ID.csv")
-        File(directory, "$SAVED_WORDS_ID.edited.json").delete()
+    fun syncSavedWords(pairs: List<SentencePair>): SavedDataset? = syncManaged(SAVED_WORDS_ID, SAVED_WORDS_NAME, pairs)
+
+    /** Same for the starred sentences: they live in their own dataset next to the saved-words one. */
+    fun syncFavorites(pairs: List<SentencePair>): SavedDataset? = syncManaged(FAVORITES_ID, FAVORITES_NAME, pairs)
+
+    private fun syncManaged(id: String, name: String, pairs: List<SentencePair>): SavedDataset? {
+        val others = list().filterNot { it.id == id }
+        val file = File(directory, "$id.csv")
+        File(directory, "$id.edited.json").delete()
         if (pairs.isEmpty()) {
             file.delete()
             saveIndex(others)
             return null
         }
         file.writeText(DatasetCsv.write(pairs), Charsets.UTF_8)
-        val dataset = SavedDataset(SAVED_WORDS_ID, SAVED_WORDS_NAME, file.name, pairs.size)
-        saveIndex(listOf(dataset) + others)
+        val dataset = SavedDataset(id, name, file.name, pairs.size)
+        // The managed datasets stay at the top of the list: saved words first, then favorites.
+        val managedIds = listOf(SAVED_WORDS_ID, FAVORITES_ID)
+        val (managed, rest) = (others + dataset).partition { it.id in managedIds }
+        saveIndex(managed.sortedBy { managedIds.indexOf(it.id) } + rest)
         return dataset
     }
 
@@ -125,5 +133,7 @@ class DatasetStore(private val context: Context) {
         const val SAVED_WORDS_ID = "saved_words"
         /** The name must end in ".csv": the parser is chosen from it when the dataset is loaded. */
         const val SAVED_WORDS_NAME = "저장 단어 예문.csv"
+        const val FAVORITES_ID = "favorites"
+        const val FAVORITES_NAME = "즐겨찾기 문장.csv"
     }
 }

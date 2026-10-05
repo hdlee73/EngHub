@@ -190,6 +190,8 @@ class MainActivity : ComponentActivity() {
             }
 
             val savedSentences = remember(saved) { SavedWordSentences.fromEntries(saved) }
+            // The saved words' example sentences become a dataset of their own, always up to date.
+            LaunchedEffect(savedSentences) { learningVm.syncSavedWordsDataset(savedSentences) }
 
             AppRoot(
                 tab = tab,
@@ -328,9 +330,6 @@ class MainActivity : ComponentActivity() {
                         onEditorClose = learningVm::closeEditor,
                         onSentenceSave = learningVm::saveSentence,
                         onOpenUpdate = { openUrl("https://github.com/hdlee73/LexiFlow/releases/latest") },
-                        savedSentenceCount = savedSentences.size,
-                        onStudySavedWords = { learningVm.studySavedWords(savedSentences) },
-                        onStudyFavorites = { learningVm.studyFavorites() },
                         onToggleFavorite = { learningVm.toggleFavorite() },
                         onDatasetSequence = { learningVm.selectDatasets(it); datasetsOpen = false },
                         onImport = {

@@ -1,5 +1,6 @@
 package com.hdlee73.englishstudy.speaking.ui
 
+import androidx.compose.foundation.Canvas as DrawCanvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
@@ -59,9 +63,6 @@ fun SpeakFlowApp(
     onEditorClose: () -> Unit,
     onSentenceSave: (Int, String, String) -> Unit,
     onOpenUpdate: () -> Unit,
-    savedSentenceCount: Int,
-    onStudySavedWords: () -> Unit,
-    onStudyFavorites: () -> Unit,
     onToggleFavorite: () -> Unit,
     onDatasetSequence: (List<String>) -> Unit,
     onImport: () -> Unit,
@@ -90,7 +91,6 @@ fun SpeakFlowApp(
                 val tight = maxHeight < 700.dp
                 Column(Modifier.fillMaxSize()) {
                     TopBar(state, tight, onDatasetsOpen, onSettingsOpen)
-                    SavedWordsBar(savedSentenceCount, state.favorites.size, state.activeDatasetId, tight, onStudySavedWords, onStudyFavorites)
                     LinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
@@ -133,37 +133,6 @@ private fun BannerButton(iconRes: Int, description: String, onClick: () -> Unit)
         Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.22f)).clickable(onClickLabel = description) { onClick() },
         contentAlignment = Alignment.Center
     ) { Icon(painterResource(iconRes), description, Modifier.size(21.dp), tint = Color.White) }
-}
-
-/** Starts speaking practice with the example sentences of the saved dictionary words, or with the starred sentences only. */
-@Composable
-private fun SavedWordsBar(sentenceCount: Int, favoriteCount: Int, activeId: String?, tight: Boolean, onSavedClick: () -> Unit, onFavoritesClick: () -> Unit) {
-    Surface(color = Color.White.copy(alpha = .72f)) {
-        if (sentenceCount == 0 && favoriteCount == 0) {
-            // No button to press yet: just a hint on how sentences get here.
-            Text(
-                "📚 사전에서 단어를 저장하면 그 예문으로 연습할 수 있어요 · 문장 카드의 ☆로 즐겨찾기도 할 수 있어요",
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (tight) 4.dp else 8.dp),
-                fontSize = 12.sp, color = Color(0xFF667085), textAlign = TextAlign.Center, maxLines = 2
-            )
-        } else Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (tight) 0.dp else 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (sentenceCount > 0) FilledTonalButton(
-                onClick = onSavedClick, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), shape = RoundedCornerShape(14.dp)
-            ) {
-                Text(if (activeId == DatasetStore.SAVED_WORDS_ID) "📚 저장 단어 다시 ($sentenceCount)" else "📚 저장 단어 예문 ($sentenceCount)", fontSize = 13.sp, maxLines = 1)
-            }
-            if (favoriteCount > 0) FilledTonalButton(
-                onClick = onFavoritesClick, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), shape = RoundedCornerShape(14.dp)
-            ) {
-                Text(if (activeId == "favorites") "★ 즐겨찾기 다시 ($favoriteCount)" else "★ 즐겨찾기 ($favoriteCount)", fontSize = 13.sp, maxLines = 1)
-            }
-        }
-    }
 }
 
 @Composable
@@ -303,11 +272,11 @@ private fun AutoFitText(text: AnnotatedString, maxSp: Int, weight: FontWeight, c
 
 @Composable
 private fun LessonStatusHeader(state: LearningUiState, statusColor: Color, tight: Boolean, favorite: Boolean, onFavorite: () -> Unit) {
-    val height = if (tight) 30.dp else 40.dp
-    Row(Modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(Modifier.width(height))
+    val height = if (tight) 32.dp else 40.dp
+    Box(Modifier.fillMaxWidth().height(height)) {
+        // A narrow status pill in the middle, with room on both sides.
         Surface(
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth(.56f).height(if (tight) 28.dp else 34.dp),
             color = statusColor,
             shape = RoundedCornerShape(10.dp)
         ) {
@@ -316,20 +285,28 @@ private fun LessonStatusHeader(state: LearningUiState, statusColor: Color, tight
                     statusLabel(state),
                     color = Color.White,
                     fontSize = 12.sp,
-                    lineHeight = 15.sp,
+                    lineHeight = 14.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     maxLines = 2
                 )
             }
         }
-        // Star: keeps this sentence in "favorites", which can be practised on their own.
+        // Bookmark ribbon at the right edge: keeps this sentence in "favorites", a dataset of its own.
         Box(
-            Modifier.size(height).clip(CircleShape)
+            Modifier.align(Alignment.CenterEnd).size(height).clip(CircleShape)
                 .clickable(onClickLabel = if (favorite) "즐겨찾기 해제" else "즐겨찾기 추가", onClick = onFavorite),
             contentAlignment = Alignment.Center
         ) {
-            Text(if (favorite) "★" else "☆", fontSize = 26.sp, color = if (favorite) Color(0xFFF5B301) else Color(0xFF98A2B3))
+            DrawCanvas(Modifier.size(width = 20.dp, height = 26.dp)) {
+                val w = size.width
+                val h = size.height
+                val ribbon = Path().apply {
+                    moveTo(w * 0.1f, 0f); lineTo(w * 0.9f, 0f); lineTo(w * 0.9f, h); lineTo(w * 0.5f, h * 0.72f); lineTo(w * 0.1f, h); close()
+                }
+                if (favorite) drawPath(ribbon, Color(0xFFF5B301))
+                else drawPath(ribbon, Color(0xFF98A2B3), style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Round))
+            }
         }
     }
 }
@@ -378,6 +355,7 @@ private fun DatasetSheet(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             Text("내 데이터셋", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
             Text("저장된 파일을 선택하면 바로 학습할 수 있어요.", color = Color(0xFF667085), fontSize = 13.sp)
+            Text("사전에서 저장한 단어의 예문과 ★로 즐겨찾기한 문장은 여기에 자동으로 모입니다.", color = Color(0xFF667085), fontSize = 12.sp)
             Spacer(Modifier.height(16.dp))
             Text("이어 학습할 파일을 체크하세요. 체크한 순서대로 이어집니다.", fontSize = 12.sp)
             Button(onClick = { onSequence(selected) }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
@@ -401,7 +379,7 @@ private fun DatasetSheet(
                             Text("${dataset.sentenceCount}개 문장", fontSize = 12.sp, color = Color(0xFF667085))
                         }
                         if (dataset.id == state.activeDatasetId) Text("학습 중", color = Blue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        if (dataset.id != DatasetStore.SAVED_WORDS_ID) {
+                        if (dataset.id != DatasetStore.SAVED_WORDS_ID && dataset.id != DatasetStore.FAVORITES_ID) {
                             TextButton(onClick = { onEdit(dataset) }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("편집") }
                         }
                         TextButton(
@@ -517,11 +495,11 @@ private fun AutoButton(on: Boolean, onToggle: () -> Unit, modifier: Modifier = M
             .semantics { contentDescription = if (on) "자동 넘김 켜짐" else "자동 넘김 꺼짐" }.padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("AUTO", fontSize = 10.sp, lineHeight = 12.sp, color = Color(0xFF98A2B3), fontWeight = FontWeight.Medium)
+        Text("AUTO", fontSize = 9.sp, lineHeight = 11.sp, color = Color(0xFF98A2B3), fontWeight = FontWeight.Medium)
         Surface(shape = RoundedCornerShape(6.dp), color = if (on) Blue else Color(0xFFC9CED8)) {
             Text(
                 if (on) "ON" else "OFF", modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.dp),
-                fontSize = 14.sp, lineHeight = 17.sp, color = Color.White, fontWeight = FontWeight.Bold
+                fontSize = 11.sp, lineHeight = 13.sp, color = Color.White, fontWeight = FontWeight.Bold
             )
         }
     }

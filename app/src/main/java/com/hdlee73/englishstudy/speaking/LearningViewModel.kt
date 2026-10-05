@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 class LearningViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val SUCCESS_RESULT_DISPLAY_MILLIS = 3_000L
-        const val FAVORITES_ID = "favorites"
     }
     private val prefs = application.getSharedPreferences("learning", 0)
     private val favoritePrefs = application.getSharedPreferences("favorite_sentences", 0)
@@ -306,18 +305,22 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val existing = entries.firstOrNull { it.substringBefore('\u001F') == item.english }
         if (existing != null) entries.remove(existing) else entries.add(item.english + "\u001F" + item.korean)
         favoritePrefs.edit().putStringSet("items", entries).apply()
-        _state.update { it.copy(favorites = loadFavorites()) }
+        val favorites = loadFavorites()
+        _state.update { it.copy(favorites = favorites) }
+        // The starred sentences are kept as a dataset of their own, listed with the other datasets.
+        viewModelScope.launch {
+            runCatching { datasetStore.syncFavorites(favorites) }
+            _state.update { it.copy(savedDatasets = datasetStore.list()) }
+        }
     }
 
-    /** Practises only the starred sentences. */
-    fun studyFavorites() {
-        val items = _state.value.favorites
-        if (items.isEmpty()) {
-            _state.update { it.copy(message = "즐겨찾기한 문장이 없습니다. 문장 카드의 ☆를 눌러 추가하세요.") }
-            return
+    /** Keeps the "saved words" dataset in step with the example sentences of the dictionary's saved words. */
+    fun syncSavedWordsDataset(sentences: List<SentencePair>) {
+        viewModelScope.launch {
+            runCatching { datasetStore.syncSavedWords(sentences) }
+            runCatching { datasetStore.syncFavorites(loadFavorites()) }
+            _state.update { it.copy(savedDatasets = datasetStore.list()) }
         }
-        resetWith(items, "즐겨찾기", FAVORITES_ID)
-        restart()
     }
 
     fun updateSettings(settings: LearningSettings) {
