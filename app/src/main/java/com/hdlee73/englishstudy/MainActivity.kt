@@ -78,6 +78,8 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         if (savedInstanceState == null && ListeningLink.isForListening(intent)) listeningIntent = intent
         if (savedInstanceState == null && DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
+        // Fetches each new BBC 6 Minute English episode into the Listening tab's "6min" folder.
+        com.hdlee73.englishstudy.listening.SixMinuteEnglish.schedule(applicationContext)
         wordSpeaker = WordSpeaker(this) { notice(it) }
         speech = SpeechEngine(
             context = this,
@@ -347,7 +349,18 @@ class MainActivity : AppCompatActivity() {
                             tabIndex = AppTab.DICTIONARY.ordinal
                         },
                         onSpeak = wordSpeaker::speak,
-                        onMessageDismiss = translateVm::clearMessage
+                        onMessageDismiss = translateVm::clearMessage,
+                        onSaveToSpeaking = { english, korean ->
+                            learningVm.addTranslatedSentence(english, korean) { added ->
+                                translateVm.showMessage(
+                                    when (added) {
+                                        true -> "문장말하기 ‘번역 저장 문장’ 데이터셋에 추가했어요."
+                                        false -> "이미 ‘번역 저장 문장’ 데이터셋에 있는 문장이에요."
+                                        null -> "데이터셋에 저장하지 못했어요."
+                                    }
+                                )
+                            }
+                        }
                     )
                     AppTab.SPEAKING -> SpeakFlowApp(
                         state = learning,

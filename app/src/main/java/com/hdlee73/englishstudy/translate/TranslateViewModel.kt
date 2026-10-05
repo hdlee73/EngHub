@@ -47,6 +47,8 @@ class TranslateViewModel : ViewModel() {
 
     fun setDirection(direction: Direction) = _state.update { it.copy(direction = direction, result = null, resultFor = "") }
 
+    fun showMessage(text: String) = _state.update { it.copy(message = text) }
+
     fun clearMessage() = _state.update { it.copy(message = null) }
 
     fun translate() {

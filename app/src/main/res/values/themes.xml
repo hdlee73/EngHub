@@ -2,6 +2,13 @@
 <resources>
     <style name="Theme.EnglishStudy" parent="Theme.Material3.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="colorPrimary">#168C82</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#DDF1EC</item>
+        <item name="colorSecondary">#168C82</item>
+        <item name="colorSecondaryContainer">#DDF1EC</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="android:colorBackground">#EAF3F1</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>

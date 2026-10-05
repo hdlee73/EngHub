@@ -68,8 +68,8 @@ fun EmptyState(emoji: String, title: String, body: String, modifier: Modifier = 
 /** The part of a Korean meaning text that is worth showing on a card: numbered senses, no blank lines. */
 fun meaningLines(korean: String): List<String> = korean.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
-private val HeroStart = Color(0xFF4F7CFF)
-private val HeroEnd = Color(0xFF8B5CF6)
+private val HeroStart = Color(0xFF22A394)
+private val HeroEnd = Color(0xFF0C6F67)
 
 /** The colourful banner at the top of every screen. [trailing] puts buttons at its right end; [compact] makes it slimmer. */
 @Composable
@@ -121,7 +121,7 @@ fun StudyTopBar(title: String, primary: String, secondary: String, progress: Flo
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(accent.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = if (compact) 3.dp else 5.dp)
             )
         }
-        Box(Modifier.fillMaxWidth().height(if (compact) 6.dp else 8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFE3EAF8))) {
+        Box(Modifier.fillMaxWidth().height(if (compact) 6.dp else 8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFDCE9E6))) {
             Box(Modifier.fillMaxWidth(animated).height(if (compact) 6.dp else 8.dp).clip(RoundedCornerShape(4.dp)).background(accent))
         }
     }
@@ -135,7 +135,7 @@ fun StartButton(text: String, enabled: Boolean, onClick: () -> Unit, modifier: M
         modifier = modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Mint, contentColor = Color.White,
-            disabledContainerColor = Color(0xFFD5DBE8), disabledContentColor = Color(0xFF8A94A8)
+            disabledContainerColor = Color(0xFFD3E2DF), disabledContentColor = Color(0xFF86A09B)
         ),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
     ) { Text(text, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold) }
@@ -159,7 +159,7 @@ fun SourcePicker(
                 Column(
                     Modifier.width(150.dp).clip(RoundedCornerShape(16.dp))
                         .background(if (selected) SoftBlue else Color.White)
-                        .border(if (selected) 2.dp else 1.dp, if (selected) Blue else Color(0xFFDDE3F0), RoundedCornerShape(16.dp))
+                        .border(if (selected) 2.dp else 1.dp, if (selected) Blue else Color(0xFFDCE9E6), RoundedCornerShape(16.dp))
                         .clickable { onSelect(source.id) }
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {

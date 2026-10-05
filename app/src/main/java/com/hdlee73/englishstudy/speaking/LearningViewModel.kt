@@ -12,7 +12,9 @@ import com.hdlee73.englishstudy.speaking.model.*
 import com.hdlee73.englishstudy.speaking.speech.PronunciationRecorder
 import com.hdlee73.englishstudy.speaking.speech.SpeechScorer
 import com.hdlee73.englishstudy.speaking.speech.RetryEvaluator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -315,6 +317,17 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** Keeps the "saved words" dataset in step with the example sentences of the dictionary's saved words. */
+    /** Adds a sentence from the Translate tab to the "번역 저장 문장" dataset; [done] gets true when it was new. */
+    fun addTranslatedSentence(english: String, korean: String, done: (Boolean?) -> Unit) {
+        viewModelScope.launch {
+            val added = withContext(Dispatchers.IO) {
+                runCatching { datasetStore.addTranslated(SentencePair(korean.trim(), english.trim())) }.getOrNull()
+            }
+            _state.update { it.copy(savedDatasets = datasetStore.list()) }
+            done(added)
+        }
+    }
+
     fun syncSavedWordsDataset(sentences: List<SentencePair>) {
         viewModelScope.launch {
             runCatching { datasetStore.syncSavedWords(sentences) }

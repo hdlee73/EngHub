@@ -204,6 +204,16 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player).setSessionActivity(openApp).build()
 
         restoreGroups()
+        importPending()
+    }
+
+    /** Adds the 6 Minute English episodes downloaded in the background to the "6min" folder (created when missing). */
+    fun importPending() {
+        val entries = SixMinuteEnglish.takePending(this)
+        if (entries.isEmpty()) return
+        val index = groups.indexOfFirst { it.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true) }
+            .takeIf { it >= 0 } ?: createGroup(SixMinuteEnglish.GROUP_NAME)
+        addEntries(entries, index)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -648,7 +658,20 @@ class PlaybackService : MediaSessionService() {
     // ------------------------------------------------------------------ subtitles
 
     val currentTrackUri: String? get() = currentUri
-    val subtitleUri: String? get() = current.subtitleUri
+    val subtitleUri: String? get() = current.subtitleUri ?: adoptLinkedSubtitle()
+
+    /** A subtitle made for this audio in DocVoice (MP3 → 문서, SRT) becomes the track's subtitle by itself. */
+    private fun adoptLinkedSubtitle(): String? {
+        val uri = currentUri ?: return null
+        if (uri == checkedLinkFor && SubtitleLinks.version == checkedLinkVersion) return null
+        checkedLinkFor = uri
+        checkedLinkVersion = SubtitleLinks.version
+        val linked = SubtitleLinks.find(this, uri, currentTitle) ?: return null
+        setSubtitle(linked)
+        return linked
+    }
+    private var checkedLinkFor: String? = null
+    private var checkedLinkVersion = -1
 
     /** Links a subtitle file to the current track (null removes the link). */
     fun setSubtitle(uri: String?) {
