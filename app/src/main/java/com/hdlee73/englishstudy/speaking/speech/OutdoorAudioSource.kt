@@ -10,7 +10,12 @@ import java.io.Closeable
 import kotlin.concurrent.thread
 
 // Optional Android 13+ input for engines that accept EXTRA_AUDIO_SOURCE.
-class OutdoorAudioSource(private val tee: ((ByteArray, Int) -> Unit)? = null) : Closeable {
+// outdoor = false (recording only): the clean VOICE_RECOGNITION path without call-style
+// noise suppression/echo cancelling, which smear consonants and lower recognition accuracy.
+class OutdoorAudioSource(
+    private val tee: ((ByteArray, Int) -> Unit)? = null,
+    private val outdoor: Boolean = true
+) : Closeable {
     private var recorder: AudioRecord? = null
     private var pipe: Array<ParcelFileDescriptor>? = null
     private val effects = mutableListOf<AudioEffect>()
@@ -22,16 +27,17 @@ class OutdoorAudioSource(private val tee: ((ByteArray, Int) -> Unit)? = null) : 
     fun attach(intent: Intent, device: AudioDeviceInfo?) {
         val min = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(min > 0)
-        val record = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+        val record = AudioRecord.Builder()
+            .setAudioSource(if (outdoor) MediaRecorder.AudioSource.VOICE_COMMUNICATION else MediaRecorder.AudioSource.VOICE_RECOGNITION)
             .setAudioFormat(AudioFormat.Builder().setSampleRate(16000).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()).setBufferSizeInBytes(maxOf(min * 4, 8192)).build()
         recorder = record
         check(record.state == AudioRecord.STATE_INITIALIZED)
         if (device != null) check(record.setPreferredDevice(device))
-        if (NoiseSuppressor.isAvailable()) runCatching {
+        if (outdoor && NoiseSuppressor.isAvailable()) runCatching {
             NoiseSuppressor.create(record.audioSessionId)?.let { it.enabled = true; noiseSuppressed = it.enabled; effects += it }
         }
-        if (AcousticEchoCanceler.isAvailable()) runCatching {
+        if (outdoor && AcousticEchoCanceler.isAvailable()) runCatching {
             AcousticEchoCanceler.create(record.audioSessionId)?.let { it.enabled = true; effects += it }
         }
         val descriptors = ParcelFileDescriptor.createPipe()
