@@ -327,7 +327,7 @@ class MainActivity : ComponentActivity() {
                         onDatasetEdit = { datasetsOpen = false; learningVm.editDataset(it) },
                         onEditorClose = learningVm::closeEditor,
                         onSentenceSave = learningVm::saveSentence,
-                        onOpenUpdate = { openUrl("https://github.com/hdlee73/english_study/releases/latest") },
+                        onOpenUpdate = { openUrl("https://github.com/hdlee73/LexiFlow/releases/latest") },
                         savedSentenceCount = savedSentences.size,
                         onStudySavedWords = { learningVm.studySavedWords(savedSentences) },
                         onDatasetSequence = { learningVm.selectDatasets(it); datasetsOpen = false },

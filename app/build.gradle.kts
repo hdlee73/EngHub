@@ -12,8 +12,8 @@ android {
         applicationId = "com.hdlee73.englishstudy"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.7.0"
+        versionCode = 15
+        versionName = "1.7.1"
     }
 
     // Every release must be signed with the same key, otherwise Android refuses to install an update
