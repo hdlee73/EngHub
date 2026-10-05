@@ -43,6 +43,13 @@
             android:textStyle="bold" />
 
         <ImageButton
+            android:id="@+id/sheetViewButton"
+            style="@style/ls_HeaderIcon"
+            android:layout_marginEnd="6dp"
+            android:contentDescription="보기 방식 바꾸기"
+            android:src="@drawable/ls_ic_list" />
+
+        <ImageButton
             android:id="@+id/sheetAddButton"
             style="@style/ls_HeaderIcon"
             android:contentDescription="이 그룹에 파일 추가"
@@ -67,6 +74,23 @@
         android:paddingBottom="4dp"
         android:textColor="@color/ls_text_secondary"
         android:textSize="12sp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/fetchEpisodeButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="4dp"
+        android:backgroundTint="@color/ls_teal_600"
+        android:text="새 에피소드 가져오기"
+        android:textColor="@android:color/white"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:cornerRadius="14dp"
+        app:icon="@drawable/ls_ic_add"
+        app:iconTint="@android:color/white" />
 
     <FrameLayout
         android:layout_width="match_parent"

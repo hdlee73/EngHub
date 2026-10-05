@@ -207,6 +207,35 @@ class PlaybackService : MediaSessionService() {
         importPending()
     }
 
+    /**
+     * Gives the episodes in the "6min" folder the name yyyymmdd_6min.mp3 (the date the episode was published).
+     * Files this app downloaded are renamed on the phone too; other files keep their file name and only the playlist name changes.
+     */
+    private fun renameSixMinuteEntries() {
+        val renamedFiles = ArrayList<Pair<String, String>>()
+        var changed = false
+        for (group in groups) {
+            if (!group.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true)) continue
+            for ((i, entry) in group.entries.withIndex()) {
+                val key = SixMinuteEnglish.episodeKey(entry.name) ?: continue
+                val name = SixMinuteEnglish.fileName(key)
+                if (entry.name == name) continue
+                group.entries[i] = TrackStore.Entry(entry.uri, name)
+                changed = true
+                if (entry.uri.startsWith("content://media/")) renamedFiles += entry.uri to name
+            }
+        }
+        if (changed) store.saveGroups(groups, store.activeGroup.coerceIn(0, groups.lastIndex))
+        if (renamedFiles.isNotEmpty()) Thread {
+            renamedFiles.forEach { (uri, name) ->
+                runCatching {
+                    val values = android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name) }
+                    contentResolver.update(Uri.parse(uri), values, null, null)
+                }
+            }
+        }.start()
+    }
+
     /** Adds the 6 Minute English episodes downloaded in the background to the "6min" folder (created when missing). */
     fun importPending() {
         val entries = SixMinuteEnglish.takePending(this)
@@ -248,6 +277,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun restoreGroups() {
         groups = store.loadGroups()
+        renameSixMinuteEntries()
         activeGroup = store.activeGroup.coerceIn(0, groups.lastIndex)
         loadActiveIntoPlayer(play = false, startIndex = null)
     }

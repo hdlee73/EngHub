@@ -74,6 +74,11 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
     private var translateJob: Job? = null
     private var snippetJob: Job? = null
     private var expressionJob: Job? = null
+    /** Everyday English words (the most frequent ones), left out of the key expressions. */
+    private val commonWords: Set<String> by lazy {
+        runCatching { getApplication<Application>().assets.open("common_words.txt").bufferedReader().useLines { lines -> lines.map { it.trim() }.filter { it.isNotEmpty() }.toHashSet() } }
+            .getOrDefault(emptySet())
+    }
     private var fetchJob: Job? = null
 
     init { refresh() }
@@ -338,7 +343,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
 
     private fun loadExpressions(article: ReadingArticle) {
         if (_state.value.expressions.isNotEmpty()) return
-        val base = KeyExpressions.extract(article.paragraphs)
+        val base = KeyExpressions.extract(article.paragraphs, common = commonWords)
         val saved = cachedExpressions(article.id)
         val items = base.map { e -> saved[e.expression] ?: ExpressionItem(e.expression, e.sentence) }
         _state.update { it.copy(expressions = items, loadingExpressions = items.any { i -> i.meaning == null }) }

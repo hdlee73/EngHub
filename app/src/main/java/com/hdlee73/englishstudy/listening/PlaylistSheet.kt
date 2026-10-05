@@ -37,6 +37,11 @@ class PlaylistSheet(
     private val backButton: ImageButton = root.findViewById(R.id.sheetBackButton)
     private val addButton: ImageButton = root.findViewById(R.id.sheetAddButton)
     private val menuButton: ImageButton = root.findViewById(R.id.sheetMenuButton)
+    private val viewButton: ImageButton = root.findViewById(R.id.sheetViewButton)
+    private val fetchButton: android.widget.Button = root.findViewById(R.id.fetchEpisodeButton)
+    private val prefs = context.getSharedPreferences(TrackStore.PREFS, Context.MODE_PRIVATE)
+    /** Folders as a list of rows instead of a grid of cards; remembered. */
+    private var listView = prefs.getBoolean(KEY_LIST_VIEW, false)
     private val folders: RecyclerView = root.findViewById(R.id.folderGrid)
     private val summary: TextView = root.findViewById(R.id.groupSummary)
     private val list: RecyclerView = root.findViewById(R.id.trackList)
@@ -67,9 +72,19 @@ class PlaylistSheet(
         list.layoutManager = LinearLayoutManager(context)
         list.adapter = adapter
         touchHelper.attachToRecyclerView(list)
-        val columns = if (context.resources.configuration.screenWidthDp >= 600) 4 else 2
-        folders.layoutManager = GridLayoutManager(context, columns)
+        applyFolderLayout()
         folders.adapter = folderAdapter
+        viewButton.setOnClickListener {
+            listView = !listView
+            prefs.edit().putBoolean(KEY_LIST_VIEW, listView).apply()
+            applyFolderLayout()
+            folders.adapter = folderAdapter
+        }
+        fetchButton.setOnClickListener {
+            val have = svc.groupEntries(viewGroup).mapNotNull { SixMinuteEnglish.episodeKey(it.name) }
+            SixMinuteEnglish.fetchLatest(context, have)
+            toast("최신 에피소드를 확인하고 있어요…")
+        }
 
         backButton.setOnClickListener { openFolders() }
         addButton.setOnClickListener { if (inFolder) addFilesTo(viewGroup) else promptNewFolder() }
@@ -96,6 +111,13 @@ class PlaylistSheet(
         svc.groups.forEach { append('|').append(it.name).append(':').append(it.entries.size) }
     }
 
+    private fun applyFolderLayout() {
+        val columns = if (context.resources.configuration.screenWidthDp >= 600) 4 else 2
+        folders.layoutManager = if (listView) LinearLayoutManager(context) else GridLayoutManager(context, columns)
+        viewButton.setImageResource(if (listView) R.drawable.ls_ic_grid else R.drawable.ls_ic_list)
+        viewButton.contentDescription = if (listView) "카드로 보기" else "목록으로 보기"
+    }
+
     private fun openFolder(index: Int) {
         viewGroup = index
         inFolder = true
@@ -118,6 +140,9 @@ class PlaylistSheet(
         lastSignature = signature()
         backButton.visibility = if (inFolder) View.VISIBLE else View.GONE
         menuButton.visibility = if (inFolder) View.VISIBLE else View.GONE
+        viewButton.visibility = if (inFolder) View.GONE else View.VISIBLE
+        val sixMinute = inFolder && svc.groups.getOrNull(viewGroup)?.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true)
+        fetchButton.visibility = if (sixMinute) View.VISIBLE else View.GONE
         folders.visibility = if (inFolder) View.GONE else View.VISIBLE
         list.visibility = if (inFolder) View.VISIBLE else View.GONE
         if (!inFolder) {
@@ -146,8 +171,10 @@ class PlaylistSheet(
 
     /** The folders, followed by a "new folder" card. */
     private inner class FolderAdapter : RecyclerView.Adapter<FolderHolder>() {
+        override fun getItemViewType(position: Int): Int = if (listView) 1 else 0
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FolderHolder =
-            FolderHolder(LayoutInflater.from(parent.context).inflate(R.layout.ls_item_folder, parent, false))
+            FolderHolder(LayoutInflater.from(parent.context).inflate(if (viewType == 1) R.layout.ls_item_folder_row else R.layout.ls_item_folder, parent, false))
 
         override fun onBindViewHolder(holder: FolderHolder, position: Int) {
             val group = svc.groups.getOrNull(position)
@@ -155,7 +182,7 @@ class PlaylistSheet(
                 holder.icon.setImageResource(R.drawable.ls_ic_add)
                 holder.badge.text = ""
                 holder.name.text = "새 폴더"
-                holder.count.text = "폴더 만들기"
+                holder.count.text = if (listView) "" else "폴더 만들기"
                 holder.itemView.setBackgroundResource(R.drawable.ls_bg_folder)
                 holder.itemView.setOnClickListener { promptNewFolder() }
                 holder.itemView.setOnLongClickListener(null)
@@ -192,7 +219,6 @@ class PlaylistSheet(
         menu.menu.add(0, 2, 1, "이 폴더 반복 재생")
         menu.menu.add(0, 3, 2, "이름 변경")
         menu.menu.add(0, 4, 3, "폴더 비우기")
-        if (group.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true)) menu.menu.add(0, 6, 5, "6 Minute English 새 회차 지금 받기")
         menu.menu.add(0, 5, 4, if (svc.groups.size > 1) "폴더 삭제" else "폴더 삭제 (마지막 폴더는 비우기만)")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -217,10 +243,6 @@ class PlaylistSheet(
                 4 -> confirm("‘${group.name}’ 폴더의 곡을 모두 뺄까요?\n(곡별 기록은 유지됩니다)", "비우기") {
                     svc.clearGroup(viewGroup)
                     render()
-                }
-                6 -> {
-                    SixMinuteEnglish.checkNow(context)
-                    toast("새 회차를 확인하고 있어요. 받으면 알림으로 알려 드려요.")
                 }
                 5 -> confirm("‘${group.name}’ 폴더를 삭제할까요?\n(곡별 기록은 유지됩니다)", "삭제") {
                     val wasLast = svc.groups.size == 1
@@ -329,7 +351,7 @@ class PlaylistSheet(
                 val pos = holder.bindingAdapterPosition
                 if (pos >= 0) {
                     svc.playIn(viewGroup, pos)
-                    render()
+                    dismiss()
                 }
             }
             holder.more.setOnClickListener {
@@ -377,5 +399,9 @@ class PlaylistSheet(
             dragging = false
             recyclerView.post { render() }
         }
+    }
+
+    private companion object {
+        const val KEY_LIST_VIEW = "folder_list_view"
     }
 }
