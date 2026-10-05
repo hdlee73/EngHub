@@ -167,8 +167,8 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
         else -> Blue
     }
     Card(
-        Modifier.padding(horizontal = if (expanded) 32.dp else 20.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 10.dp)
-            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(if (tight) 1f else if (expanded) 0.92f else 0.96f)
+        Modifier.padding(horizontal = if (expanded) 32.dp else 28.dp, vertical = if (tight) 6.dp else 18.dp)
+            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(if (tight) 1f else 0.84f)
             .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = statusColor.copy(alpha = .18f)),
         shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
@@ -352,10 +352,10 @@ private fun DatasetSheet(
     var selected by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingDelete by remember { mutableStateOf<SavedDataset?>(null) }
     SheetDialog(onDismiss = onClose, heightFraction = .9f) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(top = 22.dp, bottom = 32.dp)) {
             Text("내 데이터셋", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
             Text("저장된 파일을 선택하면 바로 학습할 수 있어요.", color = Color(0xFF667085), fontSize = 13.sp)
-            Text("사전에서 저장한 단어의 예문과 ★로 즐겨찾기한 문장은 여기에 자동으로 모입니다.", color = Color(0xFF667085), fontSize = 12.sp)
+            Text("사전에서 저장한 단어의 예문과 책갈피 리본으로 즐겨찾기한 문장은 여기에 자동으로 모입니다.", color = Color(0xFF667085), fontSize = 12.sp)
             Spacer(Modifier.height(16.dp))
             Text("이어 학습할 파일을 체크하세요. 체크한 순서대로 이어집니다.", fontSize = 12.sp)
             Button(onClick = { onSequence(selected) }, enabled = selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {

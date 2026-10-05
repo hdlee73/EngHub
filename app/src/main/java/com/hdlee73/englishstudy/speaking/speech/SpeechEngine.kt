@@ -549,6 +549,12 @@ class SpeechEngine(
 
     fun playSuccessSound(onFinished: () -> Unit) {
         stop()
+        // The audio streams muted during recognition need a moment to come back; played at once, the
+        // start of the chime was swallowed. A short wait makes it audible every time.
+        mainHandler.postDelayed({ startSuccessSound(onFinished) }, 350L)
+    }
+
+    private fun startSuccessSound(onFinished: () -> Unit) {
         runCatching {
             val attributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
