@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ls_navy_950">#EAF3F1</color>
+    <color name="ls_navy_900">#F5F9F8</color>
+    <color name="ls_navy_800">#FFFFFF</color>
+    <color name="ls_blue_500">#168C82</color>
+    <color name="ls_blue_400">#168C82</color>
+    <color name="ls_text_primary">#172B2A</color>
+    <color name="ls_text_secondary">#6B7D7A</color>
+    <color name="ls_surface_border">#DCE9E6</color>
+    <color name="ls_favorite_active">#F28C72</color>
+    <color name="ls_mint_100">#DDF1EC</color>
+    <color name="ls_teal_600">#168C82</color>
+    <color name="ls_teal_700">#0C6F67</color>
+</resources>
+

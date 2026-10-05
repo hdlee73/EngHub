@@ -60,27 +60,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 enum class AppTab(val label: String, val emoji: String) {
-    DICTIONARY("사전", "📖"),
-    FLASHCARDS("암기", "🃏"),
-    QUIZ("퀴즈", "✏️"),
-    READING("리딩", "📰"),
-    TRANSLATE("번역", "🌐"),
-    SPEAKING("스피킹", "🎤")
+    DICTIONARY("Words", "📖"),
+    FLASHCARDS("Cards", "🃏"),
+    QUIZ("Quiz", "✏️"),
+    READING("Reading", "📰"),
+    TRANSLATE("Translate", "🌐"),
+    SPEAKING("Speaking", "🎤"),
+    LISTENING("Listening", "🎧")
 }
 
 /** The tab bar: a slim row of icons with small labels, above the phone's own navigation bar. */
 @Composable
 private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onHide: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 4.dp, vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 2.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         AppTab.values().forEach { item ->
             val selected = item == tab
-            // The fold-away arrow sits in its own narrow slot between 퀴즈 and 리딩, inside the bar.
+            // The fold-away arrow sits in its own narrow slot between Quiz and Reading, inside the bar.
             if (item == AppTab.READING) {
                 Box(
-                    Modifier.width(30.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                    Modifier.width(24.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onHide),
                     contentAlignment = Alignment.Center
                 ) {
@@ -98,7 +99,7 @@ private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onHide: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
                 Text(item.emoji, fontSize = 18.sp, lineHeight = 22.sp)
-                Text(item.label, fontSize = 11.sp, lineHeight = 13.sp, color = if (selected) Blue else Muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                Text(item.label, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.2).sp, color = if (selected) Blue else Muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
             }
         }
     }
@@ -109,7 +110,7 @@ private const val HINT_KEY = "menu_hint_seen"
 
 /**
  * The tabs of the app; the screen of the selected tab is drawn by [content].
- * The tab bar can be folded away with the small "v" inside it, between 퀴즈 and 리딩; swipe up on the strip at the bottom (or tap the "^") to bring it back.
+ * The tab bar can be folded away with the small "v" inside it, between Quiz and Reading; swipe up on the strip at the bottom (or tap the "^") to bring it back.
  * It never covers the phone's own navigation bar.
  */
 @Composable

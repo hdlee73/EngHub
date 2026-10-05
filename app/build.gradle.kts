@@ -12,8 +12,8 @@ android {
         applicationId = "com.hdlee73.englishstudy"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.9.3"
+        versionCode = 22
+        versionName = "1.10.0"
     }
 
     // Every release must be signed with the same key, otherwise Android refuses to install an update
@@ -53,6 +53,11 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.session)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.animation)

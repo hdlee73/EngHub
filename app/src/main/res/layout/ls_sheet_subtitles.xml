@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingTop="10dp">
+
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/ls_bg_handle" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="자막"
+            android:textColor="@color/ls_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/subPlayButton"
+            style="@style/ls_HeaderIcon"
+            android:contentDescription="재생/일시정지"
+            android:src="@drawable/ls_ic_play" />
+
+        <ImageButton
+            android:id="@+id/subMenuButton"
+            style="@style/ls_HeaderIcon"
+            android:layout_marginStart="6dp"
+            android:contentDescription="자막 메뉴"
+            android:src="@drawable/ls_ic_more" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/subHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="6dp"
+        android:text="문장을 누르면 그 위치로 이동 · 길게 누르면 그 문장을 구간 반복"
+        android:textColor="@color/ls_text_secondary"
+        android:textSize="11sp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/cueList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="24dp" />
+
+        <LinearLayout
+            android:id="@+id/cueEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="28dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/cueEmptyText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:text="이 곡에 연결된 자막이 없어요."
+                android:textColor="@color/ls_text_secondary"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/cuePick"
+                style="@style/ls_CompactPrimaryButton"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginTop="14dp"
+                android:paddingLeft="22dp"
+                android:paddingRight="22dp"
+                android:text="자막 파일 선택 (.srt)" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>
