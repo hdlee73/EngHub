@@ -12,6 +12,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
@@ -66,40 +71,58 @@ enum class AppTab(val label: String, val emoji: String) {
     READING("Reading", "📰"),
     TRANSLATE("Translate", "🌐"),
     SPEAKING("Speaking", "🎤"),
-    LISTENING("Listening", "🎧")
+    LISTENING("Listening", "🎧"),
+    DOCVOICE("DocVoice", "🎙️")
 }
 
-/** The tab bar: a slim row of icons with small labels, above the phone's own navigation bar. */
+/**
+ * The tab bar: a slim row of icons with small labels, above the phone's own navigation bar.
+ * With many tabs the row scrolls sideways (each tab keeps a readable width) and keeps the selected tab in view.
+ */
 @Composable
 private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onHide: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 2.dp, vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(0.dp)
-    ) {
-        AppTab.values().forEach { item ->
-            val selected = item == tab
-            // The fold-away arrow sits in its own narrow slot between Quiz and Reading, inside the bar.
-            if (item == AppTab.READING) {
-                Box(
-                    Modifier.width(24.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onHide),
-                    contentAlignment = Alignment.Center
-                ) {
-                    DrawCanvas(Modifier.size(width = 18.dp, height = 9.dp)) {
-                        val stroke = 2.6.dp.toPx()
-                        drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
-                        drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
+    BoxWithConstraints(Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp)) {
+        val count = AppTab.values().size
+        val tabWidth = maxOf(50.dp, (maxWidth - 28.dp) / count)
+        val scroll = rememberScrollState()
+        val density = LocalDensity.current
+        LaunchedEffect(tab, tabWidth, maxWidth) {
+            val tabPx = with(density) { tabWidth.roundToPx() }
+            val viewPx = with(density) { maxWidth.roundToPx() }
+            scroll.animateScrollTo((tabPx * tab.ordinal - (viewPx - tabPx) / 2).coerceAtLeast(0))
+        }
+        Row(
+            Modifier.fillMaxSize().horizontalScroll(scroll).padding(horizontal = 2.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            AppTab.values().forEach { item ->
+                val selected = item == tab
+                // The fold-away arrow sits in its own narrow slot between Quiz and Reading, inside the bar.
+                if (item == AppTab.READING) {
+                    Box(
+                        Modifier.width(24.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onHide),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DrawCanvas(Modifier.size(width = 18.dp, height = 9.dp)) {
+                            val stroke = 2.6.dp.toPx()
+                            drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
+                            drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
+                        }
                     }
                 }
-            }
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp))
-                    .background(if (selected) SoftBlue else Color.Transparent)
-                    .selectable(selected = selected, role = Role.Tab, onClick = { onTab(item) }),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-            ) {
-                Text(item.emoji, fontSize = 18.sp, lineHeight = 22.sp)
-                Text(item.label, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.2).sp, color = if (selected) Blue else Muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                Column(
+                    Modifier.width(tabWidth).fillMaxHeight().clip(RoundedCornerShape(14.dp))
+                        .background(if (selected) SoftBlue else Color.Transparent)
+                        .selectable(selected = selected, role = Role.Tab, onClick = { onTab(item) }),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+                ) {
+                    Text(item.emoji, fontSize = 18.sp, lineHeight = 22.sp)
+                    Text(
+                        item.label, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 1, softWrap = false, letterSpacing = (-0.2).sp,
+                        color = if (selected) Blue else Muted, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
             }
         }
     }

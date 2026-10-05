@@ -15,3 +15,6 @@ __pycache__/
 .learning_data/
 app/src/main/assets/word_dictionary.sqlite
 app/src/main/assets/bilingual_examples.sqlite
+
+# The speech library of the DocVoice tab is downloaded at build time
+app/libs/
