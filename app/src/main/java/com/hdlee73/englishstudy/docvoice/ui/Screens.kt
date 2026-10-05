@@ -95,11 +95,11 @@ import java.util.Locale
 fun DocVoiceScreen(vm: DocVoiceViewModel) {
     Box(Modifier.fillMaxSize().background(Dv.Bg)) {
         if (vm.tab == 2) {
-            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { RecordScreen(vm) }
+            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { RecordScreen(vm) }
         } else {
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) { if (vm.tab == 0) TtsScreen(vm) else SttScreen(vm) }
         }
     }

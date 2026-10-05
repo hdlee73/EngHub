@@ -338,7 +338,7 @@ class ListeningController(
                 toast(if (svc.abStartMs < 0) "먼저 A 시작점을 지정해 주세요." else "B 종료점은 A보다 뒤에 있어야 합니다.")
             }
         }
-        root.findViewById<Button>(R.id.clearRepeatButton).setOnClickListener { playbackService?.clearAb() }
+        root.findViewById<View>(R.id.clearRepeatButton).setOnClickListener { playbackService?.clearAb() }
         root.findViewById<Button>(R.id.aMinusButton).setOnClickListener { playbackService?.nudgeA(-fineStepMs) }
         root.findViewById<Button>(R.id.aPlusButton).setOnClickListener { playbackService?.nudgeA(fineStepMs) }
         root.findViewById<Button>(R.id.bMinusButton).setOnClickListener { playbackService?.nudgeB(-fineStepMs) }

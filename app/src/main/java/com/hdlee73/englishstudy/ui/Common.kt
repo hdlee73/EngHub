@@ -80,16 +80,16 @@ fun Hero(
     Row(
         modifier.fillMaxWidth().clip(RoundedCornerShape(if (compact) 20.dp else 24.dp))
             .background(Brush.linearGradient(listOf(HeroStart, HeroEnd)))
-            .padding(horizontal = 18.dp, vertical = if (compact) 8.dp else 14.dp),
+            .padding(horizontal = 16.dp, vertical = if (compact) 7.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(if (compact) 38.dp else 46.dp).clip(RoundedCornerShape(if (compact) 12.dp else 15.dp)).background(Color.White.copy(alpha = 0.22f)),
+            Modifier.size(if (compact) 36.dp else 40.dp).clip(RoundedCornerShape(if (compact) 12.dp else 13.dp)).background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center
-        ) { Text(emoji, fontSize = if (compact) 20.sp else 24.sp) }
-        Column(Modifier.padding(start = 14.dp).weight(1f)) {
-            Text(title, color = Color.White, fontSize = if (compact) 19.sp else 21.sp, fontWeight = FontWeight.ExtraBold)
-            if (!compact) Text(subtitle, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
+        ) { Text(emoji, fontSize = if (compact) 19.sp else 21.sp) }
+        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+            Text(title, color = Color.White, fontSize = if (compact) 18.sp else 20.sp, fontWeight = FontWeight.ExtraBold, lineHeight = if (compact) 22.sp else 24.sp)
+            if (!compact) Text(subtitle, color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp, lineHeight = 15.sp)
         }
         trailing?.invoke(this)
     }

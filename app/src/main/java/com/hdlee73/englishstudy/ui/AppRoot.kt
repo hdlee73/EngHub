@@ -82,27 +82,13 @@ enum class AppTab(val label: String, val emoji: String) {
  * The selected tab grows and shows its name; the others shrink to just their icon, so even eight tabs fit on a narrow screen.
  */
 @Composable
-private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onHide: () -> Unit) {
+private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit) {
     Row(
         Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         AppTab.values().forEach { item ->
             val selected = item == tab
-            // The fold-away arrow sits in its own narrow slot between Quiz and Reading, inside the bar.
-            if (item == AppTab.READING) {
-                Box(
-                    Modifier.width(22.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onHide),
-                    contentAlignment = Alignment.Center
-                ) {
-                    DrawCanvas(Modifier.size(width = 16.dp, height = 8.dp)) {
-                        val stroke = 2.4.dp.toPx()
-                        drawLine(Muted, Offset(stroke / 2, stroke / 2), Offset(size.width / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
-                        drawLine(Muted, Offset(size.width / 2, size.height - stroke / 2), Offset(size.width - stroke / 2, stroke / 2), stroke, StrokeCap.Round)
-                    }
-                }
-            }
             val weight by androidx.compose.animation.core.animateFloatAsState(if (selected) 2.6f else 1f, label = "tabWeight")
             Column(
                 Modifier.weight(weight).fillMaxHeight().clip(RoundedCornerShape(14.dp))
@@ -125,7 +111,7 @@ private const val HINT_KEY = "menu_hint_seen"
 
 /**
  * The tabs of the app; the screen of the selected tab is drawn by [content].
- * The tab bar can be folded away with the small "v" inside it, between Quiz and Reading; swipe up on the strip at the bottom (or tap the "^") to bring it back.
+ * The tab bar folds itself away a few seconds after it was last used; swipe up on the strip at the bottom (or tap the "^") to bring it back.
  * It never covers the phone's own navigation bar.
  */
 @Composable
@@ -133,16 +119,22 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
     val context = LocalContext.current
     var barVisible by remember { mutableStateOf(true) }
     var showHint by remember { mutableStateOf(false) }
+    // The bar folds itself away a few seconds after it was last used; any tap on it starts the countdown again.
+    var touches by remember { mutableStateOf(0) }
+    LaunchedEffect(barVisible, touches) {
+        if (barVisible) {
+            kotlinx.coroutines.delay(4000)
+            barVisible = false
+            // The first time, a picture shows how to bring the bar back.
+            if (!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) showHint = true
+        }
+    }
     EnglishStudyTheme {
         Scaffold(
             containerColor = Canvas,
             bottomBar = {
                 if (barVisible) {
-                    TabBar(tab, onTab, onHide = {
-                        barVisible = false
-                        // The first time, a picture shows how to bring the bar back.
-                        if (!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) showHint = true
-                    })
+                    TabBar(tab) { next -> touches++; onTab(next) }
                 } else {
                     // Keeps the screen above the phone's navigation bar while the tab bar is away.
                     Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -154,7 +146,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                 if (!barVisible) {
                     // A strip across the whole width, above the phone's own navigation bar: swipe up on it, or tap the "^", to show the tab bar.
                     Box(
-                        Modifier.fillMaxWidth().height(40.dp)
+                        Modifier.fillMaxWidth().height(30.dp)
                             .pointerInput(Unit) {
                                 var travelled = 0f
                                 detectVerticalDragGestures(
@@ -172,11 +164,11 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
-                            Modifier.size(width = 56.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xE6FFFFFF)),
+                            Modifier.size(width = 52.dp, height = 22.dp).clip(RoundedCornerShape(11.dp)).background(Color(0xE6FFFFFF)),
                             contentAlignment = Alignment.Center
                         ) {
-                            DrawCanvas(Modifier.size(width = 22.dp, height = 12.dp)) {
-                                val stroke = 3.dp.toPx()
+                            DrawCanvas(Modifier.size(width = 20.dp, height = 10.dp)) {
+                                val stroke = 2.6.dp.toPx()
                                 drawLine(Blue, Offset(stroke / 2, size.height - stroke / 2), Offset(size.width / 2, stroke / 2), stroke, StrokeCap.Round)
                                 drawLine(Blue, Offset(size.width / 2, stroke / 2), Offset(size.width - stroke / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
                             }
