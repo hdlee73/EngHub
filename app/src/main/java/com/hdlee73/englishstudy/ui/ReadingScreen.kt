@@ -75,14 +75,18 @@ fun ReadingScreen(
     onSpeak: (String) -> Unit,
     onTranslateSnippet: (String) -> Unit,
     onClearSnippet: () -> Unit,
-    onMessageDismiss: () -> Unit
+    onMessageDismiss: () -> Unit,
+    savedScroll: Int = 0,
+    onScroll: (Int) -> Unit = {},
+    savedSelection: Triple<Int, Int, Int>? = null,
+    onSelection: (Triple<Int, Int, Int>?) -> Unit = {}
 ) {
     Box(Modifier.fillMaxSize()) {
         val article = state.open
         if (article == null) {
             ReadingList(state, onOpen)
         } else {
-            ArticleView(article, state, onClose, onMode, onSaveExpression, onLookup, onSpeak, onTranslateSnippet, onClearSnippet)
+            ArticleView(article, state, onClose, onMode, onSaveExpression, onLookup, onSpeak, onTranslateSnippet, onClearSnippet, savedScroll, onScroll, savedSelection, onSelection)
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
     }
@@ -95,7 +99,7 @@ private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
         if (state.fetching) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text("오늘의 뉴스를 가져오는 중…", color = Muted, fontSize = 13.sp)
+                Text("오늘의 기사를 가져오는 중…", color = Muted, fontSize = 13.sp)
             }
         }
         if (state.loaded && state.today.isEmpty()) {
@@ -110,7 +114,7 @@ private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${article.level.ifBlank { "${index + 1}" }}  ·  ${article.topic}", color = if (article.level == "고급") Miss else Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        if (article.level.isBlank()) article.topic else "${article.level}  ·  ${article.topic}", color = if (article.level == "고급") Miss else Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
                     if (read) Text("✓ 읽음", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -124,7 +128,8 @@ private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
             }
         }
         Text(
-            if (state.fromWeb) "실제 영어 뉴스(Wikinews, CC BY 2.5)에서 매일 중급·고급 한 편씩 순서대로 가져옵니다. 읽기 좋은 길이로 앞부분만 싣고, 원문 링크는 글 아래에 있어요."
+            if (state.today.any { it.credit == "The Daily Upside" }) "The Daily Upside의 기사를 하루 한 편, 원문 그대로 가져옵니다. 글을 열면 위쪽 탭에서 번역과 주요 표현을 볼 수 있고, 원문 링크는 글 아래에 있어요. 저작권은 원문 사이트에 있으니 개인 학습용으로만 쓰세요."
+            else if (state.fromWeb) "실제 영어 뉴스(Wikinews, CC BY 2.5)에서 매일 중급·고급 한 편씩 가져옵니다. (The Daily Upside에 연결하지 못해 대신 보여 드려요.)"
             else "인터넷에 연결되면 실제 영어 뉴스로 바뀝니다. 지금은 앱에 들어 있는 학습용 글을 보여 드려요.",
             color = Muted, fontSize = 12.sp, lineHeight = 17.sp
         )
@@ -141,12 +146,25 @@ private fun ArticleView(
     onLookup: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onTranslateSnippet: (String) -> Unit,
-    onClearSnippet: () -> Unit
+    onClearSnippet: () -> Unit,
+    savedScroll: Int,
+    onScroll: (Int) -> Unit,
+    savedSelection: Triple<Int, Int, Int>?,
+    onSelection: (Triple<Int, Int, Int>?) -> Unit
 ) {
     val context = LocalContext.current
     // The selection: which paragraph and which characters (a word, a phrase or a sentence).
-    var selected by remember(article.id) { mutableStateOf<Pair<Int, IntRange>?>(null) }
+    // After a dictionary lookup the tab is drawn again: the selection and the scroll position come back from where they were left.
+    var selected by remember(article.id) {
+        mutableStateOf<Pair<Int, IntRange>?>(
+            savedSelection?.takeIf { (p, first, last) -> article.paragraphs.getOrNull(p)?.let { first >= 0 && last >= first && last < it.length } == true }
+                ?.let { (p, first, last) -> p to (first..last) }
+        )
+    }
     val selectedText = selected?.let { (p, range) -> article.paragraphs[p].substring(range.first, range.last + 1) }
+    LaunchedEffect(selected) { onSelection(selected?.let { (p, range) -> Triple(p, range.first, range.last) }) }
+    val scrollState = rememberScrollState(savedScroll)
+    LaunchedEffect(scrollState) { androidx.compose.runtime.snapshotFlow { scrollState.value }.collect { onScroll(it) } }
     LaunchedEffect(selectedText) { onClearSnippet() }
     // While a range is being dragged the panel stays away, so the text does not move under the finger.
     var dragging by remember { mutableStateOf(false) }
@@ -164,7 +182,7 @@ private fun ArticleView(
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp),
+            Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(article.topic, color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
