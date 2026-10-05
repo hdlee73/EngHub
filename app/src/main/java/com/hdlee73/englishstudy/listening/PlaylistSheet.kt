@@ -29,7 +29,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 class PlaylistSheet(
     private val context: Context,
     private val svc: PlaybackService,
-    private val addFilesTo: (Int) -> Unit
+    private val addFilesTo: (Int) -> Unit,
+    private val importDeviceFolder: () -> Unit
 ) {
     private val dialog = BottomSheetDialog(context)
     private val root: View = LayoutInflater.from(context).inflate(R.layout.ls_sheet_playlist, null)
@@ -87,7 +88,18 @@ class PlaylistSheet(
         }
 
         backButton.setOnClickListener { openFolders() }
-        addButton.setOnClickListener { if (inFolder) addFilesTo(viewGroup) else promptNewFolder() }
+        addButton.setOnClickListener {
+            if (inFolder) addFilesTo(viewGroup) else {
+                val menu = PopupMenu(context, it)
+                menu.menu.add(0, 1, 0, "새 폴더 만들기")
+                menu.menu.add(0, 2, 1, "기기 폴더 가져오기 (하위 폴더 포함)")
+                menu.setOnMenuItemClickListener { item ->
+                    if (item.itemId == 1) promptNewFolder() else importDeviceFolder()
+                    true
+                }
+                menu.show()
+            }
+        }
         menuButton.setOnClickListener { showGroupMenu(it) }
         dialog.setOnKeyListener { _, keyCode, event ->
             if (keyCode == android.view.KeyEvent.KEYCODE_BACK && inFolder) {
