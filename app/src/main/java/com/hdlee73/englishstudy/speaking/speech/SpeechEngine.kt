@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.SoundPool
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
@@ -80,10 +81,24 @@ class SpeechEngine(
     @Volatile private var promptStarted = false
     private var appliedVoiceKey: String? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val outputWarmer = OutputWarmer()
+    private val chimeAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+    // Decoded once up front: MediaPlayer.create() on every correct answer decoded the file
+    // synchronously and opened a new output stream each time, which delayed the chime.
+    private val soundPool = SoundPool.Builder().setMaxStreams(1).setAudioAttributes(chimeAttributes).build()
+    @Volatile private var successSoundId = 0
+    private val successSoundMillis = rawWavMillis(context, R.raw.result_success) ?: 700L
+    private var pendingChime: Runnable? = null
+    private var chimeToken = 0L
     private lateinit var tts: TextToSpeech
     private var recognizer = if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
 
     init {
+        soundPool.setOnLoadCompleteListener { _, id, status -> if (status == 0) successSoundId = id }
+        runCatching { soundPool.load(appContext, R.raw.result_success, 1) }
         if (Build.VERSION.SDK_INT >= 29) audioManager?.setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_ALL)
         tts = TextToSpeech(context.applicationContext) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
@@ -110,7 +125,12 @@ class SpeechEngine(
                 // Bluetooth media playback can finish at the TTS engine slightly before
                 // the headset has rendered its final audio frames. Leave a short tail
                 // before switching the same device into communication/microphone mode.
-                mainHandler.postDelayed({ if (utteranceId != null && utteranceId == currentPromptId) onPromptFinished() }, 300L)
+                mainHandler.postDelayed({
+                    if (utteranceId != null && utteranceId == currentPromptId) {
+                        outputWarmer.stop()
+                        onPromptFinished()
+                    }
+                }, 300L)
             }
             @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) {
                 mainHandler.post { if (utteranceId != null && utteranceId == currentPromptId) onUnavailable("예문 음성을 재생하지 못했습니다. 휴대전화의 미디어 음량과 TTS 설정을 확인해 주세요.") }
@@ -161,6 +181,7 @@ class SpeechEngine(
 
     fun speak(text: String, korean: Boolean, accent: VoiceAccent) {
         currentPromptId = null
+        cancelPendingChime()
         cancelPendingSpeak()
         cancelPendingListen()
         recognitionGeneration++
@@ -172,31 +193,37 @@ class SpeechEngine(
         val wasInCallMode = bluetoothRouteActive || communicationRouteActive
         restoreAudioRoute()
         val prompt = PendingPrompt(text, korean, accent)
+        // Open the output path now so it is fully awake when the first word is spoken.
+        outputWarmer.start()
         if (!ttsReady) {
             pendingPrompt = prompt
             return
         }
-        if (wasInCallMode) waitForMediaRoute(prompt) else speakNow(prompt, 0)
+        waitForMediaRoute(prompt, wasInCallMode)
     }
 
     /**
      * Right after the microphone phase the headset is still in call (SCO) mode. Speaking
      * before it has switched back to media (A2DP) either loses the first words or the
-     * whole sentence, so wait until the media route is really back (bounded).
+     * whole sentence, so wait until the media route is really back (bounded). In every
+     * case the output warmer must have held the path open for a moment first, otherwise
+     * the speaker amplifier swallows the start of the sentence.
      */
-    private fun waitForMediaRoute(prompt: PendingPrompt) {
+    private fun waitForMediaRoute(prompt: PendingPrompt, wasInCallMode: Boolean) {
         val startedAt = SystemClock.elapsedRealtime()
         lateinit var check: Runnable
         check = Runnable {
             val waited = SystemClock.elapsedRealtime() - startedAt
-            val ready = if (Build.VERSION.SDK_INT >= 33) waited >= 150L && mediaRouteReady() else waited >= 500L
-            if (ready || waited >= 1500L) {
+            val routeReady = !wasInCallMode ||
+                if (Build.VERSION.SDK_INT >= 33) waited >= 150L && mediaRouteReady() else waited >= 500L
+            val warm = !outputWarmer.isRunning || outputWarmer.warmMillis() >= OUTPUT_WARM_MILLIS
+            if ((routeReady && warm) || waited >= 1500L) {
                 pendingSpeak = null
                 speakNow(prompt, 0)
             } else mainHandler.postDelayed(check, 50L)
         }
         pendingSpeak = check
-        mainHandler.postDelayed(check, 50L)
+        mainHandler.post(check)
     }
 
     private fun mediaRouteReady(): Boolean = runCatching {
@@ -236,15 +263,9 @@ class SpeechEngine(
         val id = "prompt-${++promptVersion}"
         currentPromptId = id
         promptStarted = false
-        // A short silent lead-in wakes a sleeping Bluetooth link so the first word is not clipped.
-        val lead = activeMediaOutputAddress() != null
-        var result = TextToSpeech.SUCCESS
-        if (lead) {
-            tts.playSilentUtterance(250L, TextToSpeech.QUEUE_FLUSH, "$id-lead")
-            result = tts.speak(naturalizeForSpeech(prompt.text, prompt.korean), TextToSpeech.QUEUE_ADD, params, id)
-        } else {
-            result = tts.speak(naturalizeForSpeech(prompt.text, prompt.korean), TextToSpeech.QUEUE_FLUSH, params, id)
-        }
+        // The output warmer (started in speak) keeps the speaker / Bluetooth link awake, so the
+        // sentence can start at once. A TTS silent utterance writes no audio and did not help.
+        val result = tts.speak(naturalizeForSpeech(prompt.text, prompt.korean), TextToSpeech.QUEUE_FLUSH, params, id)
         if (result == TextToSpeech.ERROR) {
             onUnavailable("예문 음성을 재생하지 못했습니다. 미디어 음량을 확인해 주세요.")
             return
@@ -255,6 +276,7 @@ class SpeechEngine(
             tts.stop()
             if (attempt < 1) speakNow(prompt, attempt + 1)
             else {
+                outputWarmer.stop()
                 onNotice("예문 음성이 재생되지 않아 다음 단계로 넘어갑니다.")
                 onPromptFinished()
             }
@@ -285,6 +307,7 @@ class SpeechEngine(
     fun listen(expectedText: String) {
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) { onUnavailable("이 기기에서 음성 인식을 사용할 수 없습니다."); return }
         cancelPendingListen()
+        cancelPendingChime()
         acceptingRecognitionResults = false
         recognitionStarting = false
         recognitionGeneration++
@@ -314,7 +337,6 @@ class SpeechEngine(
                     addAll(normalizedWords.zipWithNext { first, second -> "$first $second" })
                 }.distinct().take(24)
                 putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(phrases))
-                putExtra(RecognizerIntent.EXTRA_ENABLE_BIASING_DEVICE_CONTEXT, true)
             }
             if (Build.VERSION.SDK_INT >= 33) {
                 putExtra(RecognizerIntent.EXTRA_ENABLE_FORMATTING, RecognizerIntent.FORMATTING_OPTIMIZE_QUALITY)
@@ -329,6 +351,9 @@ class SpeechEngine(
         // Give a cancelled/finished recognizer session time to release before a retry.
         // Late callbacks remain ignored until the new session reports ready.
         val routeDelay = maxOf(selectInputDevice(), 250L)
+        // On the plain phone route the warmer keeps running under the (muted) recognition
+        // so the result chime starts instantly. In call/SCO mode media is routed oddly, so stop it.
+        if (bluetoothRouteActive || communicationRouteActive) outputWarmer.stop() else outputWarmer.start()
         pendingListen = Runnable {
             pendingListen = null
             acceptingRecognitionResults = false
@@ -336,7 +361,7 @@ class SpeechEngine(
             val recordingWanted = isRecording()
             if (!recordingWanted) recordingNoticeShown = false
             if ((outdoorAudio || recordingWanted) && !injectionFailed && Build.VERSION.SDK_INT >= 33) {
-                val source = OutdoorAudioSource(recordingTee)
+                val source = OutdoorAudioSource(recordingTee, outdoor = outdoorAudio || bluetoothRouteActive)
                 runCatching {
                     val routed = if (Build.VERSION.SDK_INT >= 31) audioManager?.communicationDevice else null
                     val inputs = audioManager?.getDevices(AudioManager.GET_DEVICES_INPUTS).orEmpty()
@@ -398,8 +423,17 @@ class SpeechEngine(
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return 0L
-                val bluetooth = preferredBluetooth(audioManager.availableCommunicationDevices, null)
-                    ?: run { selectPhoneInput(); return 250L }
+                val available = audioManager.availableCommunicationDevices
+                val bluetooth = preferredBluetooth(available, null)
+                    ?: run {
+                        // Only pin the phone mic when some Bluetooth device (e.g. a watch) could take
+                        // over the input. Otherwise stay in normal mode: call mode switches the mic to
+                        // the voice-call path (narrower, heavily processed), which hurts recognition,
+                        // and switching back afterwards clipped the start of the next sentence.
+                        val anyBluetooth = available.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
+                        if (!anyBluetooth) return 0L
+                        selectPhoneInput(); return 250L
+                    }
                 audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                 if (audioManager.setCommunicationDevice(bluetooth)) {
                     bluetoothRouteActive = true
@@ -548,19 +582,32 @@ class SpeechEngine(
     }
 
     fun playSuccessSound(onFinished: () -> Unit) {
-        stop()
-        // The audio streams muted during recognition need a moment to come back; played at once, the
-        // start of the chime was swallowed. A short wait makes it audible every time.
-        mainHandler.postDelayed({ startSuccessSound(onFinished) }, 120L)
+        stopActivity()
+        // The warmer is usually already running from the listening phase; if not (Bluetooth),
+        // give the freshly opened path a short moment so the chime's attack is not swallowed.
+        val wait = if (outputWarmer.isRunning) (CHIME_WARM_MILLIS - outputWarmer.warmMillis()).coerceAtLeast(0L) else CHIME_WARM_MILLIS
+        outputWarmer.start()
+        val token = ++chimeToken
+        val play = Runnable {
+            pendingChime = null
+            startSuccessSound {
+                // A new prompt may already have taken over the warmer; leave it running then.
+                if (token == chimeToken) outputWarmer.stop()
+                onFinished()
+            }
+        }
+        pendingChime = play
+        mainHandler.postDelayed(play, wait)
     }
 
     private fun startSuccessSound(onFinished: () -> Unit) {
+        val soundId = successSoundId
+        if (soundId != 0 && soundPool.play(soundId, 1f, 1f, 1, 0, 1f) != 0) {
+            mainHandler.postDelayed(onFinished, successSoundMillis)
+            return
+        }
         runCatching {
-            val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            val player = MediaPlayer.create(appContext, R.raw.result_success, attributes, 0)
+            val player = MediaPlayer.create(appContext, R.raw.result_success, chimeAttributes, 0)
                 ?: error("결과음을 준비하지 못했습니다.")
             var finished = false
             fun finish() {
@@ -576,6 +623,39 @@ class SpeechEngine(
         }.onFailure { mainHandler.post(onFinished) }
     }
 
-    fun stop() { recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.cancel(); restoreRecognitionAudio(); restoreAudioRoute(); tts.stop() }
-    fun destroy() { recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.destroy(); restoreRecognitionAudio(); restoreAudioRoute(); tts.shutdown() }
+    private fun cancelPendingChime() {
+        chimeToken++
+        pendingChime?.let(mainHandler::removeCallbacks)
+        pendingChime = null
+    }
+
+    fun stop() { stopActivity(); cancelPendingChime(); outputWarmer.stop() }
+
+    private fun stopActivity() { recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.cancel(); restoreRecognitionAudio(); restoreAudioRoute(); tts.stop() }
+    fun destroy() { cancelPendingChime(); outputWarmer.stop(); soundPool.release(); recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.destroy(); restoreRecognitionAudio(); restoreAudioRoute(); tts.shutdown() }
+
+    private companion object {
+        const val OUTPUT_WARM_MILLIS = 350L
+        const val CHIME_WARM_MILLIS = 150L
+
+        /** Length of a 16-bit PCM WAV resource, read from its header. */
+        fun rawWavMillis(context: Context, resId: Int): Long? = runCatching {
+            context.resources.openRawResource(resId).use { input ->
+                val header = ByteArray(4096)
+                val read = input.read(header)
+                fun int(at: Int) = (header[at].toInt() and 0xff) or ((header[at + 1].toInt() and 0xff) shl 8) or
+                    ((header[at + 2].toInt() and 0xff) shl 16) or ((header[at + 3].toInt() and 0xff) shl 24)
+                var at = 12
+                var byteRate = 0
+                while (at + 8 <= read) {
+                    val id = String(header, at, 4, Charsets.US_ASCII)
+                    val size = int(at + 4)
+                    if (id == "fmt ") byteRate = int(at + 16)
+                    if (id == "data") return@use if (byteRate > 0) size * 1000L / byteRate else null
+                    at += 8 + size + (size and 1)
+                }
+                null
+            }
+        }.getOrNull()
+    }
 }
