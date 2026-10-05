@@ -63,7 +63,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: EnglishStudy-debug-apk
+          name: EngHub-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish the APK as a GitHub release
@@ -73,10 +73,10 @@ jobs:
         run: |
           version=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
           tag="v${version}"
-          apk="EnglishStudy-${tag}.apk"
+          apk="EngHub-${tag}.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$apk"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" --clobber
           else
-            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --title "EneHub $tag" --notes-file RELEASE_NOTES.md
+            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --title "EngHub $tag" --notes-file RELEASE_NOTES.md
           fi

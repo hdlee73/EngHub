@@ -127,9 +127,9 @@ fun IconTile(icon: ImageVector, color: Color) {
 @Composable
 fun RowShell(icon: ImageVector? = null, color: Color = Dv.Blue, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+        Modifier.fillMaxWidth().heightIn(min = 44.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) { IconTile(icon, color); Spacer(Modifier.width(14.dp)) }
@@ -184,7 +184,7 @@ fun ToggleRow(icon: ImageVector, color: Color, title: String, checked: Boolean, 
 
 @Composable
 fun SegmentedRow(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) { Segmented(options, selected, onSelect) }
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) { Segmented(options, selected, onSelect) }
 }
 
 @Composable
@@ -228,7 +228,7 @@ fun SliderRow(icon: ImageVector, color: Color, valueText: String, value: Float, 
 @Composable
 fun FilledButton(text: String, icon: ImageVector? = null, enabled: Boolean = true, color: Color = Dv.Blue, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
     Row(
-        modifier.height(52.dp).clip(RoundedCornerShape(14.dp))
+        modifier.height(48.dp).clip(RoundedCornerShape(14.dp))
             .background(if (enabled) color else Dv.Fill)
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
