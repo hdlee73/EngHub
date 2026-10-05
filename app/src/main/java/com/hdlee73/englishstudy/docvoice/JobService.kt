@@ -140,7 +140,11 @@ class JobService : Service() {
             Stt.transcribe(store, pcm, req.opts, active) { stage, f -> progress(title, stage, f) }
         }
         if (result.segments.isEmpty()) throw ExtractException("음성에서 인식된 말이 없습니다.")
-        finishDocument(title, result, req.format, Storage.baseName(req.audio.name), req.gap, req.includeTime, req.showSpeaker)
+        val bytes = finishDocument(title, result, req.format, Storage.baseName(req.audio.name), req.gap, req.includeTime, req.showSpeaker)
+        // An SRT made from an audio file becomes that file's subtitle in the Listening player.
+        if (req.format == "srt") runCatching {
+            com.hdlee73.englishstudy.listening.SubtitleLinks.remember(this, req.audio.uri.toString(), req.audio.name, bytes)
+        }
     }
 
     private suspend fun runModelDownload(req: JobRequest.ModelDownload, title: String) {
@@ -190,7 +194,7 @@ class JobService : Service() {
     private suspend fun finishDocument(
         title: String, result: com.hdlee73.englishstudy.docvoice.core.SttResult, format: String, docTitle: String,
         gap: Double, includeTime: Boolean, showSpeakerReq: Boolean,
-    ) {
+    ): ByteArray {
         progress(title, "문서로 정리하는 중", null)
         val (sentences, paragraphs) = Stt.toDocument(result, gap)
         val speakers = showSpeakerReq && result.turns.isNotEmpty()
@@ -216,6 +220,7 @@ class JobService : Service() {
             listOf(OutFile(name, uri, Storage.mimeFor(name))),
             result.diarizationNote,
         )
+        return bytes
     }
 
     // ---- 알림 -----------------------------------------------------------------

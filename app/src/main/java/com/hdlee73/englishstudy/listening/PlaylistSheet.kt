@@ -14,19 +14,17 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.widget.PopupMenu
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.chip.Chip
-import com.google.android.material.chip.ChipDrawable
-import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
- * Bottom sheet with the playlist groups as chips and the tracks of the chosen group below.
- * Tracks can be reordered by dragging the handle; a track or a whole group can be set to repeat.
+ * Bottom sheet with the playlist groups shown as folders. Tapping a folder opens it and lists its tracks;
+ * the back arrow returns to the folders. Tracks can be reordered by dragging the handle; a track or a whole folder can be set to repeat.
  */
 class PlaylistSheet(
     private val context: Context,
@@ -35,14 +33,21 @@ class PlaylistSheet(
 ) {
     private val dialog = BottomSheetDialog(context)
     private val root: View = LayoutInflater.from(context).inflate(R.layout.ls_sheet_playlist, null)
-    private val chips: ChipGroup = root.findViewById(R.id.groupChips)
+    private val title: TextView = root.findViewById(R.id.sheetTitle)
+    private val backButton: ImageButton = root.findViewById(R.id.sheetBackButton)
+    private val addButton: ImageButton = root.findViewById(R.id.sheetAddButton)
+    private val menuButton: ImageButton = root.findViewById(R.id.sheetMenuButton)
+    private val folders: RecyclerView = root.findViewById(R.id.folderGrid)
     private val summary: TextView = root.findViewById(R.id.groupSummary)
     private val list: RecyclerView = root.findViewById(R.id.trackList)
     private val emptyText: TextView = root.findViewById(R.id.emptyText)
     private val adapter = TrackAdapter()
+    private val folderAdapter = FolderAdapter()
     private val touchHelper = ItemTouchHelper(DragCallback())
 
     private var viewGroup = svc.activeGroup
+    /** False while the folders are shown, true while the tracks of [viewGroup] are shown. */
+    private var inFolder = false
     private var lastSignature = ""
     private var dragging = false
 
@@ -62,9 +67,19 @@ class PlaylistSheet(
         list.layoutManager = LinearLayoutManager(context)
         list.adapter = adapter
         touchHelper.attachToRecyclerView(list)
+        val columns = if (context.resources.configuration.screenWidthDp >= 600) 4 else 2
+        folders.layoutManager = GridLayoutManager(context, columns)
+        folders.adapter = folderAdapter
 
-        root.findViewById<ImageButton>(R.id.sheetAddButton).setOnClickListener { addFilesTo(viewGroup) }
-        root.findViewById<ImageButton>(R.id.sheetMenuButton).setOnClickListener { showGroupMenu(it) }
+        backButton.setOnClickListener { openFolders() }
+        addButton.setOnClickListener { if (inFolder) addFilesTo(viewGroup) else promptNewFolder() }
+        menuButton.setOnClickListener { showGroupMenu(it) }
+        dialog.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_BACK && inFolder) {
+                if (event.action == android.view.KeyEvent.ACTION_UP) openFolders()
+                true
+            } else false
+        }
 
         render()
         dialog.show()
@@ -77,47 +92,93 @@ class PlaylistSheet(
     }
 
     private fun signature(): String = buildString {
-        append(viewGroup).append('|').append(svc.activeGroup).append('|').append(svc.player.currentMediaItemIndex)
+        append(inFolder).append('|').append(viewGroup).append('|').append(svc.activeGroup).append('|').append(svc.player.currentMediaItemIndex)
         svc.groups.forEach { append('|').append(it.name).append(':').append(it.entries.size) }
+    }
+
+    private fun openFolder(index: Int) {
+        viewGroup = index
+        inFolder = true
+        render()
+    }
+
+    private fun openFolders() {
+        inFolder = false
+        render()
+    }
+
+    private fun promptNewFolder() {
+        context.promptText("새 폴더", "폴더 ${svc.groups.size + 1}", "만들기") { name ->
+            openFolder(svc.createGroup(name))
+        }
     }
 
     private fun render() {
         viewGroup = viewGroup.coerceIn(0, svc.groups.lastIndex)
         lastSignature = signature()
-        renderChips()
+        backButton.visibility = if (inFolder) View.VISIBLE else View.GONE
+        menuButton.visibility = if (inFolder) View.VISIBLE else View.GONE
+        folders.visibility = if (inFolder) View.GONE else View.VISIBLE
+        list.visibility = if (inFolder) View.VISIBLE else View.GONE
+        if (!inFolder) {
+            title.text = "재생목록"
+            addButton.contentDescription = "새 폴더"
+            summary.text = "폴더 ${svc.groups.size}개  ·  폴더를 눌러 곡을 보세요 (길게 누르면 메뉴)"
+            emptyText.visibility = View.GONE
+            folderAdapter.notifyDataSetChanged()
+            return
+        }
         val entries = svc.groupEntries(viewGroup)
         val isActive = viewGroup == svc.activeGroup
-        summary.text = "${entries.size}곡" + if (isActive) "  ·  재생 중인 그룹" else "  ·  곡을 누르면 이 그룹으로 전환돼요"
+        title.text = svc.groups[viewGroup].name
+        addButton.contentDescription = "이 폴더에 파일 추가"
+        summary.text = "${entries.size}곡" + if (isActive) "  ·  재생 중인 폴더" else "  ·  곡을 누르면 이 폴더로 전환돼요"
         adapter.submit(entries, isActive)
         emptyText.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun renderChips() {
-        chips.removeAllViews()
-        svc.groups.forEachIndexed { index, group ->
-            val chip = newChip(com.google.android.material.R.style.Widget_Material3_Chip_Filter)
-            chip.isCheckable = true
-            chip.text = (if (index == svc.activeGroup) "▶ " else "") + group.name + " · " + group.entries.size
-            chip.isChecked = index == viewGroup
-            chip.setOnClickListener {
-                viewGroup = index
-                render()
-            }
-            chips.addView(chip)
-        }
-        val add = newChip(com.google.android.material.R.style.Widget_Material3_Chip_Assist)
-        add.text = "＋ 그룹"
-        add.setOnClickListener {
-            context.promptText("새 그룹", "그룹 ${svc.groups.size + 1}", "만들기") { name ->
-                viewGroup = svc.createGroup(name)
-                render()
-            }
-        }
-        chips.addView(add)
+    private inner class FolderHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val icon: ImageView = view.findViewById(R.id.folderIcon)
+        val badge: TextView = view.findViewById(R.id.folderBadge)
+        val name: TextView = view.findViewById(R.id.folderName)
+        val count: TextView = view.findViewById(R.id.folderCount)
     }
 
-    private fun newChip(style: Int): Chip = Chip(context).apply {
-        setChipDrawable(ChipDrawable.createFromAttributes(context, null, 0, style))
+    /** The folders, followed by a "new folder" card. */
+    private inner class FolderAdapter : RecyclerView.Adapter<FolderHolder>() {
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FolderHolder =
+            FolderHolder(LayoutInflater.from(parent.context).inflate(R.layout.ls_item_folder, parent, false))
+
+        override fun onBindViewHolder(holder: FolderHolder, position: Int) {
+            val group = svc.groups.getOrNull(position)
+            if (group == null) {
+                holder.icon.setImageResource(R.drawable.ls_ic_add)
+                holder.badge.text = ""
+                holder.name.text = "새 폴더"
+                holder.count.text = "폴더 만들기"
+                holder.itemView.setBackgroundResource(R.drawable.ls_bg_folder)
+                holder.itemView.setOnClickListener { promptNewFolder() }
+                holder.itemView.setOnLongClickListener(null)
+                return
+            }
+            val active = position == svc.activeGroup
+            holder.icon.setImageResource(R.drawable.ls_ic_folder)
+            holder.badge.text = if (active) "▶ 재생 중" else ""
+            holder.name.text = group.name
+            holder.count.text = "${group.entries.size}곡"
+            holder.itemView.setBackgroundResource(if (active) R.drawable.ls_bg_folder_active else R.drawable.ls_bg_folder)
+            holder.itemView.setOnClickListener {
+                val pos = holder.bindingAdapterPosition
+                if (pos >= 0) openFolder(pos)
+            }
+            holder.itemView.setOnLongClickListener {
+                val pos = holder.bindingAdapterPosition
+                if (pos >= 0) { viewGroup = pos; showGroupMenu(it) }
+                true
+            }
+        }
+
+        override fun getItemCount(): Int = svc.groups.size + 1
     }
 
     private fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -127,39 +188,45 @@ class PlaylistSheet(
     private fun showGroupMenu(anchor: View) {
         val group = svc.groups.getOrNull(viewGroup) ?: return
         val menu = PopupMenu(context, anchor)
-        menu.menu.add(0, 1, 0, "이 그룹 재생")
-        menu.menu.add(0, 2, 1, "이 그룹 반복 재생")
+        menu.menu.add(0, 1, 0, "이 폴더 재생")
+        menu.menu.add(0, 2, 1, "이 폴더 반복 재생")
         menu.menu.add(0, 3, 2, "이름 변경")
-        menu.menu.add(0, 4, 3, "그룹 비우기")
-        menu.menu.add(0, 5, 4, if (svc.groups.size > 1) "그룹 삭제" else "그룹 삭제 (마지막 그룹은 비우기만)")
+        menu.menu.add(0, 4, 3, "폴더 비우기")
+        if (group.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true)) menu.menu.add(0, 6, 5, "6 Minute English 새 회차 지금 받기")
+        menu.menu.add(0, 5, 4, if (svc.groups.size > 1) "폴더 삭제" else "폴더 삭제 (마지막 폴더는 비우기만)")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> {
-                    if (group.entries.isEmpty()) toast("비어 있는 그룹입니다.") else svc.switchGroup(viewGroup, play = true)
+                    if (group.entries.isEmpty()) toast("비어 있는 폴더입니다.") else svc.switchGroup(viewGroup, play = true)
                     render()
                 }
                 2 -> {
                     if (group.entries.isEmpty()) {
-                        toast("비어 있는 그룹입니다.")
+                        toast("비어 있는 폴더입니다.")
                     } else {
                         svc.switchGroup(viewGroup, play = true)
                         svc.updateRepeatMode(2)
-                        toast("‘${group.name}’ 그룹을 반복 재생합니다.")
+                        toast("‘${group.name}’ 폴더를 반복 재생합니다.")
                     }
                     render()
                 }
-                3 -> context.promptText("그룹 이름", group.name) { name ->
+                3 -> context.promptText("폴더 이름", group.name) { name ->
                     svc.renameGroup(viewGroup, name)
                     render()
                 }
-                4 -> confirm("‘${group.name}’ 그룹의 곡을 모두 뺄까요?\n(곡별 기록은 유지됩니다)", "비우기") {
+                4 -> confirm("‘${group.name}’ 폴더의 곡을 모두 뺄까요?\n(곡별 기록은 유지됩니다)", "비우기") {
                     svc.clearGroup(viewGroup)
                     render()
                 }
-                5 -> confirm("‘${group.name}’ 그룹을 삭제할까요?\n(곡별 기록은 유지됩니다)", "삭제") {
+                6 -> {
+                    SixMinuteEnglish.checkNow(context)
+                    toast("새 회차를 확인하고 있어요. 받으면 알림으로 알려 드려요.")
+                }
+                5 -> confirm("‘${group.name}’ 폴더를 삭제할까요?\n(곡별 기록은 유지됩니다)", "삭제") {
                     val wasLast = svc.groups.size == 1
                     svc.deleteGroup(viewGroup)
                     if (!wasLast) viewGroup = (viewGroup - 1).coerceAtLeast(0)
+                    inFolder = false
                     render()
                 }
             }
@@ -172,7 +239,7 @@ class PlaylistSheet(
         val entry = svc.groupEntries(viewGroup).getOrNull(position) ?: return
         val menu = PopupMenu(context, anchor)
         menu.menu.add(0, 1, 0, "이 파일 반복 재생")
-        if (svc.groups.size > 1) menu.menu.add(0, 2, 1, "다른 그룹으로 이동")
+        if (svc.groups.size > 1) menu.menu.add(0, 2, 1, "다른 폴더로 이동")
         menu.menu.add(0, 3, 2, "이어듣기 기록 초기화")
         menu.menu.add(0, 4, 3, "목록에서 삭제")
         menu.setOnMenuItemClickListener { item ->
@@ -201,10 +268,10 @@ class PlaylistSheet(
     private fun chooseTargetGroup(position: Int, entry: TrackStore.Entry) {
         val targets = svc.groups.indices.filter { it != viewGroup }
         MaterialAlertDialogBuilder(context)
-            .setTitle("어느 그룹으로 옮길까요?")
+            .setTitle("어느 폴더로 옮길까요?")
             .setItems(targets.map { svc.groups[it].name }.toTypedArray()) { _, which ->
                 val moved = svc.moveToGroup(viewGroup, position, targets[which])
-                if (!moved) toast("‘${entry.name}’ 파일이 이미 그 그룹에 있습니다.")
+                if (!moved) toast("‘${entry.name}’ 파일이 이미 그 폴더에 있습니다.")
                 render()
             }
             .setNegativeButton("취소", null)

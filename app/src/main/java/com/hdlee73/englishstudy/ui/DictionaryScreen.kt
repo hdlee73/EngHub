@@ -61,15 +61,15 @@ import com.hdlee73.englishstudy.dictionary.examplePairs
 import kotlin.math.abs
 
 // The look of the original dictionary app: soft blue-grey cards, lavender 듣기 and green 저장 buttons.
-private val DictBlue = Color(0xFF486A90)
-private val DictDark = Color(0xFF182230)
-private val DictGrey = Color(0xFF526174)
-private val ListenFill = Color(0xFFEEE9F7)
-private val ListenInk = Color(0xFF655880)
+private val DictBlue = Color(0xFF168C82)
+private val DictDark = Color(0xFF172B2A)
+private val DictGrey = Color(0xFF5E716E)
+private val ListenFill = Color(0xFFDDF1EC)
+private val ListenInk = Color(0xFF0C6F67)
 private val SaveFill = Color(0xFFDFF0E7)
 private val SaveInk = Color(0xFF386752)
-private val TabOn = Color(0xFFDCE8F2)
-private val TabOff = Color(0xFFEDF0F4)
+private val TabOn = Color(0xFFDDF1EC)
+private val TabOff = Color(0xFFF1F6F5)
 
 private val ExportFormats = listOf(
     "단어·뜻·영어 예문(한글 해석 병기)",
@@ -204,7 +204,7 @@ fun DictionaryScreen(
 private fun TabButton(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Button(
         onClick = onClick, modifier = modifier.height(40.dp), shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = if (selected) TabOn else TabOff, contentColor = if (selected) DictBlue else Color(0xFF667384)),
+        colors = ButtonDefaults.buttonColors(containerColor = if (selected) TabOn else TabOff, contentColor = if (selected) DictBlue else Color(0xFF6B7D7A)),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
         elevation = null
     ) { Text(text, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
@@ -253,7 +253,7 @@ private fun SearchResult(
         item {
             Row(Modifier.padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (state.searching) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
-                Text(state.status, color = Color(0xFF5D6877), fontSize = 14.sp)
+                Text(state.status, color = Color(0xFF6B7D7A), fontSize = 14.sp)
             }
         }
         if (state.suggestions.isNotEmpty()) {
@@ -308,12 +308,12 @@ private fun EntryCard(
         Section("한글 의미", entry.korean)
         Row(verticalAlignment = Alignment.CenterVertically) {
             val encoded = java.net.URLEncoder.encode(entry.word, "UTF-8").replace("+", "%20")
-            Text("네이버 ", color = Color(0xFF64748B), fontSize = 12.sp)
+            Text("네이버 ", color = Color(0xFF6B7D7A), fontSize = 12.sp)
             Text(
                 "영한", color = DictBlue, fontSize = 12.sp, textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable { onOpenUrl("https://en.dict.naver.com/#/search?query=$encoded") }.padding(horizontal = 4.dp, vertical = 8.dp)
             )
-            Text(" · ", color = Color(0xFF64748B), fontSize = 12.sp)
+            Text(" · ", color = Color(0xFF6B7D7A), fontSize = 12.sp)
             Text(
                 "영영", color = DictBlue, fontSize = 12.sp, textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable { onOpenUrl("https://dict.naver.com/enendict/#/search?query=$encoded") }.padding(horizontal = 4.dp, vertical = 8.dp)
@@ -325,7 +325,7 @@ private fun EntryCard(
             Section(if (pairs.any { it.second.isNotBlank() }) "예문 · 한국어 해석" else "영어 예문", displayExamples(entry.examples))
         }
         Text(
-            entry.source.ifBlank { "의미별 자체 정리 · 직접 작성한 한영 예문" }, color = Color(0xFF64748B), fontSize = 10.sp,
+            entry.source.ifBlank { "의미별 자체 정리 · 직접 작성한 한영 예문" }, color = Color(0xFF6B7D7A), fontSize = 10.sp,
             modifier = Modifier.padding(top = 12.dp)
         )
     }
@@ -344,7 +344,7 @@ private fun SavedList(
     if (words.isEmpty()) {
         Text(
             "아직 저장한 단어가 없습니다. 검색 결과에서 원하는 단어만 저장할 수 있어요.",
-            color = Color(0xFF5D6877), fontSize = 15.sp, modifier = Modifier.padding(4.dp, 14.dp)
+            color = Color(0xFF6B7D7A), fontSize = 15.sp, modifier = Modifier.padding(4.dp, 14.dp)
         )
         return
     }

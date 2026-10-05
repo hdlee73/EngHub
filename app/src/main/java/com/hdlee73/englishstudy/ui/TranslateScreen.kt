@@ -16,6 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -43,7 +45,9 @@ fun TranslateScreen(
     onClear: () -> Unit,
     onLookup: (String) -> Unit,
     onSpeak: (String) -> Unit,
-    onMessageDismiss: () -> Unit
+    onMessageDismiss: () -> Unit,
+    /** Saves the translated sentence (English, Korean) to the Speaking tab's "번역 저장 문장" dataset. */
+    onSaveToSpeaking: (english: String, korean: String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val focus = LocalFocusManager.current
@@ -95,6 +99,14 @@ fun TranslateScreen(
                             OutlinedButton(onClick = { onLookup(result) }, shape = RoundedCornerShape(12.dp)) { Text("📖 사전", fontSize = 14.sp) }
                         }
                     }
+                    Button(
+                        onClick = {
+                            val (english, korean) = if (state.resultDirection == Direction.EN_KO) state.resultFor to result else result to state.resultFor
+                            onSaveToSpeaking(english, korean)
+                        },
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SoftBlue, contentColor = Blue)
+                    ) { Text("🎤 문장말하기 데이터셋에 추가", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                     Text("구글 번역 기반 자동 번역이에요. 중요한 내용은 한 번 더 확인하세요.", color = Muted, fontSize = 11.sp)
                 }
             }

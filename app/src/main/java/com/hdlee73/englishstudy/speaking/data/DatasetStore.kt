@@ -43,6 +43,29 @@ class DatasetStore(private val context: Context) {
     /** Same for the starred sentences: they live in their own dataset next to the saved-words one. */
     fun syncFavorites(pairs: List<SentencePair>): SavedDataset? = syncManaged(FAVORITES_ID, FAVORITES_NAME, pairs)
 
+    /**
+     * Appends a sentence saved from the Translate tab to the "번역 저장 문장" dataset (created on first use).
+     * Returns false when that English sentence is already in it.
+     */
+    fun addTranslated(pair: SentencePair): Boolean {
+        val existing = list().firstOrNull { it.id == TRANSLATED_ID }
+        val items = existing?.let { runCatching { load(it) }.getOrNull() }.orEmpty()
+        val key = pair.english.trim().lowercase()
+        if (items.any { it.english.trim().lowercase() == key }) return false
+        val all = items + pair
+        File(directory, "$TRANSLATED_ID.csv").writeText(DatasetCsv.write(all), Charsets.UTF_8)
+        File(directory, "$TRANSLATED_ID.edited.json").delete()
+        val dataset = SavedDataset(TRANSLATED_ID, TRANSLATED_NAME, "$TRANSLATED_ID.csv", all.size)
+        saveIndex(managedFirst(list().filterNot { it.id == TRANSLATED_ID } + dataset))
+        return true
+    }
+
+    private fun managedFirst(items: List<SavedDataset>): List<SavedDataset> {
+        val managedIds = listOf(SAVED_WORDS_ID, FAVORITES_ID, TRANSLATED_ID)
+        val (managed, rest) = items.partition { it.id in managedIds }
+        return managed.sortedBy { managedIds.indexOf(it.id) } + rest
+    }
+
     private fun syncManaged(id: String, name: String, pairs: List<SentencePair>): SavedDataset? {
         val others = list().filterNot { it.id == id }
         val file = File(directory, "$id.csv")
@@ -54,10 +77,8 @@ class DatasetStore(private val context: Context) {
         }
         file.writeText(DatasetCsv.write(pairs), Charsets.UTF_8)
         val dataset = SavedDataset(id, name, file.name, pairs.size)
-        // The managed datasets stay at the top of the list: saved words first, then favorites.
-        val managedIds = listOf(SAVED_WORDS_ID, FAVORITES_ID)
-        val (managed, rest) = (others + dataset).partition { it.id in managedIds }
-        saveIndex(managed.sortedBy { managedIds.indexOf(it.id) } + rest)
+        // The managed datasets stay at the top of the list: saved words first, then favorites, then translated sentences.
+        saveIndex(managedFirst(others + dataset))
         return dataset
     }
 
@@ -135,5 +156,7 @@ class DatasetStore(private val context: Context) {
         const val SAVED_WORDS_NAME = "저장 단어 예문.csv"
         const val FAVORITES_ID = "favorites"
         const val FAVORITES_NAME = "즐겨찾기 문장.csv"
+        const val TRANSLATED_ID = "translated"
+        const val TRANSLATED_NAME = "번역 저장 문장.csv"
     }
 }

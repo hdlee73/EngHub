@@ -217,7 +217,7 @@ private fun SwipeHint(onDismiss: () -> Unit) {
             drawLine(Color.White.copy(alpha = 0.55f), Offset(cx, startY), Offset(cx, endY + 14.dp.toPx()), arrow.width, StrokeCap.Round)
             drawLine(Color.White.copy(alpha = 0.55f), Offset(cx, endY), Offset(cx - 12.dp.toPx(), endY + 14.dp.toPx()), arrow.width, StrokeCap.Round)
             drawLine(Color.White.copy(alpha = 0.55f), Offset(cx, endY), Offset(cx + 12.dp.toPx(), endY + 14.dp.toPx()), arrow.width, StrokeCap.Round)
-            drawCircle(Color(0xFF5B8CFF), 17.dp.toPx(), Offset(cx, y))
+            drawCircle(Color(0xFF22A394), 17.dp.toPx(), Offset(cx, y))
             drawCircle(Color.White, 17.dp.toPx(), Offset(cx, y), style = Stroke(width = 3.dp.toPx()))
         }
     }
