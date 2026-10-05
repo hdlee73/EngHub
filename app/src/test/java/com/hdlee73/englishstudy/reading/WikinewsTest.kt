@@ -81,4 +81,22 @@ class WikinewsTest {
         assertTrue(found.all { it.sentence.contains(it.expression, ignoreCase = true) })
         assertNotNull(found.firstOrNull())
     }
+
+    @Test fun keyExpressionsPreferIdiomsPhrasalVerbsAndHardWords() {
+        val text = listOf(
+            "The central bank moved to rein in inflation in the wake of a sharp rise in energy prices last quarter.",
+            "Analysts warned that the policy could take a toll on small firms that are already struggling to stay afloat.",
+            "Officials have not ruled out further measures, citing unprecedented volatility in global markets this year."
+        )
+        val common = setOf("central", "bank", "moved", "inflation", "sharp", "rise", "energy", "prices", "last", "quarter",
+            "analysts", "warned", "policy", "could", "small", "firms", "already", "struggling", "officials", "further",
+            "measures", "citing", "global", "markets", "year", "this", "that", "have", "the")
+        val found = KeyExpressions.extract(text, 8, common).map { it.expression }
+        assertTrue(found.toString(), "rein in" in found)
+        assertTrue(found.toString(), "in the wake of" in found)
+        assertTrue(found.toString(), "take a toll on" in found)
+        assertTrue(found.toString(), "ruled out" in found)
+        assertTrue(found.toString(), "unprecedented" in found || "volatility" in found)
+        assertTrue(found.toString(), found.none { it.lowercase() in common })
+    }
 }
