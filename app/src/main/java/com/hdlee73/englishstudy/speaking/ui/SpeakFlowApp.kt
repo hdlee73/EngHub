@@ -98,7 +98,7 @@ fun SpeakFlowApp(
                         if (state.items.isEmpty()) EmptyState(onImport)
                         else LessonCard(state, expanded, compact, tight, onReplay, onRestart, onRetry, onNext)
                     }
-                    PlayerControls(state, tight, onPrevious, onPlayPause, onNext, onToggleRecording) { onSettingsSave(state.settings.copy(autoAdvanceSentence = !state.settings.autoAdvanceSentence)) }
+                    PlayerControls(state, tight, expanded, onPrevious, onPlayPause, onNext, onToggleRecording) { onSettingsSave(state.settings.copy(autoAdvanceSentence = !state.settings.autoAdvanceSentence)) }
                 }
             }
         }
@@ -137,7 +137,14 @@ private fun BannerButton(iconRes: Int, description: String, onClick: () -> Unit)
 @Composable
 private fun SavedWordsBar(sentenceCount: Int, active: Boolean, tight: Boolean, onClick: () -> Unit) {
     Surface(color = Color.White.copy(alpha = .72f)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (tight) 0.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (sentenceCount == 0) {
+            // No button to press yet: just a hint on how the saved words become practice sentences.
+            Text(
+                "📚 사전에서 단어를 저장하면 그 예문으로 말하기 연습을 할 수 있어요",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (tight) 4.dp else 8.dp),
+                fontSize = 12.sp, color = Color(0xFF667085), textAlign = TextAlign.Center, maxLines = 2
+            )
+        } else Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (tight) 0.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
             FilledTonalButton(
                 onClick = onClick, enabled = sentenceCount > 0, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
@@ -145,7 +152,6 @@ private fun SavedWordsBar(sentenceCount: Int, active: Boolean, tight: Boolean, o
             ) {
                 Text(
                     when {
-                        sentenceCount == 0 -> "📚 저장 단어 예문 없음 · 사전에서 단어를 저장하세요"
                         active -> "📚 저장 단어 예문 다시 시작 (${sentenceCount}문장)"
                         else -> "📚 저장 단어 예문으로 학습 (${sentenceCount}문장)"
                     },
@@ -188,8 +194,8 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
         else -> Blue
     }
     Card(
-        Modifier.padding(horizontal = if (expanded) 20.dp else 12.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 10.dp)
-            .widthIn(max = if (expanded) 860.dp else 520.dp).fillMaxHeight()
+        Modifier.padding(horizontal = if (expanded) 32.dp else 20.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 10.dp)
+            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(if (tight) 1f else if (expanded) 0.86f else 0.94f)
             .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = statusColor.copy(alpha = .18f)),
         shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
@@ -209,11 +215,11 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
             // the sentence has appeared.
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (!revealEnglish) {
-                    AutoFitText(AnnotatedString(item.korean), if (expanded) 38 else 30, FontWeight.Bold, Ink)
+                    AutoFitText(AnnotatedString(item.korean), if (expanded) 34 else 30, FontWeight.Bold, Ink)
                 } else {
                     AutoFitText(
                         realtimeSentence(item.english, state.liveText, state.matchedWords, state.settings.strictness, state.phase == LessonPhase.RETRYING),
-                        if (expanded) 38 else 30, FontWeight.ExtraBold, Color.Unspecified
+                        if (expanded) 34 else 30, FontWeight.ExtraBold, Color.Unspecified
                     )
                 }
             }
@@ -431,30 +437,49 @@ private fun statusLabel(state: LearningUiState) = when (state.phase) {
 }
 
 @Composable
-private fun PlayerControls(state: LearningUiState, tight: Boolean, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit, onToggleRecording: () -> Unit, onToggleAuto: () -> Unit) {
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = if (tight) 2.dp else 8.dp, top = if (tight) 2.dp else 4.dp)) {
+private fun PlayerControls(state: LearningUiState, tight: Boolean, expanded: Boolean, onPrevious: () -> Unit, onPlayPause: () -> Unit, onNext: () -> Unit, onToggleRecording: () -> Unit, onToggleAuto: () -> Unit) {
+    val side = if (tight) 40 else if (expanded) 58 else 52
+    val main = if (tight) 50 else if (expanded) 76 else 68
+    val small = if (tight) 40 else if (expanded) 52 else 48
+    var hint by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(hint) {
+        if (hint != null) { delay(2500); hint = null }
+    }
+    val auto = state.settings.autoAdvanceSentence
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = if (tight) 4.dp else 12.dp, top = if (tight) 2.dp else 8.dp)) {
         Row(
             Modifier.align(Alignment.Center),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
         ) {
-            RoundButton(R.drawable.ic_previous, "이전 문장", if (tight) 40 else 48, onPrevious, state.position > 0)
-            Spacer(Modifier.width(14.dp))
+            RoundButton(R.drawable.ic_previous, "이전 문장", side, onPrevious, state.position > 0)
+            Spacer(Modifier.width(18.dp))
             RoundButton(
                 if (state.phase == LessonPhase.PAUSED || state.phase == LessonPhase.IDLE || state.phase == LessonPhase.COMPLETE) R.drawable.ic_play else R.drawable.ic_pause,
                 if (state.phase == LessonPhase.PAUSED || state.phase == LessonPhase.IDLE || state.phase == LessonPhase.COMPLETE) "재생" else "일시 정지",
-                if (tight) 50 else 62, onPlayPause, state.items.isNotEmpty(), primary = true
+                main, onPlayPause, state.items.isNotEmpty(), primary = true
             )
-            Spacer(Modifier.width(14.dp))
-            RoundButton(R.drawable.ic_next, "다음 문장", if (tight) 40 else 48, onNext, state.position <= state.order.lastIndex)
+            Spacer(Modifier.width(18.dp))
+            RoundButton(R.drawable.ic_next, "다음 문장", side, onNext, state.position <= state.order.lastIndex)
         }
-        AutoButton(state.settings.autoAdvanceSentence, onToggleAuto, Modifier.align(Alignment.CenterStart).padding(start = 20.dp))
-        RecordButton(state.recordingStartedAt, onToggleRecording, Modifier.align(Alignment.CenterEnd).padding(end = 20.dp))
+        AutoButton(auto, small, {
+            onToggleAuto()
+            hint = if (auto) "자동 넘김 꺼짐 · 다음 문장은 직접 넘겨요" else "자동 넘김 켜짐 · 끝나면 다음 문장으로 넘어가요"
+        }, Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
+        RecordButton(state.recordingStartedAt, small, onToggleRecording, Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
+        hint?.let {
+            Surface(
+                modifier = Modifier.align(Alignment.TopStart).offset(x = 16.dp, y = (-40).dp),
+                shape = RoundedCornerShape(12.dp), color = Color(0xE6101828)
+            ) {
+                Text(it, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color.White, fontSize = 12.sp)
+            }
+        }
     }
 }
 
 /** Small, unobtrusive start/stop button for recording the pronunciation. */
 @Composable
-private fun RecordButton(startedAt: Long?, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+private fun RecordButton(startedAt: Long?, size: Int, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     var seconds by remember { mutableStateOf(0L) }
     LaunchedEffect(startedAt) {
         while (startedAt != null) {
@@ -464,7 +489,7 @@ private fun RecordButton(startedAt: Long?, onToggle: () -> Unit, modifier: Modif
     }
     val recording = startedAt != null
     Surface(
-        onClick = onToggle, modifier = modifier.size(40.dp).semantics { contentDescription = if (recording) "녹음 종료" else "녹음 시작" },
+        onClick = onToggle, modifier = modifier.size(size.dp).semantics { contentDescription = if (recording) "녹음 종료" else "녹음 시작" },
         shape = CircleShape, color = if (recording) Miss else Color.White, shadowElevation = 4.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -476,14 +501,14 @@ private fun RecordButton(startedAt: Long?, onToggle: () -> Unit, modifier: Modif
 
 /** Small round switch: when on, the next sentence follows by itself after each one. */
 @Composable
-private fun AutoButton(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+private fun AutoButton(on: Boolean, size: Int, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onToggle,
-        modifier = modifier.size(40.dp).semantics { contentDescription = if (on) "자동 넘김 켜짐" else "자동 넘김 꺼짐" },
+        modifier = modifier.size(size.dp).semantics { contentDescription = if (on) "자동 넘김 켜짐" else "자동 넘김 꺼짐" },
         shape = CircleShape, color = if (on) Blue else Color.White, shadowElevation = 4.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text("자동", fontSize = 11.sp, color = if (on) Color.White else Color(0xFF667085), fontWeight = FontWeight.Bold)
+            Text(if (on) "Auto\non" else "Auto\noff", fontSize = 10.sp, lineHeight = 12.sp, textAlign = TextAlign.Center, color = if (on) Color.White else Color(0xFF667085), fontWeight = FontWeight.Bold)
         }
     }
 }
