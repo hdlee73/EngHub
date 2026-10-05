@@ -58,8 +58,32 @@ class TrackStore(context: Context) {
                 groups += group
             }
         }
-        if (groups.isEmpty()) groups += Group("기본", loadPlaylist(), currentIndex)
+        if (groups.isEmpty()) groups += Group(FIRST_GROUP_NAME, loadPlaylist(), currentIndex)
+        removeDefaultGroup(groups)
         return groups
+    }
+
+    /**
+     * The old default folder "기본" is removed once (v1.15.0); its audio files stay on the phone. When it is the only folder it is renamed instead.
+     */
+    private fun removeDefaultGroup(groups: MutableList<Group>) {
+        if (prefs.getBoolean(KEY_DEFAULT_REMOVED, false)) return
+        val index = groups.indexOfFirst { it.name == "기본" }
+        if (index >= 0) {
+            var active = activeGroup.coerceIn(0, groups.lastIndex)
+            if (groups.size == 1) {
+                groups[0].name = FIRST_GROUP_NAME
+            } else {
+                groups.removeAt(index)
+                active = when {
+                    active > index -> active - 1
+                    active == index -> 0
+                    else -> active
+                }
+            }
+            saveGroups(groups, active)
+        }
+        prefs.edit().putBoolean(KEY_DEFAULT_REMOVED, true).apply()
     }
 
     fun saveGroups(groups: List<Group>, active: Int) {
@@ -162,5 +186,7 @@ class TrackStore(context: Context) {
         private const val KEY_GROUPS = "groups"
         private const val KEY_ACTIVE_GROUP = "active_group"
         private const val KEY_INDEX = "playlist_index"
+        private const val KEY_DEFAULT_REMOVED = "default_group_removed"
+        const val FIRST_GROUP_NAME = "내 폴더"
     }
 }

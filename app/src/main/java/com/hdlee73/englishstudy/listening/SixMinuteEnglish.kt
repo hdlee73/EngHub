@@ -55,15 +55,17 @@ object SixMinuteEnglish {
             .sortedWith(compareByDescending<Episode> { it.id }.thenByDescending { it.url.endsWith("_download.mp3") })
             .distinctBy { it.id }.toList()
 
-    /** "261001_6_minute_english_why_does_heartbreak_hurt_so_much_download.mp3" → "6min 261001 Why does heartbreak hurt so much". */
-    fun titleOf(url: String): String {
-        val file = url.substringAfterLast('/').removeSuffix(".mp3")
-        val id = file.substringBefore('_')
-        val words = file.substringAfter('_').removeSuffix("_download")
-            .replace(Regex("^6_minute_english_?"), "").replace('_', ' ').trim()
-        val topic = words.replaceFirstChar { it.uppercase() }
-        return if (topic.isEmpty()) "6 Minute English $id" else "6min $id $topic"
-    }
+    /** The file name of the episode published on [id] (yymmdd): "20261001_6min.mp3". */
+    fun fileName(id: String): String = "20${id}_6min.mp3"
+
+    private val keyPatterns = listOf(
+        Regex("""^20(\d{6})_6min"""),
+        Regex("""(?:^|\D)(\d{6})_6_minute_english"""),
+        Regex("""^6min (\d{6})\b"""),
+    )
+
+    /** The publication date (yymmdd) of the episode a playlist entry or file named [name] is, or null when it is not one. */
+    fun episodeKey(name: String): String? = keyPatterns.firstNotNullOfOrNull { it.find(name)?.groupValues?.get(1) }
 
     /** Runs the check once a day while the phone is online, and once right away. */
     fun schedule(context: Context) {
@@ -75,14 +77,20 @@ object SixMinuteEnglish {
         )
     }
 
-    /** Checks for a new episode now (from the playlist menu). */
-    fun checkNow(context: Context) {
-        val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+    /**
+     * Fetches the latest episode now (the 6min folder's "새 에피소드 가져오기" button), unless an episode of that date is
+     * already among [have] (yymmdd keys of the folder's tracks).
+     */
+    fun fetchLatest(context: Context, have: Collection<String>) {
         WorkManager.getInstance(context).enqueueUniqueWork(
             WORK_NOW, ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<Worker>().setConstraints(online).setInputData(androidx.work.workDataOf("manual" to true)).build()
+            OneTimeWorkRequestBuilder<Worker>()
+                .setInputData(androidx.work.workDataOf(KEY_MANUAL to true, KEY_HAVE to have.toTypedArray()))
+                .build()
         )
     }
+    private const val KEY_MANUAL = "manual"
+    private const val KEY_HAVE = "have"
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -114,29 +122,57 @@ object SixMinuteEnglish {
 
         override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
             try {
+                if (inputData.getBoolean(KEY_MANUAL, false)) {
+                    val have = inputData.getStringArray(KEY_HAVE).orEmpty().toSet()
+                    val got = fetchLatestIfMissing(applicationContext, have)
+                    toast(if (got != null) "‘$got’을(를) 받았어요." else "최신 에피소드가 이미 6min 폴더에 있어요.")
+                    if (got != null) notifyDownloaded(listOf(got))
+                    return@withContext Result.success()
+                }
                 val got = fetchNew(applicationContext)
                 if (got.isNotEmpty()) notifyDownloaded(got)
-                else if (inputData.getBoolean("manual", false)) notify("새로 올라온 회차가 없어요.")
                 Result.success()
             } catch (e: Exception) {
-                if (runAttemptCount < 3) Result.retry() else Result.failure()
+                if (inputData.getBoolean(KEY_MANUAL, false)) {
+                    toast("에피소드를 가져오지 못했어요. 인터넷 연결을 확인해 주세요.")
+                    Result.failure()
+                } else if (runAttemptCount < 3) Result.retry() else Result.failure()
             }
         }
 
         private fun get(url: String): String = http.newCall(Request.Builder().url(url).header("User-Agent", "Mozilla/5.0 (Android) EngHub").build())
             .execute().use { r -> if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code}"); r.body!!.string() }
 
-        private fun fetchNew(context: Context): List<String> {
-            val done = prefs(context).getStringSet(KEY_DONE, emptySet()).orEmpty()
+        private fun toast(message: String) = android.os.Handler(android.os.Looper.getMainLooper()).post {
+            android.widget.Toast.makeText(applicationContext, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+
+        /** Newest episodes as (yymmdd → MP3 address), newest first; [skip] episode pages are not opened. */
+        private fun latestEpisodes(skip: Set<String>, pages: Int): LinkedHashMap<String, String> {
             val index = get(INDEX_URL)
-            // The newest episodes: the programme page links each episode page, and each episode page has the MP3 download link.
             val candidates = linkedMapOf<String, String>()
             mp3Links(index).forEach { candidates[it.id] = it.url }
-            for (page in episodePages(index).take(3)) {
-                if (page.id in done || page.id in candidates) continue
+            for (page in episodePages(index).take(pages)) {
+                if (page.id in skip || page.id in candidates) continue
                 val mp3 = runCatching { mp3Links(get(page.url)).firstOrNull() }.getOrNull() ?: continue
                 candidates[page.id] = mp3.url
             }
+            return candidates.keys.sortedDescending().associateWithTo(LinkedHashMap()) { candidates.getValue(it) }
+        }
+
+        /** Downloads the latest episode when its date is not in [have]; returns its name, or null when it was already there. */
+        private fun fetchLatestIfMissing(context: Context, have: Set<String>): String? {
+            val (id, url) = latestEpisodes(emptySet(), 1).entries.firstOrNull()?.toPair() ?: throw java.io.IOException("에피소드를 찾지 못했어요.")
+            if (id in have) return null
+            val name = fileName(id)
+            val uri = download(context, url, name) ?: throw java.io.IOException("저장하지 못했어요.")
+            addPending(context, TrackStore.Entry(uri, name), id)
+            return name
+        }
+
+        private fun fetchNew(context: Context): List<String> {
+            val done = prefs(context).getStringSet(KEY_DONE, emptySet()).orEmpty()
+            val candidates = latestEpisodes(done, 3)
             val newest = candidates.keys.sortedDescending()
             // The first time only the latest episode is fetched, not the whole archive; afterwards everything newer than what we have.
             val lastDone = done.maxOrNull()
@@ -144,8 +180,8 @@ object SixMinuteEnglish {
             val fetched = mutableListOf<String>()
             for (id in wanted.sorted()) {
                 val url = candidates.getValue(id)
-                val title = titleOf(url)
-                val uri = download(context, url) ?: continue
+                val title = fileName(id)
+                val uri = download(context, url, title) ?: continue
                 addPending(context, TrackStore.Entry(uri, title), id)
                 fetched += title
             }
@@ -153,8 +189,7 @@ object SixMinuteEnglish {
         }
 
         /** Saves the MP3 to Downloads/EngHub/6min and returns its address. */
-        private fun download(context: Context, url: String): String? {
-            val name = url.substringAfterLast('/')
+        private fun download(context: Context, url: String, name: String): String? {
             val resolver = context.contentResolver
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, name)

@@ -29,3 +29,8 @@ Automatic translation fallback (online, labeled "자동 번역" in the app)
 Used only when the sources above have no Korean meaning, and for English example sentences that have no human translation.
 Service: Google Translate (translate.googleapis.com, unofficial "gtx" client). Results are not stored in the bundled data.
 English Wiktionary Korean translations (Kaikki.org English dump), CC BY-SA 4.0
+
+Common English word list (common_words.txt, used to pick harder words for Reading key expressions)
+Derived from wordfreq (Robyn Speer et al.), the most frequent English words.
+Source: https://github.com/rspeer/wordfreq
+License: data under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
