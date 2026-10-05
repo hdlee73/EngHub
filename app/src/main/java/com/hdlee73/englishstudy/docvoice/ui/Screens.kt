@@ -299,7 +299,7 @@ private fun RecordButton(recording: Boolean, enabled: Boolean = true, onClick: (
 @Composable
 private fun TtsScreen(vm: DocVoiceViewModel) {
     val busy = vm.job.collectAsState().value is JobState.Running
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::pickDoc) }
+    val picker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Single()) { it?.let(vm::pickDoc) }
 
     ScreenHero(
         "🔊", "문서 → MP3", "문서를 남성 목소리 MP3로 만들어요",
@@ -340,7 +340,7 @@ private fun TtsScreen(vm: DocVoiceViewModel) {
 @Composable
 private fun SttScreen(vm: DocVoiceViewModel) {
     val busy = vm.job.collectAsState().value is JobState.Running
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::pickAudio) }
+    val picker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Single()) { it?.let(vm::pickAudio) }
     var sheet by remember { mutableStateOf(false) }
 
     ScreenHero(

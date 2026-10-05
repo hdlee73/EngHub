@@ -152,7 +152,17 @@ fun SourcePicker(
     onDelete: ((String) -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("학습 자료", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        // The add button sits beside the title so it stays on screen however many lists scroll sideways.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("학습 자료", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (onAdd != null) {
+                Text(
+                    "＋ 단어장 추가", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Blue).clickable { onAdd() }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                )
+            }
+        }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             sources.forEach { source ->
                 val selected = source.id == selectedId
@@ -176,16 +186,6 @@ fun SourcePicker(
                             )
                         }
                     }
-                }
-            }
-            if (onAdd != null) {
-                Column(
-                    Modifier.width(120.dp).height(IntrinsicSize.Min).clip(RoundedCornerShape(16.dp))
-                        .border(1.dp, Blue, RoundedCornerShape(16.dp)).clickable { onAdd() }.padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-                ) {
-                    Text("＋", color = Blue, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Text("단어장 추가", color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
