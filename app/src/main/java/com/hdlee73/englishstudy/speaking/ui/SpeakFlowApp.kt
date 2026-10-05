@@ -61,6 +61,8 @@ fun SpeakFlowApp(
     onOpenUpdate: () -> Unit,
     savedSentenceCount: Int,
     onStudySavedWords: () -> Unit,
+    onStudyFavorites: () -> Unit,
+    onToggleFavorite: () -> Unit,
     onDatasetSequence: (List<String>) -> Unit,
     onImport: () -> Unit,
     onPlayPause: () -> Unit,
@@ -88,7 +90,7 @@ fun SpeakFlowApp(
                 val tight = maxHeight < 700.dp
                 Column(Modifier.fillMaxSize()) {
                     TopBar(state, tight, onDatasetsOpen, onSettingsOpen)
-                    SavedWordsBar(savedSentenceCount, state.activeDatasetId == DatasetStore.SAVED_WORDS_ID, tight, onStudySavedWords)
+                    SavedWordsBar(savedSentenceCount, state.favorites.size, state.activeDatasetId, tight, onStudySavedWords, onStudyFavorites)
                     LinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
@@ -96,7 +98,7 @@ fun SpeakFlowApp(
                     )
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         if (state.items.isEmpty()) EmptyState(onImport)
-                        else LessonCard(state, expanded, compact, tight, onReplay, onRestart, onRetry, onNext)
+                        else LessonCard(state, expanded, compact, tight, onReplay, onRestart, onRetry, onNext, onToggleFavorite)
                     }
                     PlayerControls(state, tight, expanded, onPrevious, onPlayPause, onNext, onToggleRecording) { onSettingsSave(state.settings.copy(autoAdvanceSentence = !state.settings.autoAdvanceSentence)) }
                 }
@@ -133,30 +135,32 @@ private fun BannerButton(iconRes: Int, description: String, onClick: () -> Unit)
     ) { Icon(painterResource(iconRes), description, Modifier.size(21.dp), tint = Color.White) }
 }
 
-/** Starts speaking practice with the example sentences of the words saved in the dictionary. */
+/** Starts speaking practice with the example sentences of the saved dictionary words, or with the starred sentences only. */
 @Composable
-private fun SavedWordsBar(sentenceCount: Int, active: Boolean, tight: Boolean, onClick: () -> Unit) {
+private fun SavedWordsBar(sentenceCount: Int, favoriteCount: Int, activeId: String?, tight: Boolean, onSavedClick: () -> Unit, onFavoritesClick: () -> Unit) {
     Surface(color = Color.White.copy(alpha = .72f)) {
-        if (sentenceCount == 0) {
-            // No button to press yet: just a hint on how the saved words become practice sentences.
+        if (sentenceCount == 0 && favoriteCount == 0) {
+            // No button to press yet: just a hint on how sentences get here.
             Text(
-                "📚 사전에서 단어를 저장하면 그 예문으로 말하기 연습을 할 수 있어요",
+                "📚 사전에서 단어를 저장하면 그 예문으로 연습할 수 있어요 · 문장 카드의 ☆로 즐겨찾기도 할 수 있어요",
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (tight) 4.dp else 8.dp),
                 fontSize = 12.sp, color = Color(0xFF667085), textAlign = TextAlign.Center, maxLines = 2
             )
-        } else Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (tight) 0.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            FilledTonalButton(
-                onClick = onClick, enabled = sentenceCount > 0, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                shape = RoundedCornerShape(14.dp)
+        } else Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (tight) 0.dp else 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (sentenceCount > 0) FilledTonalButton(
+                onClick = onSavedClick, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), shape = RoundedCornerShape(14.dp)
             ) {
-                Text(
-                    when {
-                        active -> "📚 저장 단어 예문 다시 시작 (${sentenceCount}문장)"
-                        else -> "📚 저장 단어 예문으로 학습 (${sentenceCount}문장)"
-                    },
-                    fontSize = 13.sp, maxLines = 1
-                )
+                Text(if (activeId == DatasetStore.SAVED_WORDS_ID) "📚 저장 단어 다시 ($sentenceCount)" else "📚 저장 단어 예문 ($sentenceCount)", fontSize = 13.sp, maxLines = 1)
+            }
+            if (favoriteCount > 0) FilledTonalButton(
+                onClick = onFavoritesClick, modifier = Modifier.weight(1f).height(if (tight) 32.dp else 38.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(if (activeId == "favorites") "★ 즐겨찾기 다시 ($favoriteCount)" else "★ 즐겨찾기 ($favoriteCount)", fontSize = 13.sp, maxLines = 1)
             }
         }
     }
@@ -185,7 +189,7 @@ private fun EmptyState(onImport: () -> Unit) {
 }
 
 @Composable
-private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boolean, tight: Boolean, onReplay: () -> Unit, onRestart: () -> Unit, onRetry: () -> Unit, onNext: () -> Unit) {
+private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boolean, tight: Boolean, onReplay: () -> Unit, onRestart: () -> Unit, onRetry: () -> Unit, onNext: () -> Unit, onToggleFavorite: () -> Unit) {
     val item = state.current ?: return
     val translation = state.settings.mode == LearningMode.TRANSLATION
     val statusColor = when (state.phase) {
@@ -195,7 +199,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
     }
     Card(
         Modifier.padding(horizontal = if (expanded) 32.dp else 20.dp, vertical = if (tight) 2.dp else if (compact) 6.dp else 10.dp)
-            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(if (tight) 1f else if (expanded) 0.86f else 0.94f)
+            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(if (tight) 1f else if (expanded) 0.92f else 0.96f)
             .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = statusColor.copy(alpha = .18f)),
         shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
@@ -203,7 +207,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
             Modifier.fillMaxSize().padding(horizontal = if (expanded) 32.dp else 18.dp, vertical = if (tight) 4.dp else if (compact) 8.dp else 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            LessonStatusHeader(state, statusColor, tight)
+            LessonStatusHeader(state, statusColor, tight, state.favorites.any { it.english == item.english }, onToggleFavorite)
             Text("문장 ${state.position / state.settings.repeatCount + 1}/${state.items.size} · 반복 ${state.repeatNumber}/${state.settings.repeatCount}", fontSize = 12.sp, color = Blue)
             if (!compact) Text(state.microphoneLabel, color = Color(0xFF667085), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(if (compact) 2.dp else 8.dp))
@@ -213,7 +217,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
             // The sentence gets all the free space and shrinks its font to fit, so it never
             // gets cut off. Everything below it has a fixed height, so nothing moves once
             // the sentence has appeared.
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = 72.dp), contentAlignment = Alignment.Center) {
                 if (!revealEnglish) {
                     AutoFitText(AnnotatedString(item.korean), if (expanded) 34 else 30, FontWeight.Bold, Ink)
                 } else {
@@ -225,7 +229,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
             }
             Column(
                 Modifier.fillMaxWidth()
-                    .heightIn(max = if (tight) 110.dp else if (expanded) 170.dp else if (compact) 130.dp else 160.dp)
+                    .heightIn(max = if (tight) 150.dp else 220.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -248,7 +252,7 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                 state.score?.let {
                     if (state.heardText.isNotBlank()) {
                         Spacer(Modifier.height(6.dp))
-                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = if (tight) 2 else 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("인식: ${state.heardText}", color = Color(0xFF667085), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -298,14 +302,12 @@ private fun AutoFitText(text: AnnotatedString, maxSp: Int, weight: FontWeight, c
 }
 
 @Composable
-private fun LessonStatusHeader(state: LearningUiState, statusColor: Color, tight: Boolean = false) {
-    Row(
-        Modifier.fillMaxWidth().height(if (tight) 30.dp else 40.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun LessonStatusHeader(state: LearningUiState, statusColor: Color, tight: Boolean, favorite: Boolean, onFavorite: () -> Unit) {
+    val height = if (tight) 30.dp else 40.dp
+    Row(Modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(height))
         Surface(
-            modifier = Modifier.fillMaxWidth(.82f).fillMaxHeight(),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             color = statusColor,
             shape = RoundedCornerShape(10.dp)
         ) {
@@ -320,6 +322,14 @@ private fun LessonStatusHeader(state: LearningUiState, statusColor: Color, tight
                     maxLines = 2
                 )
             }
+        }
+        // Star: keeps this sentence in "favorites", which can be practised on their own.
+        Box(
+            Modifier.size(height).clip(CircleShape)
+                .clickable(onClickLabel = if (favorite) "즐겨찾기 해제" else "즐겨찾기 추가", onClick = onFavorite),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(if (favorite) "★" else "☆", fontSize = 26.sp, color = if (favorite) Color(0xFFF5B301) else Color(0xFF98A2B3))
         }
     }
 }
@@ -461,7 +471,7 @@ private fun PlayerControls(state: LearningUiState, tight: Boolean, expanded: Boo
             Spacer(Modifier.width(18.dp))
             RoundButton(R.drawable.ic_next, "다음 문장", side, onNext, state.position <= state.order.lastIndex)
         }
-        AutoButton(auto, small, {
+        AutoButton(auto, {
             onToggleAuto()
             hint = if (auto) "자동 넘김 꺼짐 · 다음 문장은 직접 넘겨요" else "자동 넘김 켜짐 · 끝나면 다음 문장으로 넘어가요"
         }, Modifier.align(Alignment.CenterStart).padding(start = 24.dp))
@@ -499,16 +509,20 @@ private fun RecordButton(startedAt: Long?, size: Int, onToggle: () -> Unit, modi
     }
 }
 
-/** Small round switch: when on, the next sentence follows by itself after each one. */
+/** "AUTO" over an ON/OFF pill: when on, the next sentence follows by itself after each one. */
 @Composable
-private fun AutoButton(on: Boolean, size: Int, onToggle: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onToggle,
-        modifier = modifier.size(size.dp).semantics { contentDescription = if (on) "자동 넘김 켜짐" else "자동 넘김 꺼짐" },
-        shape = CircleShape, color = if (on) Blue else Color.White, shadowElevation = 4.dp
+private fun AutoButton(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle)
+            .semantics { contentDescription = if (on) "자동 넘김 켜짐" else "자동 넘김 꺼짐" }.padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(if (on) "Auto\non" else "Auto\noff", fontSize = 10.sp, lineHeight = 12.sp, textAlign = TextAlign.Center, color = if (on) Color.White else Color(0xFF667085), fontWeight = FontWeight.Bold)
+        Text("AUTO", fontSize = 10.sp, lineHeight = 12.sp, color = Color(0xFF98A2B3), fontWeight = FontWeight.Medium)
+        Surface(shape = RoundedCornerShape(6.dp), color = if (on) Blue else Color(0xFFC9CED8)) {
+            Text(
+                if (on) "ON" else "OFF", modifier = Modifier.padding(horizontal = 9.dp, vertical = 2.dp),
+                fontSize = 14.sp, lineHeight = 17.sp, color = Color.White, fontWeight = FontWeight.Bold
+            )
         }
     }
 }

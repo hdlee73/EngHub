@@ -57,6 +57,8 @@ data class LearningUiState(
     val datasetName: String? = null,
     val activeDatasetId: String? = null,
     val savedDatasets: List<SavedDataset> = emptyList(),
+    /** Sentences the learner starred to practise on their own. */
+    val favorites: List<SentencePair> = emptyList(),
     val bluetoothDevices: List<BluetoothChoice> = emptyList(),
     /** SystemClock.elapsedRealtime() when the recording was started; null = not recording. */
     val recordingStartedAt: Long? = null,
