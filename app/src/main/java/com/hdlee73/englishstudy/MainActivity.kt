@@ -134,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                 hasOpenDialog = settingsOpen || datasetsOpen || learning.editingDataset != null
             }
 
-            val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            val filePicker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Multiple()) { uris ->
                 learningVm.importDatasets(uris)
             }
             val audioPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity() {
                 if (microphoneGranted) learningVm.retryListening()
                 else learningVm.onRecognitionUnavailable("마이크 권한이 거부되었습니다.")
             }
-            val flashListPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            val flashListPicker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Multiple()) { uris ->
                 studyVm.importFlashDatasets(uris)
             }
             val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }

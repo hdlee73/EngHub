@@ -114,7 +114,7 @@ private fun FlashcardSetup(
         )
         SourcePicker(state.sources, state.sourceId, "장", onSource, onAdd = onAddList, onDelete = { confirmDelete = it })
         Text(
-            "＋ 단어장 추가: 엑셀(.xlsx)·CSV 파일에서 영어 단어(또는 문장)와 한글 뜻을 두 열로 적어 불러오세요. 열 순서는 자동으로 인식합니다.",
+            "＋ 단어장 추가: 엑셀(.xlsx)·CSV 파일에서 영어 단어(또는 문장)와 한글 뜻을 두 열로 적어 불러오세요. 열 순서는 자동으로 인식합니다. 파일을 고르지 않고 돌아오려면 뒤로가기를 누르세요.",
             color = Muted, fontSize = 12.sp, lineHeight = 17.sp
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
