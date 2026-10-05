@@ -167,13 +167,13 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
         else -> Blue
     }
     Card(
-        Modifier.padding(horizontal = if (expanded) 32.dp else 28.dp, vertical = if (tight) 6.dp else 18.dp)
-            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(if (tight) 1f else 0.84f)
+        Modifier.padding(horizontal = if (expanded) 32.dp else 28.dp, vertical = if (tight) 8.dp else 30.dp)
+            .widthIn(max = if (expanded) 680.dp else 520.dp).fillMaxHeight(1f)
             .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = statusColor.copy(alpha = .18f)),
         shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = if (expanded) 32.dp else 18.dp, vertical = if (tight) 4.dp else if (compact) 8.dp else 14.dp),
+            Modifier.fillMaxSize().padding(horizontal = if (expanded) 32.dp else 18.dp, vertical = if (tight) 8.dp else 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             LessonStatusHeader(state, statusColor, tight, state.favorites.any { it.english == item.english }, onToggleFavorite)
