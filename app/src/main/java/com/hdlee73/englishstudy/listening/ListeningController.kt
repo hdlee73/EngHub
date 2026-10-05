@@ -353,7 +353,7 @@ class ListeningController(
             toast("저장할 구간이 없습니다. A·B 지점을 먼저 지정해 주세요.")
             return
         }
-        promptText(
+        ctx.promptText(
             "구간 저장  " + formatTimeTenths(svc.abStartMs) + " – " + formatTimeTenths(svc.abEndMs),
             "구간 ${svc.savedRanges.size + 1}",
             "저장"
@@ -396,7 +396,7 @@ class ListeningController(
             .setItems(arrayOf("이름 변경", "삭제")) { _, which ->
                 parent.dismiss()
                 if (which == 0) {
-                    promptText("이름 변경", range.name) { name ->
+                    ctx.promptText("이름 변경", range.name) { name ->
                         svc.renameRange(index, name)
                         showRanges()
                     }
@@ -489,7 +489,7 @@ class ListeningController(
                 isSelectionRequired = true
             }
             values.forEach { value ->
-                val chip = filterChip(value, value == selected)
+                val chip = ctx.filterChip(value, value == selected)
                 chip.setOnClickListener { changed(value) }
                 group.addView(chip)
             }
@@ -577,7 +577,7 @@ class ListeningController(
         val tick = object : Runnable {
             override fun run() {
                 update()
-                handler.postDelayed(ctx, 500)
+                handler.postDelayed(this, 500)
             }
         }
         listOf(R.id.timer15 to 15, R.id.timer30 to 30, R.id.timer45 to 45, R.id.timer60 to 60, R.id.timer90 to 90)
@@ -608,7 +608,7 @@ class ListeningController(
     private val uiTicker = object : Runnable {
         override fun run() {
             refreshUi()
-            handler.postDelayed(ctx, 200)
+            handler.postDelayed(this, 200)
         }
     }
 
