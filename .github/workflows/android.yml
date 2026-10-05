@@ -71,5 +71,5 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" --clobber
           else
-            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --title "영어 스터디 $tag" --notes-file RELEASE_NOTES.md
+            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --title "LexiFlow $tag" --notes-file RELEASE_NOTES.md
           fi
