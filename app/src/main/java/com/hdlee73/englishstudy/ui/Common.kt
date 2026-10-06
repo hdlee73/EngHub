@@ -7,6 +7,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -71,6 +73,66 @@ fun meaningLines(korean: String): List<String> = korean.lines().map { it.trim() 
 private val HeroStart = Color(0xFF22A394)
 private val HeroEnd = Color(0xFF0C6F67)
 
+/** The simple line icons that stand in for emoji in labels and banners. */
+private val EmojiIcons: Map<String, androidx.compose.ui.graphics.vector.ImageVector> by lazy {
+    mapOf(
+        "🔊" to androidx.compose.material.icons.Icons.Outlined.VolumeUp,
+        "🔖" to androidx.compose.material.icons.Icons.Outlined.BookmarkBorder,
+        "📖" to androidx.compose.material.icons.Icons.Outlined.MenuBook,
+        "🌐" to androidx.compose.material.icons.Icons.Outlined.Translate,
+        "📋" to androidx.compose.material.icons.Icons.Outlined.ContentCopy,
+        "🎤" to androidx.compose.material.icons.Icons.Outlined.Mic,
+        "🎙️" to androidx.compose.material.icons.Icons.Outlined.KeyboardVoice,
+        "🎙" to androidx.compose.material.icons.Icons.Outlined.KeyboardVoice,
+        "🎧" to androidx.compose.material.icons.Icons.Outlined.Headphones,
+        "📰" to androidx.compose.material.icons.Icons.Outlined.Newspaper,
+        "🃏" to androidx.compose.material.icons.Icons.Outlined.Style,
+        "✏️" to androidx.compose.material.icons.Icons.Outlined.Edit,
+        "💡" to androidx.compose.material.icons.Icons.Outlined.Lightbulb,
+        "⭐" to androidx.compose.material.icons.Icons.Outlined.StarBorder,
+        "🗂" to androidx.compose.material.icons.Icons.Outlined.Folder,
+        "📝" to androidx.compose.material.icons.Icons.Outlined.Description
+    )
+}
+
+private fun iconFor(emoji: String, rest: String): androidx.compose.ui.graphics.vector.ImageVector? =
+    if (emoji == "📋" && rest.contains("붙여넣기")) androidx.compose.material.icons.Icons.Outlined.ContentPaste else EmojiIcons[emoji]
+
+/** Splits a leading emoji (one of [EmojiIcons]) off [text]; returns null when there is none. */
+private fun splitEmoji(text: String): Pair<String, String>? {
+    val key = EmojiIcons.keys.filter { text.startsWith(it) }.maxByOrNull { it.length } ?: return null
+    return key to text.substring(key.length).trim()
+}
+
+/** A banner badge: the line icon for [emoji] (or the emoji itself if it has none). */
+@Composable
+fun BannerIcon(emoji: String, size: androidx.compose.ui.unit.Dp, tint: Color = Color.White) {
+    val icon = EmojiIcons[emoji]
+    if (icon != null) androidx.compose.material3.Icon(icon, null, Modifier.size(size), tint = tint) else Text(emoji, fontSize = (size.value * 0.95f).sp)
+}
+
+/** Like [Text], but a leading emoji becomes a simple line icon in the same colour. */
+@Composable
+fun IconText(
+    text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    fontWeight: FontWeight? = null, maxLines: Int = Int.MAX_VALUE, minLines: Int = 1
+) {
+    val parts = splitEmoji(text)
+    val icon = parts?.let { iconFor(it.first, it.second) }
+    if (parts == null || icon == null) {
+        Text(text, modifier = modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, maxLines = maxLines, minLines = minLines)
+        return
+    }
+    val size = (if (fontSize == androidx.compose.ui.unit.TextUnit.Unspecified) 14f else fontSize.value) * 1.3f
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+        androidx.compose.material3.Icon(icon, null, Modifier.size(size.dp), tint = if (color == Color.Unspecified) androidx.compose.material3.LocalContentColor.current else color)
+        if (parts.second.isNotEmpty()) {
+            Spacer(Modifier.width(5.dp))
+            Text(parts.second, color = color, fontSize = fontSize, fontWeight = fontWeight, maxLines = maxLines, minLines = minLines)
+        }
+    }
+}
+
 /** The colourful banner at the top of every screen. [trailing] puts buttons at its right end; [compact] makes it slimmer. */
 @Composable
 fun Hero(
@@ -86,7 +148,7 @@ fun Hero(
         Box(
             Modifier.size(if (compact) 36.dp else 40.dp).clip(RoundedCornerShape(if (compact) 12.dp else 13.dp)).background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center
-        ) { Text(emoji, fontSize = if (compact) 19.sp else 21.sp) }
+        ) { BannerIcon(emoji, if (compact) 20.dp else 22.dp) }
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text(title, color = Color.White, fontSize = if (compact) 18.sp else 20.sp, fontWeight = FontWeight.ExtraBold, lineHeight = if (compact) 22.sp else 24.sp)
             if (!compact) Text(subtitle, color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp, lineHeight = 15.sp)
@@ -163,7 +225,7 @@ fun SourcePicker(
                         .clickable { onSelect(source.id) }
                         .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    Text(
+                    IconText(
                         (if (source.id == com.hdlee73.englishstudy.study.SAVED_SOURCE) "⭐ " else "🗂 ") + source.label,
                         color = if (selected) Blue else Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2, minLines = 2
                     )
