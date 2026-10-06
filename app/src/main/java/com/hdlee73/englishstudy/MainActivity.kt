@@ -413,7 +413,7 @@ class MainActivity : AppCompatActivity() {
                         onDatasetEdit = { datasetsOpen = false; learningVm.editDataset(it) },
                         onEditorClose = learningVm::closeEditor,
                         onSentenceSave = learningVm::saveSentence,
-                        onOpenUpdate = { openUrl("https://github.com/hdlee73/LexiFlow/releases/latest") },
+                        onOpenUpdate = { openUrl("https://github.com/hdlee73/EngHub/releases") },
                         onToggleFavorite = { learningVm.toggleFavorite() },
                         onDatasetSequence = { learningVm.selectDatasets(it); datasetsOpen = false },
                         onImport = {
