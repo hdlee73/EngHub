@@ -178,7 +178,7 @@ private fun ArticleView(
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = state.mode == ReadingMode.TEXT, onClick = { onMode(ReadingMode.TEXT) }, label = { Text("원문") })
             FilterChip(selected = state.mode == ReadingMode.TRANSLATION, onClick = { onMode(ReadingMode.TRANSLATION) }, label = { Text("🇰🇷 번역") })
-            FilterChip(selected = state.mode == ReadingMode.EXPRESSIONS, onClick = { onMode(ReadingMode.EXPRESSIONS) }, label = { Text("💡 주요 표현") })
+            FilterChip(selected = state.mode == ReadingMode.EXPRESSIONS, onClick = { onMode(ReadingMode.EXPRESSIONS) }, label = { IconText("💡 주요 표현") })
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
         Column(
@@ -240,10 +240,10 @@ private fun ArticleView(
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = { onLookup(query) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)
-                        ) { Text("📖 사전", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = { onTranslateSnippet(selectedText) }, shape = RoundedCornerShape(12.dp)) { Text("🌐 번역", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = { copyToClipboard(context, selectedText) }, shape = RoundedCornerShape(12.dp)) { Text("📋 복사", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = { onSpeak(selectedText) }, shape = RoundedCornerShape(12.dp)) { Text("🔊", fontSize = 14.sp) }
+                        ) { IconText("📖 사전", fontSize = 14.sp, maxLines = 1) }
+                        OutlinedButton(onClick = { onTranslateSnippet(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🌐 번역", fontSize = 14.sp, maxLines = 1) }
+                        OutlinedButton(onClick = { copyToClipboard(context, selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("📋 복사", fontSize = 14.sp, maxLines = 1) }
+                        OutlinedButton(onClick = { onSpeak(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🔊", fontSize = 14.sp) }
                     }
                 }
             }
@@ -389,7 +389,7 @@ private fun ExpressionList(items: List<ExpressionItem>, loading: Boolean, onSave
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(item.expression, color = Ink, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { onSpeak(item.expression) }) { Text("🔊") }
+                TextButton(onClick = { onSpeak(item.expression) }) { IconText("🔊") }
             }
             Text(item.meaning ?: "뜻을 불러오는 중…", color = if (item.meaning == null) Muted else Ink, fontSize = 15.sp, lineHeight = 22.sp)
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SoftBlue).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -399,7 +399,7 @@ private fun ExpressionList(items: List<ExpressionItem>, loading: Boolean, onSave
             Button(
                 onClick = { onSave(index) }, enabled = item.meaning != null && !item.saved, shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Blue)
-            ) { Text(if (item.saved) "✓ 단어장에 저장됨" else "⭐ 단어장에 저장", fontSize = 14.sp) }
+            ) { IconText(if (item.saved) "✓ 단어장에 저장됨" else "⭐ 단어장에 저장", fontSize = 14.sp) }
         }
     }
 }
