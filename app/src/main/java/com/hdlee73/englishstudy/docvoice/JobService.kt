@@ -136,8 +136,12 @@ class JobService : Service() {
             AudioDecoder.decode(this@JobService, req.audio.uri, active) { progress(title, "오디오 읽는 중", it) }
         }
         val store = ModelStore(this)
-        val result = withContext(Dispatchers.Default) {
-            Stt.transcribe(store, pcm, req.opts, active) { stage, f -> progress(title, stage, f) }
+        val result = try {
+            withContext(Dispatchers.Default) {
+                Stt.transcribe(store, pcm, req.opts, active) { stage, f -> progress(title, stage, f) }
+            }
+        } finally {
+            pcm.close()
         }
         if (result.segments.isEmpty()) throw ExtractException("음성에서 인식된 말이 없습니다.")
         val bytes = finishDocument(title, result, req.format, Storage.baseName(req.audio.name), req.gap, req.includeTime, req.showSpeaker)
