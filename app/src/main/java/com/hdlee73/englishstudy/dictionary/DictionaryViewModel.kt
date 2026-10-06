@@ -105,6 +105,16 @@ class DictionaryViewModel(application: Application) : AndroidViewModel(applicati
         engine.lookup(t)
     }
 
+    /** A word sent by another app: searched at once, whatever the dictionary was showing. */
+    fun lookupExternal(word: String) {
+        val t = word.replace(Regex("^[^A-Za-z]+|[^A-Za-z'-]+$"), "").trim()
+        if (t.isEmpty()) return
+        lastClipboard = t
+        debounce?.cancel()
+        _state.update { it.copy(query = t, showSaved = false) }
+        engine.lookup(t)
+    }
+
     override fun onCleared() {
         engine.close()
         super.onCleared()
