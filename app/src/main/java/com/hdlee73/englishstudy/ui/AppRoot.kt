@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,15 +67,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class AppTab(val label: String, val emoji: String) {
-    DICTIONARY("Words", "📖"),
-    FLASHCARDS("Cards", "🃏"),
-    QUIZ("Quiz", "✏️"),
-    READING("Reading", "📰"),
-    TRANSLATE("Translate", "🌐"),
-    SPEAKING("Speaking", "🎤"),
-    LISTENING("Listening", "🎧"),
-    DOCVOICE("DocVoice", "🎙️")
+enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    DICTIONARY("Words", androidx.compose.material.icons.Icons.Outlined.MenuBook),
+    FLASHCARDS("Cards", androidx.compose.material.icons.Icons.Outlined.Style),
+    QUIZ("Quiz", androidx.compose.material.icons.Icons.Outlined.Quiz),
+    READING("Reading", androidx.compose.material.icons.Icons.Outlined.Newspaper),
+    TRANSLATE("Translate", androidx.compose.material.icons.Icons.Outlined.Translate),
+    SPEAKING("Speaking", androidx.compose.material.icons.Icons.Outlined.Mic),
+    LISTENING("Listening", androidx.compose.material.icons.Icons.Outlined.Headphones),
+    DOCVOICE("DocVoice", androidx.compose.material.icons.Icons.Outlined.GraphicEq)
 }
 
 /**
@@ -97,7 +98,7 @@ private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit) {
                     .semantics { contentDescription = item.label },
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
-                Text(item.emoji, fontSize = if (selected) 18.sp else 20.sp, lineHeight = 22.sp)
+                androidx.compose.material3.Icon(item.icon, null, Modifier.size(if (selected) 20.dp else 22.dp), tint = if (selected) Blue else Color(0xFF7A8794))
                 if (selected) {
                     Text(item.label, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1, softWrap = false, color = Blue, fontWeight = FontWeight.Bold)
                 }

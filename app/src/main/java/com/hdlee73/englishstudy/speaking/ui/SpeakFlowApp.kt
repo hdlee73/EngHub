@@ -76,6 +76,23 @@ fun SpeakFlowApp(
     onMessageDismiss: () -> Unit
 ) {
     var statisticsOpen by remember { mutableStateOf(false) }
+    var translationsOpen by remember { mutableStateOf(false) }
+    // The sheet pauses the lesson while it is open (so the automatic mode cannot move on), and resumes it on close.
+    var pausedForSheet by remember { mutableStateOf(false) }
+    // Sentences already shown, newest first, so the translation of one that has just gone by can still be read.
+    val seen = remember { mutableStateListOf<SentencePair>() }
+    LaunchedEffect(state.current, state.activeDatasetId) {
+        state.current?.let { c -> if (seen.firstOrNull() != c) { seen.remove(c); seen.add(0, c); while (seen.size > 40) seen.removeAt(seen.lastIndex) } }
+    }
+    LaunchedEffect(state.activeDatasetId) { seen.clear(); state.current?.let { seen.add(it) } }
+    val openTranslations = {
+        if (state.phase != LessonPhase.PAUSED && state.phase != LessonPhase.IDLE && state.phase != LessonPhase.COMPLETE) { pausedForSheet = true; onPlayPause() }
+        translationsOpen = true
+    }
+    val closeTranslations = {
+        translationsOpen = false
+        if (pausedForSheet) { pausedForSheet = false; onPlayPause() }
+    }
     MaterialTheme(colorScheme = lightColorScheme(primary = Blue, primaryContainer = Color(0xFFDDF1EC), secondaryContainer = Color(0xFFDDF1EC), background = Canvas, surface = Color.White)) {
         Scaffold(containerColor = Canvas, snackbarHost = {
             state.message?.let { message ->
@@ -90,7 +107,7 @@ fun SpeakFlowApp(
                 // A folded foldable's cover screen: everything fixed-size gets smaller so the sentence and its buttons fit.
                 val tight = maxHeight < 700.dp
                 Column(Modifier.fillMaxSize()) {
-                    TopBar(state, tight, onDatasetsOpen, onSettingsOpen)
+                    TopBar(state, tight, onDatasetsOpen, onSettingsOpen, openTranslations)
                     LinearProgressIndicator(
                         progress = { state.progress },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
@@ -106,24 +123,57 @@ fun SpeakFlowApp(
         }
         if (settingsOpen) SettingsSheet(state.settings, state.bluetoothDevices, onOpenUpdate, onSettingsClose, onSettingsSave) { statisticsOpen = true }
         if (state.editingDataset != null) DatasetEditor(state.editingDataset, state.editingItems, onEditorClose, onSentenceSave)
+        if (translationsOpen) TranslationSheet(seen, state.current, closeTranslations)
         if (statisticsOpen) StatisticsSheet(state.statistics) { statisticsOpen = false }
         if (datasetsOpen) DatasetSheet(state, onDatasetsClose, onDatasetSelect, onDatasetDelete, onImport, onDatasetSequence, onDatasetEdit)
     }
 }
 
 @Composable
-private fun TopBar(state: LearningUiState, compact: Boolean, onImport: () -> Unit, onSettings: () -> Unit) {
+private fun TopBar(state: LearningUiState, compact: Boolean, onImport: () -> Unit, onSettings: () -> Unit, onTranslations: () -> Unit) {
     // The same banner as the other tabs, with the two buttons at its right end.
     // Same size and spacing as the banner of every other tab, whatever the screen height.
     Box(Modifier.padding(start = 16.dp, end = 16.dp, top = if (compact) 10.dp else 14.dp, bottom = if (compact) 4.dp else 8.dp)) {
         com.hdlee73.englishstudy.ui.Hero(
             "🎤", "문장 말하기", "듣고 따라 말해요 · 자동 채점",
             trailing = {
+                BannerButton(R.drawable.ic_translation, "해석 보기", onTranslations)
+                Spacer(Modifier.width(8.dp))
                 BannerButton(R.drawable.ic_database, "데이터", onImport)
                 Spacer(Modifier.width(8.dp))
                 BannerButton(R.drawable.ic_settings, "설정", onSettings)
             }
         )
+    }
+}
+
+/** "해석 보기": the current sentence and the ones just before it, each with its Korean translation, for reading at one's own pace. */
+@Composable
+private fun TranslationSheet(seen: List<SentencePair>, current: SentencePair?, onClose: () -> Unit) {
+    SheetDialog(onDismiss = onClose, heightFraction = 0.8f) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("해석 보기", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+                TextButton(onClick = onClose) { Text("닫기 · 이어서 학습") }
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (seen.isEmpty()) Text("아직 보여 줄 문장이 없어요.", color = Color(0xFF6B7D7A))
+                seen.forEach { pair ->
+                    val isCurrent = pair == current
+                    Surface(shape = RoundedCornerShape(16.dp), color = if (isCurrent) Color(0xFFE8F0FF) else Color(0xFFF5F7FA)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                            if (isCurrent) Text("지금 문장", fontSize = 11.sp, color = Blue, fontWeight = FontWeight.Bold)
+                            Text(pair.english, fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            if (pair.korean.isNotBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(pair.korean, fontSize = 15.sp, lineHeight = 22.sp, color = Color(0xFF475467))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+        }
     }
 }
 
