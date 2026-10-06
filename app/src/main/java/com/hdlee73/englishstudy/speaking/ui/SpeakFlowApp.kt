@@ -577,6 +577,25 @@ private fun RoundButton(iconRes: Int, description: String, buttonSize: Int, onCl
 @Composable
 private fun SettingsSheet(current: LearningSettings, bluetoothDevices: List<BluetoothChoice>, onOpenUpdate: () -> Unit, onClose: () -> Unit, onSave: (LearningSettings) -> Unit, onStatistics: () -> Unit) {
     var draft by remember { mutableStateOf(current) }
+    var aboutOpen by remember { mutableStateOf(false) }
+    if (aboutOpen) {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?" }
+        AlertDialog(
+            onDismissRequest = { aboutOpen = false },
+            title = { Text("앱 정보", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("EngHub", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("버전 $version")
+                    Text("만든이: 이현덕 (hdlee73@gmail.com)")
+                    Text("업데이트 정보는 GitHub 릴리스 페이지에서 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { aboutOpen = false; onOpenUpdate() }) { Text("릴리스 페이지 열기") } },
+            dismissButton = { TextButton(onClick = { aboutOpen = false }) { Text("닫기") } },
+        )
+    }
     SheetDialog(onDismiss = onClose) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 20.dp)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -660,7 +679,7 @@ private fun SettingsSheet(current: LearningSettings, bluetoothDevices: List<Blue
                 Text("미러링 중 미디어 음량을 유지합니다. PC에서 scrcpy --audio-dup 으로 실행하면 휴대전화·PC에서 함께 들을 수 있습니다. 인식 서비스의 시작음이 들릴 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                 Spacer(Modifier.height(18.dp))
                 OutlinedButton(onClick = onStatistics, modifier = Modifier.fillMaxWidth()) { Text("학습량 · 학습시간 통계") }
-                OutlinedButton(onClick = onOpenUpdate, modifier = Modifier.fillMaxWidth()) { Text("새 버전 확인 · 업데이트 받기") }
+                OutlinedButton(onClick = { aboutOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("앱 정보 · 업데이트") }
                 Spacer(Modifier.height(12.dp))
             }
             Surface(shadowElevation = 10.dp, color = Color.White) {
