@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -100,7 +102,7 @@ fun DocVoiceScreen(vm: DocVoiceViewModel) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) { if (vm.tab == 0) TtsScreen(vm) else SttScreen(vm) }
+            ) { when (vm.tab) { 0 -> TtsScreen(vm); 3 -> YoutubeScreen(vm); else -> SttScreen(vm) } }
         }
     }
 }
@@ -108,7 +110,7 @@ fun DocVoiceScreen(vm: DocVoiceViewModel) {
 /** Document → MP3, MP3 → document, or recording: sits right under the banner. */
 @Composable
 private fun ModeSwitch(vm: DocVoiceViewModel) {
-    Segmented(listOf("문서 → MP3", "MP3 → 문서", "녹음"), vm.tab) { vm.tab = it }
+    Segmented(listOf("문서 → MP3", "MP3 → 문서", "녹음", "유튜브"), vm.tab) { vm.tab = it }
 }
 
 // ---- 설정 시트 --------------------------------------------------------------------
@@ -333,6 +335,47 @@ private fun TtsScreen(vm: DocVoiceViewModel) {
         row { SliderRow(Icons.Rounded.Speed, Dv.Blue, String.format(Locale.US, "%.1f×", vm.speed), vm.speed, 0.7f..1.5f, 7) { vm.speed = Math.round(it * 10) / 10f; vm.save() } }
     }
     FilledButton("MP3 만들기", Icons.Rounded.VolumeUp, enabled = vm.ttsFile != null && !busy) { vm.startTts() }
+}
+
+// ---- 유튜브 → MP3 ------------------------------------------------------------------------------
+
+@Composable
+private fun YoutubeScreen(vm: DocVoiceViewModel) {
+    val busy = vm.job.collectAsState().value is JobState.Running
+    val ctx = LocalContext.current
+    ScreenHero(
+        "▶️", "유튜브 → MP3", "유튜브 영상의 소리를 MP3로 만들어요",
+        "유튜브 영상 주소를 넣거나, 유튜브 앱의 공유 버튼에서 EngHub를 고르면 영상의 소리를 MP3로 저장해요.\n\n결과는 다운로드/DocVoice 폴더에 저장되고 Listening 탭에서 들을 수 있어요. 인터넷 연결이 필요해요.\n\n유튜브에서 내려받는 것은 유튜브 이용약관과 충돌할 수 있어요. 개인적으로 공부할 때만 쓰고, 저작권이 있는 영상은 퍼뜨리지 마세요.",
+    )
+    ModeSwitch(vm)
+    JobPanel(vm)
+
+    Group {
+        row {
+            RowShell(Icons.Rounded.Link, Dv.Blue) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = vm.ytUrl, onValueChange = { vm.ytUrl = it },
+                    singleLine = true,
+                    textStyle = TextStyle(fontSize = 17.sp, color = Dv.Label),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (vm.ytUrl.isEmpty()) Text("유튜브 주소", fontSize = 17.sp, color = Dv.Secondary)
+                        inner()
+                    },
+                )
+                if (vm.ytUrl.isNotEmpty()) RoundIcon(Icons.Rounded.Close, Dv.Secondary, 20.dp) { vm.ytUrl = "" }
+            }
+        }
+        row {
+            ValueRow(Icons.Rounded.ContentPaste, Dv.Blue, "붙여넣기", titleColor = Dv.Blue) {
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                val text = cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
+                vm.ytUrl = com.hdlee73.englishstudy.docvoice.core.YouTubeAudio.findUrl(text) ?: text.orEmpty()
+            }
+        }
+    }
+    FilledButton("MP3 만들기", Icons.Rounded.VolumeUp, enabled = vm.ytUrl.isNotBlank() && !busy) { vm.startYt() }
 }
 
 // ---- 받아쓰기 (음성 → 문서) ---------------------------------------------------------------

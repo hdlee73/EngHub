@@ -32,6 +32,9 @@ sealed interface JobRequest {
         val showSpeaker: Boolean,
     ) : JobRequest
 
+    /** 유튜브 영상의 소리를 mp3 로 */
+    data class Yt(val url: String) : JobRequest
+
     /** 실시간 인식 모델 미리 내려받기 */
     data class ModelDownload(val lang: com.hdlee73.englishstudy.docvoice.core.LiveLang) : JobRequest
 

@@ -26,7 +26,7 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
 
     val job = JobHub.state
 
-    var tab by mutableIntStateOf(0) // 0 문서→MP3, 1 MP3→문서, 2 녹음 & 문서화
+    var tab by mutableIntStateOf(0) // 0 문서→MP3, 1 MP3→문서, 2 녹음 & 문서화, 3 유튜브→MP3
 
     // 문서 → 음성
     var ttsFile by mutableStateOf<Storage.Picked?>(null)
@@ -35,6 +35,12 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
     var enVoiceUs by mutableStateOf(prefs.getString("enVoiceUs", TtsVoices.EN_US.values.first())!!)
     var enVoiceUk by mutableStateOf(prefs.getString("enVoiceUk", TtsVoices.EN_UK.values.first())!!)
     var speed by mutableFloatStateOf(prefs.getFloat("speed", 1.0f))
+
+    // 유튜브 → MP3
+    var ytUrl by mutableStateOf("")
+
+    /** 다른 앱에서 공유된 유튜브 주소를 받아 유튜브 탭에 채운다. */
+    fun openYoutube(url: String) { ytUrl = url; tab = 3 }
 
     // 음성 → 문서
     var sttFile by mutableStateOf<Storage.Picked?>(null)
@@ -79,6 +85,14 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
     fun startTts() {
         val f = ttsFile ?: return
         launch(JobRequest.Tts(f, koVoice, enVoice, speed.toDouble()))
+    }
+
+    fun startYt() {
+        val url = com.hdlee73.englishstudy.docvoice.core.YouTubeAudio.findUrl(ytUrl) ?: run {
+            android.widget.Toast.makeText(app, "유튜브 주소를 넣어 주세요.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        launch(JobRequest.Yt(url))
     }
 
     fun startStt() {
