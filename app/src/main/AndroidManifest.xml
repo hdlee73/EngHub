@@ -43,6 +43,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
+            <!-- Lets a YouTube video's Share button send its link to the DocVoice tab's YouTube → MP3. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
         <service
             android:name=".docvoice.JobService"

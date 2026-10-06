@@ -91,7 +91,8 @@ private val EmojiIcons: Map<String, androidx.compose.ui.graphics.vector.ImageVec
         "💡" to androidx.compose.material.icons.Icons.Outlined.Lightbulb,
         "⭐" to androidx.compose.material.icons.Icons.Outlined.StarBorder,
         "🗂" to androidx.compose.material.icons.Icons.Outlined.Folder,
-        "📝" to androidx.compose.material.icons.Icons.Outlined.Description
+        "📝" to androidx.compose.material.icons.Icons.Outlined.Description,
+        "▶️" to androidx.compose.material.icons.Icons.Outlined.SmartDisplay
     )
 }
 

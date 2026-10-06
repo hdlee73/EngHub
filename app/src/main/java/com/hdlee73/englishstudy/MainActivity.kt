@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null && ListeningLink.isForListening(intent)) listeningIntent = intent
+        if (savedInstanceState == null) DocVoiceLink.sharedYoutubeUrl(intent)?.let(docVoiceVm::openYoutube)
         if (savedInstanceState == null && DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
         if (savedInstanceState == null) readExternalLookup(intent)
         // Fetches each new BBC 6 Minute English episode into the Listening tab's "6min" folder.
@@ -443,6 +444,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (ListeningLink.isForListening(intent)) listeningIntent = intent
+        DocVoiceLink.sharedYoutubeUrl(intent)?.let(docVoiceVm::openYoutube)
         if (DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
         readExternalLookup(intent)
     }

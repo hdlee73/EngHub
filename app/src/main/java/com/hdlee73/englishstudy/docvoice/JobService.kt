@@ -58,7 +58,7 @@ class JobService : Service() {
         }
         JobHub.pending = null
         ensureChannel()
-        val title = when (req) { is JobRequest.Tts -> "문서 → 음성"; is JobRequest.Stt -> "음성 → 문서"; is JobRequest.RecExport -> "녹음 → 문서"; is JobRequest.ModelDownload -> "모델 내려받기" }
+        val title = when (req) { is JobRequest.Tts -> "문서 → 음성"; is JobRequest.Stt -> "음성 → 문서"; is JobRequest.RecExport -> "녹음 → 문서"; is JobRequest.ModelDownload -> "모델 내려받기"; is JobRequest.Yt -> "유튜브 → MP3" }
         startForeground(NOTIF_ID, buildNotification(title, "준비 중", null), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DocVoice:job").apply { acquire(3 * 60 * 60 * 1000L) }
@@ -71,6 +71,7 @@ class JobService : Service() {
                     is JobRequest.Stt -> runStt(req, title)
                     is JobRequest.RecExport -> runRecExport(req, title)
                     is JobRequest.ModelDownload -> runModelDownload(req, title)
+                    is JobRequest.Yt -> runYt(req, title)
                 }
             } catch (e: CancellationException) {
                 JobHub.state.value = JobState.Failed("작업을 취소했습니다.")
@@ -78,6 +79,8 @@ class JobService : Service() {
                 JobHub.state.value = JobState.Failed(e.message ?: "문서를 읽지 못했습니다.")
             } catch (e: TtsException) {
                 JobHub.state.value = JobState.Failed(e.message ?: "음성 합성에 실패했습니다.")
+            } catch (e: com.hdlee73.englishstudy.docvoice.core.YouTubeException) {
+                JobHub.state.value = JobState.Failed(e.message ?: "유튜브에서 소리를 가져오지 못했습니다.")
             } catch (e: ModelException) {
                 JobHub.state.value = JobState.Failed(e.message ?: "모델을 준비하지 못했습니다.")
             } catch (e: AudioDecoder.DecodeException) {
@@ -124,6 +127,30 @@ class JobService : Service() {
             listOf(OutFile(name, uri, "audio/mpeg")),
             null,
         )
+    }
+
+    // ---- 유튜브 → MP3 ---------------------------------------------------------
+
+    private suspend fun runYt(req: JobRequest.Yt, title: String) {
+        val job = currentCoroutineContext()[Job]!!
+        val active = { job.isActive }
+        val got = withContext(Dispatchers.IO) {
+            com.hdlee73.englishstudy.docvoice.core.YouTubeAudio.download(req.url, cacheDir, active) { stage, f -> progress(title, stage, f) }
+        }
+        try {
+            progress(title, "MP3 로 바꾸는 중", 0f)
+            val name = got.title.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), " ").replace(Regex("\\s+"), " ").trim().take(80).ifBlank { "YouTube" } + ".mp3"
+            val uri = withContext(Dispatchers.IO) {
+                Storage.saveToDownloads(this@JobService, name) { out ->
+                    val buffered = out.buffered(1 shl 16)
+                    com.hdlee73.englishstudy.docvoice.core.Mp3Encoder.encode(got.file, buffered, active) { progress(title, "MP3 로 바꾸는 중", it) }
+                    buffered.flush()
+                }
+            }
+            JobHub.state.value = JobState.Done("MP3 변환 완료", listOf(OutFile(name, uri, "audio/mpeg")), null)
+        } finally {
+            got.file.delete()
+        }
     }
 
     // ---- 음성 → 문서 ----------------------------------------------------------

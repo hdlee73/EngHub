@@ -6,5 +6,11 @@ import android.content.Intent
 object DocVoiceLink {
     const val EXTRA_OPEN = "open_docvoice"
 
-    fun isForDocVoice(intent: Intent?): Boolean = intent?.getBooleanExtra(EXTRA_OPEN, false) == true
+    /** The YouTube address in a text another app shared to EngHub (the share sheet), if any. */
+    fun sharedYoutubeUrl(intent: Intent?): String? =
+        if (intent?.action == Intent.ACTION_SEND)
+            com.hdlee73.englishstudy.docvoice.core.YouTubeAudio.findUrl(intent.getStringExtra(Intent.EXTRA_TEXT))
+        else null
+
+    fun isForDocVoice(intent: Intent?): Boolean = intent?.getBooleanExtra(EXTRA_OPEN, false) == true || sharedYoutubeUrl(intent) != null
 }
