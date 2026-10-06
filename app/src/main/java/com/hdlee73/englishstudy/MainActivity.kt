@@ -25,6 +25,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -91,6 +93,9 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) readExternalLookup(intent)
         // Fetches each new BBC 6 Minute English episode into the Listening tab's "6min" folder.
         com.hdlee73.englishstudy.listening.SixMinuteEnglish.schedule(applicationContext)
+        // Tells the user (notification and app info) when GitHub has a newer release.
+        com.hdlee73.englishstudy.update.UpdateChecker.schedule(applicationContext)
+        if (savedInstanceState == null) lifecycleScope.launch { com.hdlee73.englishstudy.update.UpdateChecker.checkAndNotify(applicationContext) }
         wordSpeaker = WordSpeaker(this) { notice(it) }
         speech = SpeechEngine(
             context = this,
@@ -172,6 +177,12 @@ class MainActivity : AppCompatActivity() {
                 studyVm.importFlashDatasets(uris)
             }
             val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+            // Update notices are notifications, so ask once for the permission on Android 13+.
+            LaunchedEffect(Unit) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
             val exportLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             ) { uri ->
@@ -414,7 +425,7 @@ class MainActivity : AppCompatActivity() {
                         onDatasetEdit = { datasetsOpen = false; learningVm.editDataset(it) },
                         onEditorClose = learningVm::closeEditor,
                         onSentenceSave = learningVm::saveSentence,
-                        onOpenUpdate = { openUrl("https://github.com/hdlee73/EngHub/releases") },
+                        onOpenUpdate = { openUrl(it) },
                         onToggleFavorite = { learningVm.toggleFavorite() },
                         onDatasetSequence = { learningVm.selectDatasets(it); datasetsOpen = false },
                         onImport = {
