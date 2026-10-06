@@ -120,7 +120,7 @@ fun IconText(
     val parts = splitEmoji(text)
     val icon = parts?.let { iconFor(it.first, it.second) }
     if (parts == null || icon == null) {
-        Text(text, modifier, color, fontSize, fontWeight = fontWeight, maxLines = maxLines, minLines = minLines)
+        Text(text, modifier = modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, maxLines = maxLines, minLines = minLines)
         return
     }
     val size = (if (fontSize == androidx.compose.ui.unit.TextUnit.Unspecified) 14f else fontSize.value) * 1.3f
