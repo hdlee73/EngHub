@@ -39,7 +39,7 @@ object Stt {
 
     fun transcribe(
         store: ModelStore,
-        pcm: PcmBuffer,
+        pcm: PcmSource,
         opts: SttOptions,
         isActive: () -> Boolean,
         onStage: (String, Float) -> Unit,
@@ -182,7 +182,7 @@ object Stt {
         }
     }
 
-    fun diarize(store: ModelStore, pcm: PcmBuffer, threads: Int): List<Triple<Double, Double, Int>> {
+    fun diarize(store: ModelStore, pcm: PcmSource, threads: Int): List<Triple<Double, Double, Int>> {
         val sd = OfflineSpeakerDiarization(
             config = OfflineSpeakerDiarizationConfig(
                 segmentation = OfflineSpeakerSegmentationModelConfig(

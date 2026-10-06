@@ -6,11 +6,58 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 
+/** 16kHz 모노 16bit PCM 을 구간별로 읽을 수 있는 소스. */
+interface PcmSource {
+    val size: Int
+    val seconds: Double get() = size / AudioDecoder.SAMPLE_RATE.toDouble()
+    fun toFloats(from: Int = 0, to: Int = size): FloatArray
+}
+
+/**
+ * 디코딩 결과를 힙 대신 임시 파일에 쌓는 PCM. 아주 긴 오디오도 메모리 부족 없이 처리한다.
+ * [add] 로 다 쓴 뒤 [finishWriting] 을 부르고 나서 읽는다. 다 쓰면 [close] 로 임시 파일을 지운다.
+ */
+class FilePcm(private val file: java.io.File) : PcmSource, java.io.Closeable {
+    private var out: java.io.DataOutputStream? =
+        java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(file), 1 shl 16))
+    private var raf: java.io.RandomAccessFile? = null
+    override var size = 0
+        private set
+
+    fun add(v: Short) {
+        out!!.writeShort(java.lang.Short.reverseBytes(v).toInt()) // little-endian
+        size++
+    }
+
+    fun finishWriting() {
+        out?.close(); out = null
+        if (raf == null) raf = java.io.RandomAccessFile(file, "r")
+    }
+
+    override fun toFloats(from: Int, to: Int): FloatArray {
+        val r = raf ?: throw IllegalStateException("finishWriting() 먼저")
+        val n = to - from
+        val bytes = ByteArray(n * 2)
+        r.seek(from * 2L)
+        r.readFully(bytes)
+        val sb = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val out = FloatArray(n)
+        for (i in 0 until n) out[i] = sb.get(i) / 32768f
+        return out
+    }
+
+    override fun close() {
+        try { out?.close() } catch (_: Exception) {}
+        try { raf?.close() } catch (_: Exception) {}
+        file.delete()
+    }
+}
+
 /** 16kHz 모노 16bit PCM 을 담는 늘어나는 버퍼. */
-class PcmBuffer(initial: Int = 1 shl 20) {
+class PcmBuffer(initial: Int = 1 shl 20) : PcmSource {
     var data = ShortArray(initial)
         private set
-    var size = 0
+    override var size = 0
         private set
 
     fun add(v: Short) {
@@ -18,9 +65,7 @@ class PcmBuffer(initial: Int = 1 shl 20) {
         data[size++] = v
     }
 
-    val seconds: Double get() = size / AudioDecoder.SAMPLE_RATE.toDouble()
-
-    fun toFloats(from: Int = 0, to: Int = size): FloatArray {
+    override fun toFloats(from: Int, to: Int): FloatArray {
         val out = FloatArray(to - from)
         for (i in out.indices) out[i] = data[from + i] / 32768f
         return out
@@ -76,7 +121,7 @@ object AudioDecoder {
         uri: Uri,
         isActive: () -> Boolean = { true },
         onProgress: (Float) -> Unit = {},
-    ): PcmBuffer {
+    ): FilePcm {
         val extractor = MediaExtractor()
         try {
             try {
@@ -102,7 +147,8 @@ object AudioDecoder {
             } catch (e: Exception) {
                 throw DecodeException("지원하지 않는 오디오 형식입니다. ($mime)")
             }
-            val pcm = PcmBuffer()
+            val pcm = FilePcm(java.io.File.createTempFile("stt-", ".pcm", context.cacheDir))
+            var ok = false
             try {
                 codec.configure(format, null, null, 0)
                 codec.start()
@@ -159,11 +205,14 @@ object AudioDecoder {
                         }
                     }
                 }
+                ok = true
             } finally {
                 try { codec.stop() } catch (_: Exception) {}
                 codec.release()
+                if (!ok) pcm.close()
             }
-            if (pcm.size == 0) throw DecodeException("오디오에서 소리를 읽지 못했습니다.")
+            pcm.finishWriting()
+            if (pcm.size == 0) { pcm.close(); throw DecodeException("오디오에서 소리를 읽지 못했습니다.") }
             onProgress(1f)
             return pcm
         } finally {
