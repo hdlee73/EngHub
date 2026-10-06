@@ -87,7 +87,31 @@ internal object MeaningMerge {
                 last to sense
             }.sortedBy { it.first }.map { it.second }
         } else all
-        return (parsed.preface + ordered.take(StudyMeanings.MAX_SENSES).mapIndexed { i, sense -> "${i + 1}. $sense" })
+        return (parsed.preface + capKeepingParts(ordered).mapIndexed { i, sense -> "${i + 1}. $sense" })
             .joinToString("\n")
     }
+
+    /**
+     * Caps the list at MAX_SENSES without letting one part of speech crowd out the others
+     * (notice had five noun senses, so the verb senses were cut). Each part keeps its first
+     * [PER_PART_MIN] senses, the remaining room goes to the earliest senses; order is unchanged.
+     */
+    private fun capKeepingParts(senses: List<String>): List<String> {
+        val max = StudyMeanings.MAX_SENSES
+        if (senses.size <= max) return senses
+        val parts = senses.map { partOf(it) }
+        if (parts.filter { it.isNotEmpty() }.distinct().size < 2) return senses.take(max)
+        val keep = linkedSetOf<Int>()
+        val seen = mutableMapOf<String, Int>()
+        senses.indices.forEach { i ->
+            val part = parts[i]
+            if (part.isEmpty()) return@forEach
+            val count = seen.getOrDefault(part, 0)
+            if (count < PER_PART_MIN && keep.size < max) { keep += i; seen[part] = count + 1 }
+        }
+        senses.indices.forEach { i -> if (keep.size < max) keep += i }
+        return keep.sorted().map { senses[it] }
+    }
+
+    private const val PER_PART_MIN = 2
 }

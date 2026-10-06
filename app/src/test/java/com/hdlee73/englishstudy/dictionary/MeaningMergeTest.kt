@@ -57,4 +57,13 @@ class MeaningMergeTest {
         assertEquals(listOf("[명사] 야자"), got)
         assertTrue(MeaningMerge.extras(source, setOf("형용사"), "", 2).isEmpty())
     }
+
+    @Test fun capKeepsEveryPartOfSpeechVisible() {
+        val nouns = (1..5).joinToString("\n") { "$it. [명사] 뜻$it" }
+        val combined = MeaningMerge.combine(nouns, listOf("[동사] 알아차리다", "[동사] 주목하다"), listOf("noun", "verb"))
+        val lines = combined.lines()
+        assertEquals(5, lines.size)
+        assertEquals(2, lines.count { "[동사]" in it })
+        assertTrue(lines.first().contains("[명사] 뜻1"))
+    }
 }
