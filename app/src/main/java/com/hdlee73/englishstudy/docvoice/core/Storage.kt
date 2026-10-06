@@ -38,7 +38,11 @@ object Storage {
     }
 
     /** 다운로드/DocVoice 폴더에 저장하고 Uri 를 돌려준다 (이름이 겹치면 시스템이 번호를 붙임). */
-    fun saveToDownloads(context: Context, displayName: String, bytes: ByteArray): Uri {
+    fun saveToDownloads(context: Context, displayName: String, bytes: ByteArray): Uri =
+        saveToDownloads(context, displayName) { it.write(bytes) }
+
+    /** Same, but the caller streams the content into the file (for results too big to hold in memory). */
+    fun saveToDownloads(context: Context, displayName: String, write: (java.io.OutputStream) -> Unit): Uri {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
@@ -49,7 +53,7 @@ object Storage {
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             ?: throw java.io.IOException("저장 위치를 만들 수 없습니다.")
         try {
-            resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw java.io.IOException("저장할 수 없습니다.")
+            resolver.openOutputStream(uri)?.use(write) ?: throw java.io.IOException("저장할 수 없습니다.")
             values.clear()
             values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
