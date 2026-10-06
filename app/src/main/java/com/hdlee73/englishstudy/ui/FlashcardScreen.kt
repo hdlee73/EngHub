@@ -242,7 +242,7 @@ private fun WordFace(card: WordEntry, onSpeak: (String) -> Unit, withExamples: B
             lineHeight = if (sentence) 32.sp else 40.sp
         )
         if (card.ipa.isNotBlank()) Text(card.ipa, color = Muted, fontSize = 17.sp)
-        TextButton(onClick = { onSpeak(card.word) }) { Text("🔊 발음 듣기", fontSize = 16.sp) }
+        TextButton(onClick = { onSpeak(card.word) }) { IconText("🔊 발음 듣기", fontSize = 16.sp) }
         if (withExamples) {
             val examples = displayExamples(card.examples).trim()
             if (examples.isNotEmpty()) Text(examples.lines().take(4).joinToString("\n"), color = Muted, fontSize = 14.sp, textAlign = TextAlign.Center)
@@ -268,7 +268,7 @@ private fun MeaningFace(card: WordEntry, showExamples: Boolean) {
 @Composable
 private fun FlashcardDone(state: FlashcardUiState, onRetryMissed: () -> Unit, onEnd: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ScreenTitle("라운드 완료 🎉")
+        ScreenTitle("라운드 완료")
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.padding(16.dp)) {
                 Text("${state.total}장을 모두 확인했어요", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)

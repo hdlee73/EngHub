@@ -461,8 +461,8 @@ private fun DatasetSheet(
 }
 
 private fun statusLabel(state: LearningUiState) = when (state.phase) {
-    LessonPhase.SPEAKING -> "🔊 들어 보세요"
-    LessonPhase.LISTENING -> "🎙 Speak now"
+    LessonPhase.SPEAKING -> "들어 보세요"
+    LessonPhase.LISTENING -> "Speak now"
     LessonPhase.CORRECT -> when {
         state.allWordsMatched -> "✓ 모두 인식"
         else -> "✓ Nice"
