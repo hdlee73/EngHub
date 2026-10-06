@@ -72,12 +72,22 @@ class MainActivity : AppCompatActivity() {
     /** Bumped when a DocVoice notification is tapped, so the DocVoice tab comes to the front. */
     private var docVoiceRequest by mutableStateOf(0)
     private var hasOpenDialog = false
+    /** A word sent by another app (Everynote's 단어장): the dictionary tab searches it and offers a way back to [returnPackage]. */
+    private data class ExternalLookup(val word: String, val returnPackage: String?, val serial: Long = System.nanoTime())
+    private var externalLookup by mutableStateOf<ExternalLookup?>(null)
+
+    private fun readExternalLookup(intent: Intent?) {
+        val word = intent?.getStringExtra(EXTRA_LOOKUP_WORD)?.trim().orEmpty()
+        if (word.isEmpty()) return
+        externalLookup = ExternalLookup(word, intent?.getStringExtra(EXTRA_RETURN_PACKAGE))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null && ListeningLink.isForListening(intent)) listeningIntent = intent
         if (savedInstanceState == null && DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
+        if (savedInstanceState == null) readExternalLookup(intent)
         // Fetches each new BBC 6 Minute English episode into the Listening tab's "6min" folder.
         com.hdlee73.englishstudy.listening.SixMinuteEnglish.schedule(applicationContext)
         wordSpeaker = WordSpeaker(this) { notice(it) }
@@ -106,6 +116,20 @@ class MainActivity : AppCompatActivity() {
             var tabIndex by rememberSaveable { mutableStateOf(0) }
             // The tab a dictionary lookup was started from, so the dictionary can offer a way back to it.
             var returnTab by rememberSaveable { mutableStateOf<Int?>(null) }
+            // The package of the app that sent the word being looked up; the dictionary shows a "돌아가기" bar for it.
+            var returnApp by rememberSaveable { mutableStateOf<String?>(null) }
+            LaunchedEffect(externalLookup) {
+                val lookup = externalLookup ?: return@LaunchedEffect
+                if (tabIndex == AppTab.SPEAKING.ordinal) {
+                    learningVm.pauseForBackground()
+                    speech.stop()
+                }
+                returnTab = null
+                returnApp = lookup.returnPackage?.takeIf { it.isNotBlank() }
+                tabIndex = AppTab.DICTIONARY.ordinal
+                dictionaryVm.lookupExternal(lookup.word)
+                externalLookup = null
+            }
             LaunchedEffect(docVoiceRequest) {
                 if (docVoiceRequest > 0) {
                     if (tabIndex == AppTab.SPEAKING.ordinal) {
@@ -237,11 +261,24 @@ class MainActivity : AppCompatActivity() {
                     if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
                     if (next == AppTab.READING) readingVm.refresh()
                     returnTab = null
+                    returnApp = null
                     tabIndex = next.ordinal
                 }
             ) { selected ->
                 when (selected) {
                     AppTab.DICTIONARY -> androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+                      val backApp = returnApp
+                      if (backApp != null) {
+                          com.hdlee73.englishstudy.ui.ReturnBar("Everynote로 돌아가기") {
+                              wordSpeaker.stop()
+                              returnApp = null
+                              val launch = packageManager.getLaunchIntentForPackage(backApp)
+                              if (launch != null) {
+                                  launch.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                  try { startActivity(launch) } catch (_: ActivityNotFoundException) { notice("앱을 열 수 없습니다.") }
+                              } else notice("앱을 열 수 없습니다.")
+                          }
+                      }
                       val back = returnTab?.let { AppTab.values().getOrNull(it) }
                       if (back != null) {
                           com.hdlee73.englishstudy.ui.ReturnBar("${back.label} 탭으로 돌아가기") {
@@ -407,6 +444,13 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         if (ListeningLink.isForListening(intent)) listeningIntent = intent
         if (DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
+        readExternalLookup(intent)
+    }
+
+    companion object {
+        /** Extras of the intent that opens the dictionary on a word (sent by Everynote). */
+        const val EXTRA_LOOKUP_WORD = "com.hdlee73.englishstudy.extra.LOOKUP_WORD"
+        const val EXTRA_RETURN_PACKAGE = "com.hdlee73.englishstudy.extra.RETURN_PACKAGE"
     }
 
     private fun notice(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_SHORT).show()
