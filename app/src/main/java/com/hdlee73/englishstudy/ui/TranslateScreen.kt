@@ -70,10 +70,10 @@ fun TranslateScreen(
                 OutlinedButton(onClick = {
                     val manager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                     manager?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()?.let(onInput)
-                }, shape = RoundedCornerShape(12.dp)) { Text("📋 붙여넣기", fontSize = 14.sp) }
+                }, shape = RoundedCornerShape(12.dp)) { IconText("📋 붙여넣기", fontSize = 14.sp) }
                 if (state.input.isNotEmpty()) OutlinedButton(onClick = onClear, shape = RoundedCornerShape(12.dp)) { Text("✕ 지우기", fontSize = 14.sp) }
                 if (state.direction == Direction.EN_KO && state.input.isNotBlank()) {
-                    OutlinedButton(onClick = { onLookup(state.input.trim()) }, shape = RoundedCornerShape(12.dp)) { Text("📖 사전", fontSize = 14.sp) }
+                    OutlinedButton(onClick = { onLookup(state.input.trim()) }, shape = RoundedCornerShape(12.dp)) { IconText("📖 사전", fontSize = 14.sp) }
                 }
             }
             StartButton(
@@ -93,10 +93,10 @@ fun TranslateScreen(
                     Text(state.resultDirection.toLabel, color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     SelectionContainer { Text(result, color = Ink, fontSize = 19.sp, lineHeight = 28.sp) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { copyToClipboard(context, result) }, shape = RoundedCornerShape(12.dp)) { Text("📋 복사", fontSize = 14.sp) }
+                        OutlinedButton(onClick = { copyToClipboard(context, result) }, shape = RoundedCornerShape(12.dp)) { IconText("📋 복사", fontSize = 14.sp) }
                         if (state.resultDirection == Direction.KO_EN) {
-                            OutlinedButton(onClick = { onSpeak(result) }, shape = RoundedCornerShape(12.dp)) { Text("🔊 듣기", fontSize = 14.sp) }
-                            OutlinedButton(onClick = { onLookup(result) }, shape = RoundedCornerShape(12.dp)) { Text("📖 사전", fontSize = 14.sp) }
+                            OutlinedButton(onClick = { onSpeak(result) }, shape = RoundedCornerShape(12.dp)) { IconText("🔊 듣기", fontSize = 14.sp) }
+                            OutlinedButton(onClick = { onLookup(result) }, shape = RoundedCornerShape(12.dp)) { IconText("📖 사전", fontSize = 14.sp) }
                         }
                     }
                     Button(
@@ -106,7 +106,7 @@ fun TranslateScreen(
                         },
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SoftBlue, contentColor = Blue)
-                    ) { Text("🎤 문장말하기 데이터셋에 추가", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    ) { IconText("🎤 문장말하기 데이터셋에 추가", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                     Text("구글 번역 기반 자동 번역이에요. 중요한 내용은 한 번 더 확인하세요.", color = Muted, fontSize = 11.sp)
                 }
             }

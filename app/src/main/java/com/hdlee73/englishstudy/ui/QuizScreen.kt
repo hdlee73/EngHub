@@ -162,7 +162,7 @@ private fun QuizQuestionView(
                 if (answered) {
                     val right = selected == question.answerIndex
                     Text(
-                        if (right) "정답이에요! 👏" else "아쉬워요. 정답은 ‘${question.word}’",
+                        if (right) "정답이에요!" else "아쉬워요. 정답은 ‘${question.word}’",
                         color = if (right) Mint else Miss, fontSize = 15.sp, fontWeight = FontWeight.Bold
                     )
                 }
@@ -193,7 +193,7 @@ private fun QuizQuestionView(
             OutlinedButton(
                 onClick = { onSpeak(question.sentence) }, enabled = answered,
                 modifier = Modifier.weight(1f).height(choiceHeight), shape = RoundedCornerShape(14.dp)
-            ) { Text("🔊 예문 듣기", fontSize = 15.sp, maxLines = 1) }
+            ) { IconText("🔊 예문 듣기", fontSize = 15.sp, maxLines = 1) }
             Button(
                 onClick = onNext, enabled = answered,
                 modifier = Modifier.weight(1f).height(choiceHeight), shape = RoundedCornerShape(14.dp),
@@ -213,7 +213,7 @@ private fun QuizResult(state: QuizUiState, onRetryWrong: () -> Unit, onEnd: () -
                 Text("${state.total}문제 중 ${state.correct}문제 정답", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
                     when {
-                        state.wrong.isEmpty() -> "모두 맞혔어요! 🎉"
+                        state.wrong.isEmpty() -> "모두 맞혔어요!"
                         state.correct * 2 >= state.total -> "잘했어요. 틀린 문제만 다시 풀어 보세요."
                         else -> "틀린 단어를 한 번 더 풀어 볼까요?"
                     },
@@ -245,7 +245,7 @@ private fun WrongItem(q: QuizQuestion, onSpeak: (String) -> Unit) {
                 Text(highlighted(q.sentence, q.word), color = Ink, fontSize = 14.sp)
                 if (q.translation.isNotBlank()) Text(q.translation, color = Muted, fontSize = 13.sp)
             }
-            TextButton(onClick = { onSpeak(q.sentence) }) { Text("🔊", fontSize = 20.sp) }
+            TextButton(onClick = { onSpeak(q.sentence) }) { IconText("🔊", fontSize = 20.sp) }
         }
     }
 }

@@ -195,7 +195,7 @@ fun DictionaryScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { detail = null }) { Text("닫기") } },
-            dismissButton = { TextButton(onClick = { onSpeak(current.word) }) { Text("🔊 듣기") } }
+            dismissButton = { TextButton(onClick = { onSpeak(current.word) }) { IconText("🔊 듣기") } }
         )
     }
 }
@@ -217,7 +217,7 @@ private fun PillButton(text: String, fill: Color, ink: Color, width: androidx.co
         onClick = onClick, enabled = enabled, modifier = Modifier.width(width).height(40.dp), shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(containerColor = fill, contentColor = ink, disabledContainerColor = fill, disabledContentColor = ink),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), elevation = null
-    ) { Text(text, fontSize = 12.sp, maxLines = 1) }
+    ) { IconText(text, fontSize = 12.sp, maxLines = 1) }
 }
 
 @Composable
