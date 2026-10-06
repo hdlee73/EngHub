@@ -35,8 +35,8 @@ android {
         applicationId = "com.hdlee73.englishstudy"
         minSdk = 29
         targetSdk = 36
-        versionCode = 40
-        versionName = "1.19.1"
+        versionCode = 41
+        versionName = "1.20.0"
         // The on-device speech recognition library only ships 64-bit ARM code.
         ndk { abiFilters += "arm64-v8a" }
     }
