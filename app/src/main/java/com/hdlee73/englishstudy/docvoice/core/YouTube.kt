@@ -54,6 +54,12 @@ object YouTubeAudio {
     /** 공유된 글이나 붙여넣은 글에서 유튜브 주소만 뽑는다. */
     fun findUrl(text: String?): String? = text?.let { URL_RE.find(it)?.value?.trimEnd('.', ',', ')') }
 
+    private val ID_RE = Regex("""(?:youtu\.be/|/shorts/|/live/|/embed/|[?&]v=)([A-Za-z0-9_-]{11})""")
+
+    /** 쇼츠·짧은 주소·공유 주소를 일반 watch 주소로 통일한다. */
+    private fun normalize(link: String): String =
+        ID_RE.find(link)?.let { "https://www.youtube.com/watch?v=${it.groupValues[1]}" } ?: link
+
     private var ready = false
 
     private fun init() {
@@ -65,15 +71,17 @@ object YouTubeAudio {
 
     /** 가장 좋은 소리 줄기를 골라 [dir] 의 임시 파일로 내려받는다. */
     fun download(url: String, dir: File, active: () -> Boolean, progress: (String, Float?) -> Unit): Result {
-        val link = findUrl(url) ?: throw YouTubeException("유튜브 주소가 아니에요.")
+        val link = normalize(findUrl(url) ?: throw YouTubeException("유튜브 주소가 아니에요."))
         progress("영상 정보 읽는 중", null)
         val info = try {
             init()
             StreamInfo.getInfo(ServiceList.YouTube, link)
         } catch (e: ReCaptchaException) {
             throw YouTubeException(e.message ?: "YouTube 가 잠시 요청을 막았어요. 잠시 뒤 다시 해보세요.")
+        } catch (e: org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException) {
+            throw YouTubeException("이 영상은 받을 수 없어요. 비공개·연령 제한·지역 제한 영상일 수 있어요. (${e.message})")
         } catch (e: org.schabi.newpipe.extractor.exceptions.ExtractionException) {
-            throw YouTubeException("영상을 찾지 못했어요. 비공개·연령 제한·지역 제한 영상은 받을 수 없어요. (${e.message})")
+            throw YouTubeException("유튜브에서 영상 정보를 읽지 못했어요. 영상 문제가 아니라 유튜브 쪽 변경이나 일시적인 차단일 수 있어요. 잠시 뒤 다시 해보시고, 계속되면 앱 업데이트를 기다려 주세요. (${e.message})")
         } catch (e: java.io.IOException) {
             throw YouTubeException("인터넷 연결을 확인해 주세요.")
         }
