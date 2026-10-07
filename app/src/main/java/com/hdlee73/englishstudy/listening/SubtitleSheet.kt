@@ -13,7 +13,6 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.widget.PopupMenu
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -169,20 +168,17 @@ class SubtitleSheet(
     }
 
     private fun showMenu(anchor: View) {
-        val menu = PopupMenu(context, anchor)
-        menu.menu.add(0, 1, 0, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택")
-        if (svc.subtitleUri != null) menu.menu.add(0, 2, 1, "이 곡의 자막 제거")
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
+        val items = mutableListOf(IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles))
+        if (svc.subtitleUri != null) items += IconMenu.Item(2, "이 곡의 자막 제거", R.drawable.ls_ic_delete, destructive = true)
+        IconMenu.show(context, anchor, items, alignEnd = true) { id ->
+            when (id) {
                 1 -> pickFile()
                 2 -> {
                     svc.setSubtitle(null)
                     reload()
                 }
             }
-            true
         }
-        menu.show()
     }
 
     private inner class CueHolder(view: View) : RecyclerView.ViewHolder(view) {

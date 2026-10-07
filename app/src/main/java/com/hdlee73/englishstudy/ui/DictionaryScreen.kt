@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -384,9 +386,20 @@ private fun SavedList(
                         colors = ButtonDefaults.buttonColors(containerColor = TabOff, contentColor = DictBlue),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), elevation = null
                     ) { Text("⋯", fontSize = 22.sp) }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(text = { Text("다시 검색") }, onClick = { menuOpen = false; onResearch(entry.word) })
-                        DropdownMenuItem(text = { Text("삭제") }, onClick = { menuOpen = false; onDelete(entry) })
+                    DropdownMenu(
+                        expanded = menuOpen, onDismissRequest = { menuOpen = false },
+                        shape = RoundedCornerShape(16.dp), containerColor = Color.White, shadowElevation = 10.dp
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("다시 검색", fontSize = 15.sp, color = DictDark) },
+                            leadingIcon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Refresh, null, tint = DictBlue) },
+                            onClick = { menuOpen = false; onResearch(entry.word) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("삭제", fontSize = 15.sp, color = Color(0xFFC7452F)) },
+                            leadingIcon = { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Delete, null, tint = Color(0xFFC7452F)) },
+                            onClick = { menuOpen = false; onDelete(entry) }
+                        )
                     }
                 }
             }

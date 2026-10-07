@@ -156,11 +156,14 @@ fun MenuRow(icon: ImageVector, color: Color, title: String, current: String, opt
             Spacer(Modifier.width(4.dp))
             Icon(Icons.Rounded.UnfoldMore, null, tint = Dv.Tertiary, modifier = Modifier.size(18.dp))
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Dv.Card) {
+        DropdownMenu(
+            expanded = open, onDismissRequest = { open = false }, containerColor = Dv.Card,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), shadowElevation = 10.dp
+        ) {
             options.forEach { (label, id) ->
                 DropdownMenuItem(
                     text = { Text(label, fontSize = 16.sp) },
-                    trailingIcon = { if (label == current) Icon(Icons.Rounded.Check, null, tint = Dv.Blue, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(Icons.Rounded.Check, null, tint = if (label == current) Dv.Blue else Color.Transparent, modifier = Modifier.size(20.dp)) },
                     onClick = { open = false; onPick(id) },
                 )
             }
