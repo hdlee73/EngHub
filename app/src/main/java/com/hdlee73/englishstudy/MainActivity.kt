@@ -263,6 +263,7 @@ class MainActivity : AppCompatActivity() {
 
             AppRoot(
                 tab = tab,
+                onOpenUrl = { openUrl(it) },
                 onTab = { next ->
                     if (tab == AppTab.SPEAKING && next != AppTab.SPEAKING) {
                         learningVm.pauseForBackground()
