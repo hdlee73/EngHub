@@ -362,6 +362,44 @@ class PlaybackService : MediaSessionService() {
         return true
     }
 
+    /** Moves [group] one place up ([delta] -1) or down (+1) among the folders at its level. Returns false at the end of the list. */
+    fun reorderGroup(group: Int, delta: Int): Boolean {
+        val g = groups.getOrNull(group) ?: return false
+        val level = groups.indices.filter { i ->
+            val p = groups[i].parentId?.takeIf { id -> groups.any { it.id == id } }
+            p == g.parentId?.takeIf { id -> groups.any { it.id == id } }
+        }
+        val pos = level.indexOf(group)
+        val other = level.getOrNull(pos + delta) ?: return false
+        syncActiveFromPlayer()
+        java.util.Collections.swap(groups, group, other)
+        activeGroup = when (activeGroup) {
+            group -> other
+            other -> group
+            else -> activeGroup
+        }
+        persistGroups()
+        return true
+    }
+
+    /** Sorts the tracks of [group] by file name without interrupting playback. */
+    fun sortGroupByName(group: Int) {
+        val g = groups.getOrNull(group) ?: return
+        if (group == activeGroup) {
+            syncActiveFromPlayer()
+            val sorted = g.entries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            sorted.forEachIndexed { i, entry ->
+                val j = (i until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == entry.uri } ?: return@forEachIndexed
+                if (j != i) player.moveMediaItem(j, i)
+            }
+        } else {
+            val current = g.entries.getOrNull(g.index)?.uri
+            g.entries.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            g.index = g.entries.indexOfFirst { it.uri == current }.coerceAtLeast(0)
+        }
+        persistGroups()
+    }
+
     /** Links folders imported before v1.22 to their device folder, when all their files came from one directory. */
     fun linkLegacyImports() {
         var changed = false
