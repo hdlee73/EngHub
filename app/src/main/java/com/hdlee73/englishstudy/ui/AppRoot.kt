@@ -83,7 +83,7 @@ enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vect
  * The selected tab grows and shows its name; the others shrink to just their icon, so even eight tabs fit on a narrow screen.
  */
 @Composable
-private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit) {
+private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onInfo: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -104,6 +104,18 @@ private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit) {
                 }
             }
         }
+        InfoButton(onInfo)
+    }
+}
+
+/** The small "i" that opens the app info (name, version, developer, releases page). */
+@Composable
+private fun InfoButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).semantics { contentDescription = "앱 정보" },
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Info, null, Modifier.size(22.dp), tint = Color(0xFF7A8794))
     }
 }
 
@@ -116,10 +128,11 @@ private const val HINT_KEY = "menu_hint_seen"
  * It never covers the phone's own navigation bar.
  */
 @Composable
-fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) -> Unit) {
+fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, onOpenUrl: (String) -> Unit, content: @Composable (AppTab) -> Unit) {
     val context = LocalContext.current
     var barVisible by remember { mutableStateOf(true) }
     var showHint by remember { mutableStateOf(false) }
+    var aboutOpen by remember { mutableStateOf(false) }
     // The bar folds itself away a few seconds after it was last used; any tap on it starts the countdown again.
     var touches by remember { mutableStateOf(0) }
     LaunchedEffect(barVisible, touches) {
@@ -135,7 +148,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
             containerColor = Canvas,
             bottomBar = {
                 if (barVisible) {
-                    TabBar(tab) { next -> touches++; onTab(next) }
+                    TabBar(tab, { next -> touches++; onTab(next) }, { touches++; aboutOpen = true })
                 } else {
                     // Keeps the screen above the phone's navigation bar while the tab bar is away.
                     Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -164,6 +177,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { barVisible = true },
                         contentAlignment = Alignment.Center
                     ) {
+                        InfoButton({ aboutOpen = true }, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
                         Box(
                             Modifier.size(width = 52.dp, height = 22.dp).clip(RoundedCornerShape(11.dp)).background(Color(0xE6FFFFFF)),
                             contentAlignment = Alignment.Center
@@ -178,6 +192,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, content: @Composable (AppTab) 
                 }
             }
         }
+        if (aboutOpen) AboutDialog(onOpenUrl = onOpenUrl, onDismiss = { aboutOpen = false })
         if (showHint) {
             SwipeHint(onDismiss = {
                 showHint = false

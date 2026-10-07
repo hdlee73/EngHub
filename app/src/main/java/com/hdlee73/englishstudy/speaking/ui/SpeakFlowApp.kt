@@ -578,32 +578,7 @@ private fun RoundButton(iconRes: Int, description: String, buttonSize: Int, onCl
 private fun SettingsSheet(current: LearningSettings, bluetoothDevices: List<BluetoothChoice>, onOpenUpdate: (String) -> Unit, onClose: () -> Unit, onSave: (LearningSettings) -> Unit, onStatistics: () -> Unit) {
     var draft by remember { mutableStateOf(current) }
     var aboutOpen by remember { mutableStateOf(false) }
-    if (aboutOpen) {
-        val ctx = androidx.compose.ui.platform.LocalContext.current
-        val version = remember { com.hdlee73.englishstudy.update.UpdateChecker.installedVersion(ctx) }
-        var newer by remember { mutableStateOf(com.hdlee73.englishstudy.update.UpdateChecker.available(ctx)) }
-        LaunchedEffect(Unit) { newer = com.hdlee73.englishstudy.update.UpdateChecker.check(ctx) }
-        AlertDialog(
-            onDismissRequest = { aboutOpen = false },
-            title = { Text("앱 정보", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("EngHub", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("버전 $version")
-                    val release = newer
-                    if (release != null) {
-                        Text("새 버전 ${release.version.removePrefix("v")}이(가) 나왔어요. 아래 버튼으로 받아 업데이트하세요.", color = Blue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    } else {
-                        Text("최신 버전을 쓰고 있어요.", color = Color.Gray, fontSize = 13.sp)
-                    }
-                    Text("만든이: 이현덕 (hdlee73@gmail.com)")
-                    Text("업데이트 정보는 GitHub 릴리스 페이지에서 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
-                }
-            },
-            confirmButton = { TextButton(onClick = { aboutOpen = false; onOpenUpdate(newer?.url ?: com.hdlee73.englishstudy.update.UpdateChecker.RELEASES_URL) }) { Text(if (newer != null) "업데이트 받기" else "릴리스 페이지 열기") } },
-            dismissButton = { TextButton(onClick = { aboutOpen = false }) { Text("닫기") } },
-        )
-    }
+    if (aboutOpen) com.hdlee73.englishstudy.ui.AboutDialog(onOpenUrl = onOpenUpdate, onDismiss = { aboutOpen = false })
     SheetDialog(onDismiss = onClose) {
         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 20.dp)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
