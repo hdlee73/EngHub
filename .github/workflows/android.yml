@@ -74,9 +74,11 @@ jobs:
           version=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
           tag="v${version}"
           apk="EngHub-${tag}.apk"
+          # Release body = only the newest section of RELEASE_NOTES.md (this version's notes).
+          awk '/^## /{n++} n==1' RELEASE_NOTES.md > "$RUNNER_TEMP/release-notes.md"
           cp app/build/outputs/apk/debug/app-debug.apk "$apk"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" --clobber
           else
-            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --title "EngHub $tag" --notes-file RELEASE_NOTES.md
+            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --title "EngHub $tag" --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
