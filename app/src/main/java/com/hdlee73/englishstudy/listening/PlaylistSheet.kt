@@ -285,6 +285,9 @@ class PlaylistSheet(
             IconMenu.Item(2, "이 폴더 반복 재생", R.drawable.ls_ic_repeat),
             IconMenu.Item(6, "하위 폴더 만들기", R.drawable.ls_ic_folder_add, dividerBefore = true),
             IconMenu.Item(7, "폴더 이동", R.drawable.ls_ic_folder_move),
+            IconMenu.Item(8, "앞으로 (위로) 옮기기", R.drawable.ls_ic_arrow_up),
+            IconMenu.Item(9, "뒤로 (아래로) 옮기기", R.drawable.ls_ic_arrow_down),
+            IconMenu.Item(10, "곡을 이름순으로 정렬", R.drawable.ls_ic_sort),
             IconMenu.Item(3, "이름 변경", R.drawable.ls_ic_edit),
             IconMenu.Item(4, "폴더 비우기", R.drawable.ls_ic_clear_list, dividerBefore = true),
             IconMenu.Item(5, if (svc.groups.size > 1) "폴더 삭제" else "폴더 삭제 (마지막 폴더는 비우기만)", R.drawable.ls_ic_delete, destructive = true)
@@ -325,6 +328,17 @@ class PlaylistSheet(
                 }
                 6 -> promptNewFolder(group.id)
                 7 -> chooseParentFolder(index)
+                8, 9 -> {
+                    val moved = svc.reorderGroup(index, if (id == 8) -1 else 1)
+                    if (!moved) toast(if (id == 8) "이미 맨 앞입니다." else "이미 맨 뒤입니다.")
+                    else viewGroup = svc.groups.indexOf(group)
+                    render()
+                }
+                10 -> {
+                    svc.sortGroupByName(index)
+                    toast("곡을 이름순으로 정렬했습니다.")
+                    render()
+                }
             }
         }
     }
