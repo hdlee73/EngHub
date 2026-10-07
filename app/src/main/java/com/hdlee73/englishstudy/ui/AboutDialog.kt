@@ -39,10 +39,10 @@ fun AboutDialog(onOpenUrl: (String) -> Unit, onDismiss: () -> Unit) {
                     Text("최신 버전을 쓰고 있어요.", color = Color.Gray, fontSize = 13.sp)
                 }
                 Text("만든이: 이현덕 (hdlee73@gmail.com)")
-                Text("업데이트 정보는 GitHub 릴리스 페이지에서 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
+                Text("업데이트 정보는 GitHub Release 페이지에서 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
             }
         },
-        confirmButton = { TextButton(onClick = { onDismiss(); onOpenUrl(newer?.url ?: UpdateChecker.RELEASES_URL) }) { Text(if (newer != null) "업데이트 받기" else "릴리스 페이지 열기") } },
+        confirmButton = { TextButton(onClick = { onDismiss(); onOpenUrl(newer?.url ?: UpdateChecker.RELEASES_URL) }) { Text(if (newer != null) "업데이트 받기" else "Release 페이지 열기") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
     )
 }
