@@ -87,7 +87,7 @@ object YouTubeAudio {
         }
         val stream = pick(info.audioStreams) ?: throw YouTubeException("내려받을 수 있는 소리를 찾지 못했어요.")
         val suffix = stream.format?.suffix ?: "m4a"
-        val out = File.createTempFile("yt", ".$suffix", dir)
+        val out = File.createTempFile("yt-", ".$suffix", dir)
         try {
             fetch(stream, out, active) { progress("소리 내려받는 중", it) }
         } catch (e: Throwable) {
