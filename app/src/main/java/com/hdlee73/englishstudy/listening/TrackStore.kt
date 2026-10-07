@@ -14,7 +14,19 @@ class TrackStore(context: Context) {
     data class Entry(val uri: String, val name: String)
 
     /** A named playlist. The player's queue is always the active group. */
-    class Group(var name: String, val entries: MutableList<Entry> = mutableListOf(), var index: Int = 0)
+    class Group(
+        var name: String,
+        val entries: MutableList<Entry> = mutableListOf(),
+        var index: Int = 0,
+        val id: String = java.util.UUID.randomUUID().toString(),
+        /** [id] of the folder this one sits in; null for a top-level folder. */
+        var parentId: String? = null,
+        /** For folders made by a device-folder import: the picked tree and the document id of the source directory. */
+        var sourceTree: String? = null,
+        var sourceDocId: String? = null,
+        /** Files and subfolders of the source directory that were already offered to this folder, so removed ones do not come back. */
+        val seen: MutableSet<String> = mutableSetOf()
+    )
 
     data class SavedRange(val name: String, val startMs: Long, val endMs: Long)
 
@@ -47,7 +59,14 @@ class TrackStore(context: Context) {
             val array = JSONArray(raw)
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
-                val group = Group(o.optString("n", "그룹"), mutableListOf(), o.optInt("i", 0))
+                val group = Group(
+                    o.optString("n", "그룹"), mutableListOf(), o.optInt("i", 0),
+                    id = o.optString("id", "").ifEmpty { java.util.UUID.randomUUID().toString() },
+                    parentId = o.optString("p", "").takeIf { it.isNotEmpty() },
+                    sourceTree = o.optString("st", "").takeIf { it.isNotEmpty() },
+                    sourceDocId = o.optString("sd", "").takeIf { it.isNotEmpty() }
+                )
+                o.optJSONArray("s")?.let { s -> for (k in 0 until s.length()) group.seen += s.getString(k) }
                 val items = o.optJSONArray("e")
                 if (items != null) {
                     for (j in 0 until items.length()) {
@@ -60,6 +79,8 @@ class TrackStore(context: Context) {
         }
         if (groups.isEmpty()) groups += Group(FIRST_GROUP_NAME, loadPlaylist(), currentIndex)
         removeDefaultGroup(groups)
+        // Folders saved before v1.22 have no id yet; save once so that parent links stay valid.
+        if (raw != null && !raw.contains("\"id\"")) saveGroups(groups, activeGroup.coerceIn(0, groups.lastIndex))
         return groups
     }
 
@@ -91,7 +112,12 @@ class TrackStore(context: Context) {
         groups.forEach { group ->
             val items = JSONArray()
             group.entries.forEach { items.put(JSONObject().put("u", it.uri).put("n", it.name)) }
-            array.put(JSONObject().put("n", group.name).put("i", group.index).put("e", items))
+            val obj = JSONObject().put("n", group.name).put("i", group.index).put("e", items).put("id", group.id)
+            group.parentId?.let { obj.put("p", it) }
+            group.sourceTree?.let { obj.put("st", it) }
+            group.sourceDocId?.let { obj.put("sd", it) }
+            if (group.seen.isNotEmpty()) obj.put("s", JSONArray(group.seen.toList()))
+            array.put(obj)
         }
         prefs.edit().putString(KEY_GROUPS, array.toString()).putInt(KEY_ACTIVE_GROUP, active).apply()
     }

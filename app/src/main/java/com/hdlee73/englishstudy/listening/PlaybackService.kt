@@ -331,10 +331,92 @@ class PlaybackService : MediaSessionService() {
         if (play) player.play() else player.pause()
     }
 
-    fun createGroup(name: String): Int {
-        groups.add(TrackStore.Group(name.trim().ifBlank { "새 그룹" }))
+    fun createGroup(name: String, parentId: String? = null): Int {
+        groups.add(TrackStore.Group(name.trim().ifBlank { "새 그룹" }, parentId = parentId))
         persistGroups()
         return groups.lastIndex
+    }
+
+    /** Indexes of every folder below [group], however deep. */
+    fun descendants(group: Int): List<Int> {
+        val id = groups.getOrNull(group)?.id ?: return emptyList()
+        val out = mutableListOf<Int>()
+        val queue = ArrayDeque(listOf(id))
+        while (queue.isNotEmpty()) {
+            val parent = queue.removeFirst()
+            groups.forEachIndexed { i, g -> if (g.parentId == parent) { out += i; queue += g.id } }
+        }
+        return out
+    }
+
+    /** Puts [group] inside the folder [newParentId] (null = top level). A folder cannot go into itself or its own subfolders. */
+    fun moveGroup(group: Int, newParentId: String?): Boolean {
+        val g = groups.getOrNull(group) ?: return false
+        if (newParentId != null) {
+            if (newParentId == g.id) return false
+            if (descendants(group).any { groups[it].id == newParentId }) return false
+            if (groups.none { it.id == newParentId }) return false
+        }
+        g.parentId = newParentId
+        persistGroups()
+        return true
+    }
+
+    /** Links folders imported before v1.22 to their device folder, when all their files came from one directory. */
+    fun linkLegacyImports() {
+        var changed = false
+        for (g in groups) {
+            if (g.sourceTree != null) continue
+            val (tree, dir) = FolderImport.inferSource(g.entries) ?: continue
+            val granted = contentResolver.persistedUriPermissions.any { it.isReadPermission && it.uri.toString() == tree }
+            if (!granted) continue
+            g.sourceTree = tree
+            g.sourceDocId = dir
+            g.seen.addAll(g.entries.map { it.uri })
+            changed = true
+        }
+        if (changed) persistGroups()
+    }
+
+    /** Trees that at least one folder is linked to. */
+    fun linkedTrees(): List<String> = groups.mapNotNull { it.sourceTree }.distinct()
+
+    /**
+     * Brings the playlist folders in line with a scanned device folder: new audio files are added to the folder linked to
+     * their directory (whatever it is called now) and new subdirectories become subfolders. With [force] (an explicit import)
+     * missing folders are created; otherwise only directories that were never offered before are, so deleted ones stay gone.
+     * Returns how many files were added.
+     */
+    fun applyScan(tree: String, root: FolderImport.Node, force: Boolean): Int {
+        var added = 0
+        fun visit(node: FolderImport.Node, parent: TrackStore.Group?) {
+            var group = groups.firstOrNull { it.sourceTree == tree && it.sourceDocId == node.docId }
+            if (group == null && force) {
+                group = groups.firstOrNull { it.sourceTree == null && (it.name == node.path || (parent == null && it.name == node.name)) }
+            }
+            if (group == null && node.hasAudio) {
+                val allowed = if (parent == null) force else force || node.docId !in parent.seen
+                if (allowed) {
+                    group = TrackStore.Group(node.name, parentId = parent?.id)
+                    groups.add(group)
+                    parent?.seen?.add(node.docId)
+                }
+            }
+            val linked = group
+            if (linked != null) {
+                linked.sourceTree = tree
+                linked.sourceDocId = node.docId
+                parent?.seen?.add(node.docId)
+                val have = linked.entries.map { it.uri }.toSet()
+                val toAdd = node.files.filter { it.uri !in have && (force || it.uri !in linked.seen) }
+                added += addEntries(toAdd, groups.indexOf(linked), startIfIdle = false)
+                node.files.forEach { linked.seen += it.uri }
+            }
+            node.children.forEach { visit(it, group) }
+        }
+        visit(root, null)
+        persistGroups()
+        return added
     }
 
     fun renameGroup(group: Int, name: String) {

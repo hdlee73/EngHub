@@ -181,6 +181,7 @@ class ListeningController(
         if (uiReady) return
         uiReady = true
         fineStepMs = prefs.getLong("fine_step", 100L)
+        handler.post { syncDeviceFolders() }
         configureTransport()
         configureRangeControls()
         root.findViewById<ImageButton>(R.id.addButton).setOnClickListener { openFilePicker() }
@@ -254,23 +255,37 @@ class ListeningController(
         }
         toast("폴더를 읽고 있어요…")
         Thread {
-            val found = FolderImport.scan(ctx, tree)
+            val root = runCatching { FolderImport.scan(ctx, tree) }.getOrNull()
             handler.post {
                 if (playbackService == null) return@post
-                if (found.isEmpty()) {
+                if (root == null || !root.hasAudio) {
                     toast("이 폴더에는 오디오 파일이 없습니다.")
                     return@post
                 }
-                var added = 0
-                found.forEach { f ->
-                    var index = svc.groups.indexOfFirst { it.name == f.path }
-                    if (index < 0) index = svc.createGroup(f.path)
-                    added += svc.addEntries(f.entries, index, startIfIdle = false)
-                }
+                val added = svc.applyScan(tree.toString(), root, force = true)
                 toast(
                     if (added == 0) "이미 모두 들어 있는 폴더입니다."
-                    else "폴더 ${found.size}개, ${added}곡을 재생목록에 추가했습니다."
+                    else "${added}곡을 재생목록에 추가했습니다. 이 폴더에 새 파일이 생기면 자동으로 들어옵니다."
                 )
+            }
+        }.start()
+    }
+
+    /** Adds audio files that appeared in the device folders behind imported playlist folders (also in their subfolders). */
+    private fun syncDeviceFolders() {
+        val svc = playbackService ?: return
+        svc.linkLegacyImports()
+        val trees = svc.linkedTrees()
+        if (trees.isEmpty()) return
+        Thread {
+            val scans = trees.mapNotNull { t ->
+                runCatching { t to FolderImport.scan(ctx, Uri.parse(t)) }.getOrNull()
+            }
+            handler.post {
+                if (playbackService == null) return@post
+                var added = 0
+                scans.forEach { (t, root) -> added += svc.applyScan(t, root, force = false) }
+                if (added > 0) toast("기기 폴더에서 새 파일 ${added}곡을 재생목록에 추가했습니다.")
             }
         }.start()
     }
@@ -476,15 +491,9 @@ class ListeningController(
 
     /** Drop-down list anchored to a pill; the chosen value is reported by index. */
     private fun showChoice(anchor: View, values: List<String>, selected: Int, picked: (Int) -> Unit) {
-        val menu = androidx.appcompat.widget.PopupMenu(ctx, anchor)
-        values.forEachIndexed { index, value ->
-            menu.menu.add(0, index, index, (if (index == selected) "✓  " else "     ") + value)
-        }
-        menu.setOnMenuItemClickListener { item ->
-            picked(item.itemId)
-            true
-        }
-        menu.show()
+        IconMenu.show(ctx, anchor, values.mapIndexed { index, value ->
+            IconMenu.Item(index, value, if (index == selected) R.drawable.ls_ic_check else 0)
+        }, alignEnd = true, onPick = picked)
     }
 
     private val speedValues = listOf(0.5f, 0.75f, 0.85f, 1.0f, 1.1f, 1.25f, 1.5f, 1.75f, 2.0f)
@@ -595,6 +604,7 @@ class ListeningController(
         val sheet = PlaylistSheet(ctx, svc, { group -> openFilePicker(group) }, { pickFolder.launch(null) })
         playlistSheet = sheet
         sheet.show()
+        syncDeviceFolders()
     }
 
     private fun openSubtitlePicker() {
