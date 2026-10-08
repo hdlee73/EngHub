@@ -51,7 +51,7 @@
         android:paddingTop="2dp"
         android:paddingEnd="20dp"
         android:paddingBottom="6dp"
-        android:text="문장을 누르면 그 위치로 이동 · 길게 누르면 그 문장을 구간 반복"
+        android:text="문장을 누르면 그 위치로 이동 · 길게 누르면 그 문장을 구간 반복 · 길게 누른 채 끌면 여러 문장을 구간 반복"
         android:textColor="@color/ls_text_secondary"
         android:textSize="11sp" />
 
