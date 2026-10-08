@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -20,7 +21,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 
 /**
  * On-demand subtitle window. It shows the subtitle file linked to the playing track, follows the
- * playback position and highlights the current sentence. Tap = jump there, long press = loop it.
+ * playback position and highlights the current sentence. Tap = jump there, long press = loop it,
+ * long press then drag = loop every sentence the finger passes over.
  */
 class SubtitleSheet(
     private val context: Context,
@@ -44,6 +46,25 @@ class SubtitleSheet(
     private var currentIndex = -1
     private var lastUserScroll = 0L
     private var lastActive: Boolean? = null
+    private var dragAnchor = -1
+    private var dragEnd = -1
+    private var dragY = 0f
+    private val autoScroll = object : Runnable {
+        override fun run() {
+            if (dragAnchor < 0) return
+            val edge = list.height * 0.15f
+            val dy = when {
+                dragY < edge -> -((edge - dragY) / edge * 28f + 4f)
+                dragY > list.height - edge -> ((dragY - (list.height - edge)) / edge * 28f + 4f)
+                else -> 0f
+            }
+            if (dy != 0f) {
+                list.scrollBy(0, dy.toInt())
+                updateDrag()
+            }
+            handler.postDelayed(this, 16L)
+        }
+    }
 
     fun show() {
         val height = (context.resources.displayMetrics.heightPixels * 0.88f).toInt()
@@ -60,6 +81,32 @@ class SubtitleSheet(
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                 if (newState == RecyclerView.SCROLL_STATE_DRAGGING) lastUserScroll = System.currentTimeMillis()
             }
+        })
+
+        list.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                if (dragAnchor < 0) return false
+                if (e.actionMasked == MotionEvent.ACTION_MOVE) {
+                    rv.parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+                if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) finishDrag(e.actionMasked == MotionEvent.ACTION_UP)
+                return false
+            }
+
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                if (dragAnchor < 0) return
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_MOVE -> {
+                        dragY = e.y
+                        updateDrag()
+                    }
+                    MotionEvent.ACTION_UP -> finishDrag(true)
+                    MotionEvent.ACTION_CANCEL -> finishDrag(false)
+                }
+            }
+
+            override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {}
         })
 
         playButton.setOnClickListener { svc.togglePlay() }
@@ -167,6 +214,45 @@ class SubtitleSheet(
         }
     }
 
+    private fun startDrag(position: Int, y: Float) {
+        dragAnchor = position
+        dragEnd = position
+        dragY = y
+        list.parent?.requestDisallowInterceptTouchEvent(true)
+        adapter.notifyItemChanged(position)
+        handler.post(autoScroll)
+    }
+
+    private fun updateDrag() {
+        val child = list.findChildViewUnder(list.width / 2f, dragY.coerceIn(0f, list.height - 1f)) ?: return
+        val pos = list.getChildAdapterPosition(child)
+        if (pos < 0 || pos == dragEnd) return
+        val lo = minOf(dragAnchor, dragEnd, pos)
+        val hi = maxOf(dragAnchor, dragEnd, pos)
+        dragEnd = pos
+        adapter.notifyItemRangeChanged(lo, hi - lo + 1)
+    }
+
+    private fun finishDrag(apply: Boolean) {
+        val a = dragAnchor
+        val b = dragEnd
+        dragAnchor = -1
+        dragEnd = -1
+        handler.removeCallbacks(autoScroll)
+        if (a < 0) return
+        val lo = minOf(a, b)
+        val hi = maxOf(a, b)
+        adapter.notifyItemRangeChanged(lo, hi - lo + 1)
+        if (!apply) return
+        val first = cues.getOrNull(lo) ?: return
+        val last = cues.getOrNull(hi) ?: return
+        svc.setA(first.startMs)
+        if (svc.setB(last.endMs.coerceAtLeast(first.startMs + 500L))) {
+            svc.resume()
+            Toast.makeText(context, if (lo == hi) "이 문장을 구간 반복으로 지정했습니다." else "문장 ${hi - lo + 1}개를 구간 반복으로 지정했습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun showMenu(anchor: View) {
         val items = mutableListOf(IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles))
         if (svc.subtitleUri != null) items += IconMenu.Item(2, "이 곡의 자막 제거", R.drawable.ls_ic_delete, destructive = true)
@@ -192,7 +278,8 @@ class SubtitleSheet(
 
         override fun onBindViewHolder(holder: CueHolder, position: Int) {
             val cue = cues[position]
-            val current = position == currentIndex
+            val selected = dragAnchor >= 0 && position in minOf(dragAnchor, dragEnd)..maxOf(dragAnchor, dragEnd)
+            val current = position == currentIndex || selected
             holder.time.text = formatTime(cue.startMs)
             holder.text.text = cue.text
             holder.text.setTextColor(context.getColor(if (current) R.color.ls_teal_700 else R.color.ls_text_secondary))
@@ -203,12 +290,8 @@ class SubtitleSheet(
                 cues.getOrNull(pos)?.let { svc.player.seekTo(it.startMs) }
             }
             holder.itemView.setOnLongClickListener {
-                val c = cues.getOrNull(holder.bindingAdapterPosition) ?: return@setOnLongClickListener true
-                svc.setA(c.startMs)
-                if (svc.setB(c.endMs.coerceAtLeast(c.startMs + 500L))) {
-                    svc.resume()
-                    Toast.makeText(context, "이 문장을 구간 반복으로 지정했습니다.", Toast.LENGTH_SHORT).show()
-                }
+                val pos = holder.bindingAdapterPosition
+                if (pos >= 0) startDrag(pos, holder.itemView.top + holder.itemView.height / 2f)
                 true
             }
         }
