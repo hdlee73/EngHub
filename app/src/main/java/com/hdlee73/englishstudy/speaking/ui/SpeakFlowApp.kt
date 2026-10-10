@@ -135,7 +135,7 @@ private fun TopBar(state: LearningUiState, compact: Boolean, onImport: () -> Uni
     // Same size and spacing as the banner of every other tab, whatever the screen height.
     Box(Modifier.padding(start = 16.dp, end = 16.dp, top = if (compact) 10.dp else 14.dp, bottom = if (compact) 4.dp else 8.dp)) {
         com.hdlee73.englishstudy.ui.Hero(
-            "🎤", "문장 말하기", "듣고 따라 말해요 · 자동 채점",
+            "🎤", "Speaking", "듣고 따라 말해요 · 자동 채점",
             trailing = {
                 BannerButton(R.drawable.ic_translation, "해석 보기", onTranslations)
                 Spacer(Modifier.width(8.dp))

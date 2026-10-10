@@ -42,9 +42,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,6 +63,18 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.hdlee73.englishstudy.update.UpdateChecker
+import kotlinx.coroutines.launch
 
 enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     DICTIONARY("Words", androidx.compose.material.icons.Icons.Outlined.MenuBook),
@@ -78,163 +87,122 @@ enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vect
     DOCVOICE("DocVoice", androidx.compose.material.icons.Icons.Outlined.GraphicEq)
 }
 
-/**
- * The tab bar: one slim row above the phone's own navigation bar that always shows every tab.
- * The selected tab grows and shows its name; the others shrink to just their icon, so even eight tabs fit on a narrow screen.
- */
+private val Muted = Color(0xFF7A8794)
+
+/** The menu groups, in the order the left menu lists them. */
+private val STUDY_TABS = listOf(AppTab.DICTIONARY, AppTab.FLASHCARDS, AppTab.QUIZ, AppTab.READING, AppTab.TRANSLATE)
+private val PRACTICE_TABS = listOf(AppTab.SPEAKING, AppTab.LISTENING, AppTab.DOCVOICE)
+
+/** The left menu (like the DailyHabit app): every tab, in two groups, with app info at the bottom. */
 @Composable
-private fun TabBar(tab: AppTab, onTab: (AppTab) -> Unit, onInfo: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().background(Color.White).windowInsetsPadding(WindowInsets.navigationBars).height(52.dp).padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+private fun AppDrawer(tab: AppTab, updateAvailable: Boolean, onTab: (AppTab) -> Unit, onInfo: () -> Unit) {
+    Column(
+        Modifier.fillMaxHeight().width(296.dp)
+            .clip(RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp))
+            .background(Color.White)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 14.dp)
     ) {
-        AppTab.values().forEach { item ->
-            val selected = item == tab
-            val weight by androidx.compose.animation.core.animateFloatAsState(if (selected) 2.6f else 1f, label = "tabWeight")
-            Column(
-                Modifier.weight(weight).fillMaxHeight().clip(RoundedCornerShape(14.dp))
-                    .background(if (selected) SoftBlue else Color.Transparent)
-                    .selectable(selected = selected, role = Role.Tab, onClick = { onTab(item) })
-                    .semantics { contentDescription = item.label },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
-            ) {
-                androidx.compose.material3.Icon(item.icon, null, Modifier.size(if (selected) 20.dp else 22.dp), tint = if (selected) Blue else Color(0xFF7A8794))
-                if (selected) {
-                    Text(item.label, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1, softWrap = false, color = Blue, fontWeight = FontWeight.Bold)
-                }
-            }
+        Text("EngHub", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(start = 10.dp, top = 22.dp, bottom = 14.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            STUDY_TABS.forEach { DrawerItem(it.label, it.icon, it == tab, null) { onTab(it) } }
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(horizontal = 10.dp, vertical = 12.dp), color = Color(0xFFE4E7EC))
+            Text("연습", fontSize = 13.sp, color = Muted, modifier = Modifier.padding(start = 12.dp, bottom = 6.dp))
+            PRACTICE_TABS.forEach { DrawerItem(it.label, it.icon, it == tab, null) { onTab(it) } }
+            androidx.compose.material3.HorizontalDivider(Modifier.padding(horizontal = 10.dp, vertical = 12.dp), color = Color(0xFFE4E7EC))
+            DrawerItem("앱 정보", androidx.compose.material.icons.Icons.Outlined.Info, false, if (updateAvailable) "NEW" else null, onInfo)
+            Spacer(Modifier.height(12.dp))
         }
-        InfoButton(onInfo)
     }
 }
 
-/** The small "i" that opens the app info (name, version, developer, releases page). */
 @Composable
-private fun InfoButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DrawerItem(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, badge: String?, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (selected) SoftBlue else Color.Transparent)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.Icon(icon, null, Modifier.size(22.dp), tint = if (selected) Blue else Ink)
+        Text(label, fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) Blue else Ink, modifier = Modifier.weight(1f).padding(start = 16.dp))
+        if (badge != null) Text(badge, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Blue)
+    }
+}
+
+/** The slim bar above every screen: the menu button, the current tab's icon and name, and the app info button. */
+@Composable
+private fun TopBar(tab: AppTab, onMenu: () -> Unit, onInfo: () -> Unit) {
+    Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).height(48.dp).padding(horizontal = 4.dp)) {
+        BarButton(androidx.compose.material.icons.Icons.Outlined.Menu, "메뉴 열기", onMenu, Modifier.align(Alignment.CenterStart))
+        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(tab.icon, null, Modifier.size(20.dp), tint = Blue)
+            Text(tab.label, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.padding(start = 8.dp))
+        }
+        BarButton(androidx.compose.material.icons.Icons.Outlined.Info, "앱 정보", onInfo, Modifier.align(Alignment.CenterEnd))
+    }
+}
+
+@Composable
+private fun BarButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, modifier: Modifier) {
     Box(
-        modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).semantics { contentDescription = "앱 정보" },
+        modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).semantics { contentDescription = description },
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Info, null, Modifier.size(22.dp), tint = Color(0xFF7A8794))
+        androidx.compose.material3.Icon(icon, null, Modifier.size(24.dp), tint = Ink)
     }
 }
 
-private const val HINT_PREFS = "ui"
-private const val HINT_KEY = "menu_hint_seen"
-
 /**
- * The tabs of the app; the screen of the selected tab is drawn by [content].
- * The tab bar folds itself away a few seconds after it was last used; swipe up on the strip at the bottom (or tap the "^") to bring it back.
- * It never covers the phone's own navigation bar.
+ * The tabs of the app, reached from the left menu (the ☰ button, or a swipe from the left edge); the screen of the selected tab is drawn by [content].
+ * The menu is open when the app starts (unless another app sent something to a particular tab), and a popup at start asks to update while a newer release is not installed.
  */
 @Composable
 fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, onOpenUrl: (String) -> Unit, content: @Composable (AppTab) -> Unit) {
     val context = LocalContext.current
-    var barVisible by remember { mutableStateOf(true) }
-    var showHint by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val drawer = rememberDrawerState(DrawerValue.Closed)
     var aboutOpen by remember { mutableStateOf(false) }
-    // The bar folds itself away a few seconds after it was last used; any tap on it starts the countdown again.
-    var touches by remember { mutableStateOf(0) }
-    LaunchedEffect(barVisible, touches) {
-        if (barVisible) {
-            kotlinx.coroutines.delay(4000)
-            barVisible = false
-            // The first time, a picture shows how to bring the bar back.
-            if (!context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).getBoolean(HINT_KEY, false)) showHint = true
-        }
+    var newer by remember { mutableStateOf(UpdateChecker.available(context)) }
+    var updatePrompt by remember { mutableStateOf(false) }
+    // Every time the app is opened: look for a newer release, and keep asking until it is installed.
+    LaunchedEffect(Unit) {
+        newer = UpdateChecker.check(context)
+        if (newer != null) updatePrompt = true
     }
+    BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
     EnglishStudyTheme {
-        Scaffold(
-            containerColor = Canvas,
-            bottomBar = {
-                if (barVisible) {
-                    TabBar(tab, { next -> touches++; onTab(next) }, { touches++; aboutOpen = true })
-                } else {
-                    // Keeps the screen above the phone's navigation bar while the tab bar is away.
-                    Spacer(Modifier.fillMaxWidth().windowInsetsBottomHeight(WindowInsets.navigationBars))
-                }
+        ModalNavigationDrawer(
+            drawerState = drawer,
+            scrimColor = Color.Black.copy(alpha = 0.32f),
+            drawerContent = {
+                AppDrawer(
+                    tab, newer != null,
+                    onTab = { next -> scope.launch { drawer.close() }; onTab(next) },
+                    onInfo = { scope.launch { drawer.close() }; aboutOpen = true }
+                )
             }
-        ) { inner: PaddingValues ->
-            Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding()) {
-                Box(Modifier.weight(1f).fillMaxWidth()) { content(tab) }
-                if (!barVisible) {
-                    // A strip across the whole width, above the phone's own navigation bar: swipe up on it, or tap the "^", to show the tab bar.
-                    Box(
-                        Modifier.fillMaxWidth().height(30.dp)
-                            .pointerInput(Unit) {
-                                var travelled = 0f
-                                detectVerticalDragGestures(
-                                    onDragStart = { travelled = 0f },
-                                    onDragEnd = { travelled = 0f },
-                                    onDragCancel = { travelled = 0f },
-                                    onVerticalDrag = { change, amount ->
-                                        change.consume()
-                                        travelled += amount
-                                        if (travelled < -24f) { barVisible = true; travelled = 0f }
-                                    }
-                                )
-                            }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { barVisible = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        InfoButton({ aboutOpen = true }, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
-                        Box(
-                            Modifier.size(width = 52.dp, height = 22.dp).clip(RoundedCornerShape(11.dp)).background(Color(0xE6FFFFFF)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            DrawCanvas(Modifier.size(width = 20.dp, height = 10.dp)) {
-                                val stroke = 2.6.dp.toPx()
-                                drawLine(Blue, Offset(stroke / 2, size.height - stroke / 2), Offset(size.width / 2, stroke / 2), stroke, StrokeCap.Round)
-                                drawLine(Blue, Offset(size.width / 2, stroke / 2), Offset(size.width - stroke / 2, size.height - stroke / 2), stroke, StrokeCap.Round)
-                            }
-                        }
-                    }
+        ) {
+            Scaffold(containerColor = Canvas, topBar = {
+                TopBar(tab, onMenu = { scope.launch { drawer.open() } }, onInfo = { aboutOpen = true })
+            }) { inner: PaddingValues ->
+                Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) { content(tab) }
                 }
             }
         }
         if (aboutOpen) AboutDialog(onOpenUrl = onOpenUrl, onDismiss = { aboutOpen = false })
-        if (showHint) {
-            SwipeHint(onDismiss = {
-                showHint = false
-                context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE).edit().putBoolean(HINT_KEY, true).apply()
-            })
-        }
-    }
-}
-
-/** A picture-only guide, shown once: a finger swiping up from the bottom of a phone raises the tab bar. Tap anywhere to close. */
-@Composable
-private fun SwipeHint(onDismiss: () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "hint")
-    val progress by transition.animateFloat(
-        initialValue = 0f, targetValue = 1f, label = "swipe",
-        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart)
-    )
-    Box(
-        Modifier.fillMaxSize().background(Color(0xB3101828))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
-        DrawCanvas(Modifier.size(width = 190.dp, height = 320.dp)) {
-            val w = size.width
-            val h = size.height
-            val corner = CornerRadius(w * 0.14f)
-            // The phone and its screen.
-            drawRoundRect(Color.White, Offset.Zero, Size(w, h), corner, Stroke(width = 5.dp.toPx()))
-            // The tab bar rising from the bottom edge as the finger moves up.
-            val barHeight = h * 0.13f * progress
-            drawRoundRect(Color.White.copy(alpha = 0.9f), Offset(w * 0.08f, h - h * 0.05f - barHeight), Size(w * 0.84f, barHeight), CornerRadius(8.dp.toPx()))
-            // The finger and the arrow of its path.
-            val startY = h * 0.9f
-            val endY = h * 0.45f
-            val y = startY + (endY - startY) * progress
-            val cx = w / 2
-            val arrow = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = 0.55f), Offset(cx, startY), Offset(cx, endY + 14.dp.toPx()), arrow.width, StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = 0.55f), Offset(cx, endY), Offset(cx - 12.dp.toPx(), endY + 14.dp.toPx()), arrow.width, StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = 0.55f), Offset(cx, endY), Offset(cx + 12.dp.toPx(), endY + 14.dp.toPx()), arrow.width, StrokeCap.Round)
-            drawCircle(Color(0xFF22A394), 17.dp.toPx(), Offset(cx, y))
-            drawCircle(Color.White, 17.dp.toPx(), Offset(cx, y), style = Stroke(width = 3.dp.toPx()))
+        val release = newer
+        if (updatePrompt && release != null && !aboutOpen) {
+            AlertDialog(
+                onDismissRequest = { updatePrompt = false },
+                title = { Text("새 버전이 있어요", fontWeight = FontWeight.Bold) },
+                text = { Text("EngHub ${release.version.removePrefix("v")}이(가) 나왔어요 (지금 ${UpdateChecker.installedVersion(context)}).\n업데이트하기 전까지 앱을 열 때마다 알려 드려요.") },
+                confirmButton = { TextButton(onClick = { updatePrompt = false; onOpenUrl(release.url) }) { Text("업데이트 받기") } },
+                dismissButton = { TextButton(onClick = { updatePrompt = false }) { Text("나중에") } }
+            )
         }
     }
 }
