@@ -113,6 +113,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (playWhenReady) focus.request() else focus.abandon()
             if (gapPending && (playWhenReady ||
                     reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS ||
                     reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY)
@@ -182,7 +183,9 @@ class PlaybackService : MediaSessionService() {
         player = ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
             .build().apply {
-                setAudioAttributes(AudioAttributes.DEFAULT, true)
+                // Audio focus is handled by [focus] below instead of ExoPlayer: ExoPlayer pauses for every other
+                // sound that asks for focus (and a "permanent" loss never resumes), which stopped the lesson.
+                setAudioAttributes(AudioAttributes.DEFAULT, false)
                 // Pause when headphones are unplugged / Bluetooth disconnects instead of
                 // suddenly playing through the speaker.
                 setHandleAudioBecomingNoisy(true)
@@ -255,8 +258,62 @@ class PlaybackService : MediaSessionService() {
         super.onUpdateNotification(session, startInForegroundRequired || gapPending)
     }
 
+    /**
+     * Keeps playing when other sounds (notifications, another app, navigation voice) take audio focus; only a phone or
+     * voice call pauses the lesson, and it resumes when the call ends.
+     */
+    private val focus = object {
+        private val audioManager by lazy { getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
+        private var request: android.media.AudioFocusRequest? = null
+        private var pausedForCall = false
+
+        private fun inCall() = audioManager.mode.let {
+            it == android.media.AudioManager.MODE_IN_CALL || it == android.media.AudioManager.MODE_RINGTONE ||
+                it == android.media.AudioManager.MODE_IN_COMMUNICATION
+        }
+
+        private val listener = android.media.AudioManager.OnAudioFocusChangeListener { change ->
+            handler.post {
+                if (!::player.isInitialized) return@post
+                when (change) {
+                    android.media.AudioManager.AUDIOFOCUS_GAIN -> if (pausedForCall) {
+                        pausedForCall = false
+                        player.play()
+                    }
+                    else -> if (player.playWhenReady && inCall()) {
+                        pausedForCall = true
+                        player.pause()
+                    }
+                }
+            }
+        }
+
+        fun request() {
+            if (request != null) return
+            val attrs = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+            val built = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
+                .setWillPauseWhenDucked(false)
+                .setOnAudioFocusChangeListener(listener, handler)
+                .build()
+            request = built
+            runCatching { audioManager.requestAudioFocus(built) }
+        }
+
+        fun abandon() {
+            if (pausedForCall && player.playWhenReady.not() && inCall()) return
+            request?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
+            request = null
+            pausedForCall = false
+        }
+    }
+
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        focus.abandon()
         if (::player.isInitialized) {
             savePosition()
             player.removeListener(playerListener)

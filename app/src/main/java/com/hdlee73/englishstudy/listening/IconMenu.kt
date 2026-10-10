@@ -26,7 +26,7 @@ object IconMenu {
         val dividerBefore: Boolean = false
     )
 
-    fun show(context: Context, anchor: View, items: List<Item>, alignEnd: Boolean = false, onPick: (Int) -> Unit) {
+    fun show(context: Context, anchor: View, items: List<Item>, alignEnd: Boolean = false, onDismiss: (() -> Unit)? = null, onPick: (Int) -> Unit) {
         val density = context.resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
         val red = Color.parseColor("#C7452F")
@@ -78,6 +78,30 @@ object IconMenu {
             })
             column.addView(row)
         }
-        popup.showAsDropDown(anchor, if (alignEnd) 0 else dp(12), -dp(4), if (alignEnd) Gravity.END else Gravity.START)
+        if (onDismiss != null) popup.setOnDismissListener { onDismiss() }
+        // Place the menu by hand: below the anchor when it fits, otherwise above it, and always inside the screen
+        // (a menu opened from a row near the bottom used to be pushed off the screen and was not visible).
+        column.measure(
+            View.MeasureSpec.makeMeasureSpec(context.resources.displayMetrics.widthPixels, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val frame = android.graphics.Rect()
+        anchor.getWindowVisibleDisplayFrame(frame)
+        val loc = IntArray(2)
+        anchor.getLocationOnScreen(loc)
+        val maxHeight = (frame.height() - dp(16)).coerceAtLeast(dp(120))
+        val popupHeight = column.measuredHeight.coerceAtMost(maxHeight)
+        val popupWidth = column.measuredWidth
+        popup.height = popupHeight
+        val below = loc[1] + anchor.height - dp(4)
+        val above = loc[1] - popupHeight + dp(4)
+        val y = when {
+            below + popupHeight <= frame.bottom - dp(8) -> below
+            above >= frame.top + dp(8) -> above
+            else -> (frame.bottom - dp(8) - popupHeight).coerceAtLeast(frame.top + dp(8))
+        }
+        val x = (if (alignEnd) loc[0] + anchor.width - popupWidth else loc[0] + dp(12))
+            .coerceIn(frame.left + dp(8), (frame.right - popupWidth - dp(8)).coerceAtLeast(frame.left + dp(8)))
+        popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
     }
 }
