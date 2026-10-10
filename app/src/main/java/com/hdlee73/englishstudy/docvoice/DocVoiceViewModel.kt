@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.hdlee73.englishstudy.docvoice.core.Exporter
+import com.hdlee73.englishstudy.docvoice.core.SaveFolder
 import com.hdlee73.englishstudy.docvoice.core.Storage
 import com.hdlee73.englishstudy.docvoice.core.SttOptions
 import com.hdlee73.englishstudy.docvoice.core.TtsVoices
@@ -36,6 +37,11 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
     var enVoiceUk by mutableStateOf(prefs.getString("enVoiceUk", TtsVoices.EN_UK.values.first())!!)
     var speed by mutableFloatStateOf(prefs.getFloat("speed", 1.0f))
 
+    /** 저장할 파일 이름(확장자 제외). 비우면 문서/영상 이름으로 자동. */
+    var ttsName by mutableStateOf("")
+    var ytName by mutableStateOf("")
+    var sttName by mutableStateOf("")
+
     // 유튜브 → MP3
     var ytUrl by mutableStateOf("")
 
@@ -54,8 +60,8 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
 
     val enVoice get() = if (accent == "uk") enVoiceUk else enVoiceUs
 
-    fun pickDoc(uri: Uri) { ttsFile = Storage.describe(app, uri) }
-    fun pickAudio(uri: Uri) { sttFile = Storage.describe(app, uri) }
+    fun pickDoc(uri: Uri) { ttsFile = Storage.describe(app, uri); ttsName = "" }
+    fun pickAudio(uri: Uri) { sttFile = Storage.describe(app, uri); sttName = "" }
 
     fun save() {
         prefs.edit()
@@ -84,7 +90,7 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
 
     fun startTts() {
         val f = ttsFile ?: return
-        launch(JobRequest.Tts(f, koVoice, enVoice, speed.toDouble()))
+        launch(JobRequest.Tts(f, koVoice, enVoice, speed.toDouble(), Storage.cleanName(ttsName, "mp3")))
     }
 
     fun startYt() {
@@ -92,7 +98,7 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
             android.widget.Toast.makeText(app, "유튜브 주소를 넣어 주세요.", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
-        launch(JobRequest.Yt(url))
+        launch(JobRequest.Yt(url, Storage.cleanName(ytName, "mp3")))
     }
 
     fun startStt() {
@@ -100,7 +106,7 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
         launch(
             JobRequest.Stt(
                 f, format, SttOptions(language, size, diarize), gap.toDouble(),
-                includeTime, showSpeaker && diarize,
+                includeTime, showSpeaker && diarize, Storage.cleanName(sttName, format),
             )
         )
     }
@@ -167,6 +173,14 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
         val title = RecorderHub.state.value.title.ifBlank { "녹음" }
         prefs.edit().putString("recFormat", recFormat).putString("recLang", recLang).apply()
         launch(JobRequest.RecExport(title, recFormat, recRefine, if (recLang == "mix") "" else recLang, size, recDiarize, gap.toDouble(), includeTime, showSpeaker && recDiarize))
+    }
+
+    /** The folder files are saved to (kept in step with the folder picker). */
+    val saveFolder = kotlinx.coroutines.flow.MutableStateFlow(SaveFolder.label(app))
+
+    fun setSaveFolder(tree: Uri?) {
+        SaveFolder.set(app, tree)
+        saveFolder.value = SaveFolder.label(app)
     }
 
     val formats get() = Exporter.FORMATS

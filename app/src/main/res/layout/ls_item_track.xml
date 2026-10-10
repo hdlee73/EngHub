@@ -34,6 +34,15 @@
         android:textSize="14sp" />
 
     <ImageButton
+        android:id="@+id/trackSubtitle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="자막(SRT) 만들기"
+        android:src="@drawable/ls_ic_subtitles"
+        app:tint="@color/ls_text_secondary" />
+
+    <ImageButton
         android:id="@+id/trackMore"
         android:layout_width="40dp"
         android:layout_height="40dp"

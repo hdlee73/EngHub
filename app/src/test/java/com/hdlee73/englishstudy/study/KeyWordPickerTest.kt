@@ -49,4 +49,9 @@ class KeyWordPickerTest {
         // "give" and "up" are separated by more than a pronoun, so only a single word is chosen.
         assertEquals("difficult", KeyWordPicker.pick("Never give a very difficult task up."))
     }
+
+    @Test fun idiomsAndPatternsAreChosenAndTheLongestWins() {
+        assertEquals("in the wake of", KeyWordPicker.pick("Prices rose sharply in the wake of the storm."))
+        assertEquals("a wide range of", KeyWordPicker.pick("The shop sells a wide range of cheap goods."))
+    }
 }

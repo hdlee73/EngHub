@@ -2,8 +2,10 @@ package com.hdlee73.englishstudy.docvoice.core
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 
@@ -43,6 +45,36 @@ object Storage {
 
     /** Same, but the caller streams the content into the file (for results too big to hold in memory). */
     fun saveToDownloads(context: Context, displayName: String, write: (java.io.OutputStream) -> Unit): Uri {
+        val tree = SaveFolder.get(context)
+        if (tree != null) {
+            try {
+                return saveToTree(context, tree, displayName, write)
+            } catch (e: SecurityException) {
+                // The folder is gone or its permission was revoked: fall back to Downloads/DocVoice.
+                SaveFolder.set(context, null)
+            } catch (e: java.io.FileNotFoundException) {
+                SaveFolder.set(context, null)
+            }
+        }
+        return saveToMediaStore(context, displayName, write)
+    }
+
+    private fun saveToTree(context: Context, tree: Uri, displayName: String, write: (java.io.OutputStream) -> Unit): Uri {
+        val resolver = context.contentResolver
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        // A generic type keeps the provider from appending its own extension; it numbers a name that already exists.
+        val uri = DocumentsContract.createDocument(resolver, parent, "application/octet-stream", displayName)
+            ?: throw java.io.IOException("선택한 폴더에 저장할 수 없습니다.")
+        try {
+            resolver.openOutputStream(uri)?.use(write) ?: throw java.io.IOException("저장할 수 없습니다.")
+        } catch (e: Exception) {
+            runCatching { DocumentsContract.deleteDocument(resolver, uri) }
+            throw e
+        }
+        return uri
+    }
+
+    private fun saveToMediaStore(context: Context, displayName: String, write: (java.io.OutputStream) -> Unit): Uri {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
@@ -64,5 +96,51 @@ object Storage {
         return uri
     }
 
+    /** A file name the user typed, made safe to save: no path characters, no extension the app adds itself. */
+    fun cleanName(typed: String, ext: String): String {
+        var base = typed.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), " ").replace(Regex("\\s+"), " ").trim().trim('.')
+        if (base.endsWith(".$ext", ignoreCase = true)) base = base.dropLast(ext.length + 1).trim()
+        return base.take(100)
+    }
+
     fun baseName(name: String) = name.substringBeforeLast('.', name).ifBlank { "DocVoice" }
+}
+
+/** Where files the app creates (subtitles, MP3, documents) are saved: a folder the user picked, or Downloads/DocVoice. */
+object SaveFolder {
+    private const val PREFS = "save_folder"
+
+    fun get(context: Context): Uri? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("tree", null)?.let(Uri::parse)
+
+    /** Remembers [tree] (a folder picked with the system folder picker); null goes back to Downloads/DocVoice. */
+    fun set(context: Context, tree: Uri?) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val old = get(context)
+        if (old != null && old != tree) runCatching {
+            context.contentResolver.releasePersistableUriPermission(old, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+        if (tree != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            prefs.edit().putString("tree", tree.toString()).apply()
+        } else prefs.edit().remove("tree").apply()
+        version.value++
+    }
+
+    /** Changes whenever the folder changes, so screens showing it refresh. */
+    val version = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    fun label(context: Context): String {
+        val tree = get(context) ?: return DEFAULT_LABEL
+        return runCatching {
+            val doc = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+            context.contentResolver.query(doc, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: DEFAULT_LABEL
+    }
+
+    const val DEFAULT_LABEL = "다운로드/DocVoice (기본)"
 }
