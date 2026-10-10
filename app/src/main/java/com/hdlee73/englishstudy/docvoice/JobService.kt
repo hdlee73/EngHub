@@ -58,7 +58,7 @@ class JobService : Service() {
         }
         JobHub.pending = null
         ensureChannel()
-        val title = when (req) { is JobRequest.Tts -> "문서 → 음성"; is JobRequest.Stt -> "음성 → 문서"; is JobRequest.RecExport -> "녹음 → 문서"; is JobRequest.ModelDownload -> "모델 내려받기"; is JobRequest.Yt -> "유튜브 → MP3" }
+        val title = when (req) { is JobRequest.Tts -> "문서 → 음성"; is JobRequest.Stt -> "음성 → 문서"; is JobRequest.RecExport -> "녹음 → 문서"; is JobRequest.ModelDownload -> "모델 내려받기"; is JobRequest.Yt -> "유튜브 → MP3"; is JobRequest.SttBatch -> "재생목록 → 자막" }
         startForeground(NOTIF_ID, buildNotification(title, "준비 중", null), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DocVoice:job").apply { acquire(3 * 60 * 60 * 1000L) }
@@ -72,6 +72,7 @@ class JobService : Service() {
                     is JobRequest.RecExport -> runRecExport(req, title)
                     is JobRequest.ModelDownload -> runModelDownload(req, title)
                     is JobRequest.Yt -> runYt(req, title)
+                    is JobRequest.SttBatch -> runSttBatch(req, title)
                 }
             } catch (e: CancellationException) {
                 JobHub.state.value = JobState.Failed("작업을 취소했습니다.")
@@ -176,6 +177,30 @@ class JobService : Service() {
         if (req.format == "srt") runCatching {
             com.hdlee73.englishstudy.listening.SubtitleLinks.remember(this, req.audio.uri.toString(), req.audio.name, bytes)
         }
+    }
+
+    /** Makes an SRT for each track in turn; every SRT is linked to its track so the Listening player shows it. */
+    private suspend fun runSttBatch(req: JobRequest.SttBatch, title: String) {
+        var made = 0
+        var failed = 0
+        val files = mutableListOf<OutFile>()
+        req.audios.forEachIndexed { i, audio ->
+            val step = "${i + 1}/${req.audios.size} · ${audio.name}"
+            try {
+                runStt(JobRequest.Stt(audio, "srt", req.opts, 1.5, true, false), "$title ($step)")
+                (JobHub.state.value as? JobState.Done)?.let { files += it.files }
+                made++
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                failed++
+            }
+        }
+        val message = buildString {
+            append("자막 ${made}개를 만들었어요")
+            if (failed > 0) append(" (${failed}개는 실패하거나 말이 인식되지 않았어요)")
+        }
+        if (made == 0) JobHub.state.value = JobState.Failed(message) else JobHub.state.value = JobState.Done(message, files, null)
     }
 
     private suspend fun runModelDownload(req: JobRequest.ModelDownload, title: String) {
