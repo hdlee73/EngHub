@@ -55,6 +55,17 @@ class SubtitleSheet(
     private var dragAnchor = -1
     private var dragEnd = -1
     private var dragY = 0f
+    private var dragX = 0f
+    private var lastDownRawX = 0f
+    private var lastDownRawY = 0f
+    /** True while a finger drags a text selection (select mode), false for the sentence-range drag. */
+    private var textDrag = false
+    private var dragAnchorOffset = 0
+    private var dragEndOffset = 0
+    /** The text picked in select mode, which may run over several sentences: (cue index, character offset) of both ends. */
+    private var sel: TextSel? = null
+
+    private class TextSel(val loPos: Int, val loOff: Int, val hiPos: Int, val hiOff: Int)
     private val autoScroll = object : Runnable {
         override fun run() {
             if (dragAnchor < 0) return
@@ -91,6 +102,10 @@ class SubtitleSheet(
 
         list.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
             override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                    lastDownRawX = e.rawX
+                    lastDownRawY = e.rawY
+                }
                 if (dragAnchor < 0) return false
                 if (e.actionMasked == MotionEvent.ACTION_MOVE) {
                     rv.parent?.requestDisallowInterceptTouchEvent(true)
@@ -105,6 +120,7 @@ class SubtitleSheet(
                 when (e.actionMasked) {
                     MotionEvent.ACTION_MOVE -> {
                         dragY = e.y
+                        dragX = e.x
                         updateDrag()
                     }
                     MotionEvent.ACTION_UP -> finishDrag(true)
@@ -230,6 +246,10 @@ class SubtitleSheet(
     }
 
     private fun updateDrag() {
+        if (textDrag) {
+            updateTextDrag()
+            return
+        }
         val child = list.findChildViewUnder(list.width / 2f, dragY.coerceIn(0f, list.height - 1f)) ?: return
         val pos = list.getChildAdapterPosition(child)
         if (pos < 0 || pos == dragEnd) return
@@ -239,7 +259,134 @@ class SubtitleSheet(
         adapter.notifyItemRangeChanged(lo, hi - lo + 1)
     }
 
+    /** Character offset in cue row [pos] under the screen point ([rawX], [rawY]); rows scrolled away give the nearest end. */
+    private fun offsetAt(pos: Int, rawX: Float, rawY: Float): Int {
+        val holder = list.findViewHolderForAdapterPosition(pos) as? CueHolder ?: return -1
+        val loc = IntArray(2)
+        holder.text.getLocationOnScreen(loc)
+        return holder.text.getOffsetForPosition(rawX - loc[0], rawY - loc[1])
+    }
+
+    private fun startTextDrag(position: Int) {
+        val offset = offsetAt(position, lastDownRawX, lastDownRawY).coerceAtLeast(0)
+        textDrag = true
+        sel = null
+        dragAnchor = position
+        dragEnd = position
+        dragAnchorOffset = offset
+        dragEndOffset = offset
+        dragX = list.width / 2f
+        dragY = lastDownRawY - IntArray(2).also { list.getLocationOnScreen(it) }[1]
+        list.parent?.requestDisallowInterceptTouchEvent(true)
+        publishTextSel()
+        handler.post(autoScroll)
+    }
+
+    private fun updateTextDrag() {
+        val child = list.findChildViewUnder(list.width / 2f, dragY.coerceIn(0f, list.height - 1f)) ?: return
+        val pos = list.getChildAdapterPosition(child)
+        if (pos < 0) return
+        val loc = IntArray(2)
+        list.getLocationOnScreen(loc)
+        val offset = offsetAt(pos, loc[0] + dragX, loc[1] + dragY)
+        if (offset < 0 || (pos == dragEnd && offset == dragEndOffset)) return
+        dragEnd = pos
+        dragEndOffset = offset
+        publishTextSel()
+    }
+
+    /** Orders the two ends, widens them to whole words and redraws the rows that changed. */
+    private fun publishTextSel() {
+        val forward = dragAnchor < dragEnd || (dragAnchor == dragEnd && dragAnchorOffset <= dragEndOffset)
+        val loPos = if (forward) dragAnchor else dragEnd
+        val loOffRaw = if (forward) dragAnchorOffset else dragEndOffset
+        val hiPos = if (forward) dragEnd else dragAnchor
+        val hiOffRaw = if (forward) dragEndOffset else dragAnchorOffset
+        val loText = cues.getOrNull(loPos)?.text ?: return
+        val hiText = cues.getOrNull(hiPos)?.text ?: return
+        var lo = loOffRaw.coerceIn(0, loText.length)
+        while (lo > 0 && !loText[lo - 1].isWhitespace()) lo--
+        var hi = hiOffRaw.coerceIn(0, hiText.length)
+        while (hi < hiText.length && !hiText[hi].isWhitespace()) hi++
+        val old = sel
+        val fresh = TextSel(loPos, lo, hiPos, hi)
+        sel = fresh
+        val from = minOf(old?.loPos ?: loPos, loPos)
+        val to = maxOf(old?.hiPos ?: hiPos, hiPos)
+        adapter.notifyItemRangeChanged(from, to - from + 1)
+    }
+
+    private fun clearTextSel() {
+        val old = sel ?: return
+        sel = null
+        adapter.notifyItemRangeChanged(old.loPos, old.hiPos - old.loPos + 1)
+    }
+
+    /** The picked text, sentence parts joined by a space. */
+    private fun selectedText(s: TextSel): String = (s.loPos..s.hiPos).mapNotNull { pos ->
+        val text = cues.getOrNull(pos)?.text ?: return@mapNotNull null
+        text.substring(if (pos == s.loPos) s.loOff else 0, if (pos == s.hiPos) s.hiOff.coerceAtMost(text.length) else text.length)
+    }.joinToString(" ").replace(Regex("\\s+"), " ").trim()
+
+    private fun finishTextDrag(apply: Boolean) {
+        textDrag = false
+        dragAnchor = -1
+        dragEnd = -1
+        handler.removeCallbacks(autoScroll)
+        val picked = sel
+        if (!apply || picked == null || selectedText(picked).isEmpty()) {
+            clearTextSel()
+            return
+        }
+        showSelectionMenu(picked)
+    }
+
+    private fun showSelectionMenu(picked: TextSel) {
+        val text = selectedText(picked)
+        val anchor = list.findViewHolderForAdapterPosition(picked.hiPos)?.itemView ?: list
+        IconMenu.show(
+            context, anchor, listOf(
+                IconMenu.Item(MENU_PLAY, "이 부분 재생", R.drawable.ls_ic_play),
+                IconMenu.Item(MENU_LOOKUP, "단어장·사전", R.drawable.ls_ic_edit),
+                IconMenu.Item(MENU_TRANSLATE, "번역", R.drawable.ls_ic_subtitles),
+                IconMenu.Item(MENU_COPY, "복사", R.drawable.ls_ic_list)
+            ), alignEnd = false, onDismiss = { clearTextSel() }
+        ) { id ->
+            when (id) {
+                MENU_PLAY -> playSelection(picked)
+                MENU_LOOKUP -> onLookup(text)
+                MENU_TRANSLATE -> onTranslate(text)
+                MENU_COPY -> {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("subtitle", text))
+                    Toast.makeText(context, "복사했어요.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** Loops from the start of the first picked word to the end of the last one, over any number of sentences. */
+    private fun playSelection(s: TextSel) {
+        val first = cues.getOrNull(s.loPos) ?: return
+        val last = cues.getOrNull(s.hiPos) ?: return
+        fun timeAt(cue: Cue, offset: Int): Long =
+            cue.startMs + (cue.endMs - cue.startMs).coerceAtLeast(1L) * offset / cue.text.length.coerceAtLeast(1)
+        val from = timeAt(first, s.loOff)
+        val to = if (s.hiOff >= last.text.length) last.endMs else timeAt(last, s.hiOff)
+        val a = (from - 350L).coerceAtLeast(maxOf(0L, first.startMs - 300L))
+        val b = maxOf(to + 450L, a + 800L)
+        svc.setA(a)
+        if (svc.setB(b)) {
+            svc.resume()
+            Toast.makeText(context, "고른 부분을 반복 재생합니다. (시간은 문장 안의 위치로 추정)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun finishDrag(apply: Boolean) {
+        if (textDrag) {
+            finishTextDrag(apply)
+            return
+        }
         val a = dragAnchor
         val b = dragEnd
         dragAnchor = -1
@@ -280,61 +427,13 @@ class SubtitleSheet(
         }
     }
 
-    /**
-     * The menu shown over selected subtitle text: play just that part, look it up, translate it. (Copy stays in the system menu.)
-     * Subtitles only carry times for whole sentences, so the part's time is estimated from where it sits in the sentence.
-     */
-    private fun selectionCallback(holder: CueHolder) = object : android.view.ActionMode.Callback {
-        override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
-            menu.add(0, MENU_PLAY, 0, "이 부분 재생")
-            menu.add(0, MENU_LOOKUP, 1, "단어장·사전")
-            menu.add(0, MENU_TRANSLATE, 2, "번역")
-            return true
-        }
-
-        override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) = false
-
-        override fun onActionItemClicked(mode: android.view.ActionMode, item: android.view.MenuItem): Boolean {
-            val field = holder.text
-            val start = minOf(field.selectionStart, field.selectionEnd).coerceAtLeast(0)
-            val end = maxOf(field.selectionStart, field.selectionEnd).coerceAtLeast(0)
-            val whole = field.text.toString()
-            if (start >= end || end > whole.length) return false
-            val picked = whole.substring(start, end).trim()
-            when (item.itemId) {
-                MENU_PLAY -> cues.getOrNull(holder.bindingAdapterPosition)?.let { playPart(it, start, end) }
-                MENU_LOOKUP -> if (picked.isNotEmpty()) onLookup(picked)
-                MENU_TRANSLATE -> if (picked.isNotEmpty()) onTranslate(picked)
-                else -> return false
-            }
-            mode.finish()
-            return true
-        }
-
-        override fun onDestroyActionMode(mode: android.view.ActionMode) {}
-    }
-
-    /** Loops the selected characters of [cue] (a little early and late so the words are not cut off). */
-    private fun playPart(cue: Cue, start: Int, end: Int) {
-        val length = cue.text.length.coerceAtLeast(1)
-        val duration = (cue.endMs - cue.startMs).coerceAtLeast(1L)
-        val from = cue.startMs + duration * start / length
-        val to = cue.startMs + duration * end / length
-        val a = (from - 350L).coerceAtLeast(maxOf(0L, cue.startMs - 300L))
-        val b = maxOf(to + 450L, a + 800L)
-        svc.setA(a)
-        if (svc.setB(b)) {
-            svc.resume()
-            Toast.makeText(context, "고른 부분을 반복 재생합니다. (시간은 문장 안의 위치로 추정)", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private companion object {
         const val MENU_PLAY = 1
         const val MENU_LOOKUP = 2
         const val MENU_TRANSLATE = 3
+        const val MENU_COPY = 4
         const val NORMAL_HINT = "문장을 누르면 그 위치로 이동 · 길게 누르면 그 문장을 구간 반복 · 길게 누른 채 끌면 여러 문장을 구간 반복"
-        const val SELECT_HINT = "글자 선택 모드: 자막 글자를 길게 눌러 단어나 구절을 고른 뒤 ‘이 부분 재생 · 단어장·사전 · 번역’을 고르세요. (메뉴 ⋮ 에서 끌 수 있어요)"
+        const val SELECT_HINT = "글자 선택 모드: 자막 글자를 길게 누른 채 끌면 다른 문장(시간대)까지 이어서 고를 수 있어요. 손을 떼면 ‘이 부분 재생 · 단어장·사전 · 번역 · 복사’ 메뉴가 나와요. (메뉴 ⋮ 에서 끌 수 있어요)"
     }
 
     private inner class CueHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -355,16 +454,24 @@ class SubtitleSheet(
             holder.text.setTextColor(context.getColor(if (current) R.color.ls_teal_700 else R.color.ls_text_secondary))
             holder.text.setTypeface(null, if (current) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
             holder.itemView.setBackgroundResource(if (current) R.drawable.ls_bg_row_current else 0)
-            holder.text.setTextIsSelectable(selectMode)
+            holder.text.setTextIsSelectable(false)
             if (selectMode) {
-                holder.text.customSelectionActionModeCallback = selectionCallback(holder)
-                holder.itemView.setOnClickListener(null)
-                holder.itemView.setOnLongClickListener(null)
-                holder.itemView.isClickable = false
-                holder.itemView.isLongClickable = false
+                val picked = sel
+                if (picked != null && position in picked.loPos..picked.hiPos) {
+                    val span = android.text.SpannableString(cue.text)
+                    val from = if (position == picked.loPos) picked.loOff.coerceIn(0, cue.text.length) else 0
+                    val to = if (position == picked.hiPos) picked.hiOff.coerceIn(0, cue.text.length) else cue.text.length
+                    if (to > from) span.setSpan(android.text.style.BackgroundColorSpan(0x66FFD54F), from, to, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    holder.text.text = span
+                }
+                holder.itemView.setOnClickListener { clearTextSel() }
+                holder.itemView.setOnLongClickListener {
+                    val pos = holder.bindingAdapterPosition
+                    if (pos >= 0) startTextDrag(pos)
+                    true
+                }
                 return
             }
-            holder.text.customSelectionActionModeCallback = null
             holder.itemView.setOnClickListener {
                 val pos = holder.bindingAdapterPosition
                 cues.getOrNull(pos)?.let { svc.player.seekTo(it.startMs) }

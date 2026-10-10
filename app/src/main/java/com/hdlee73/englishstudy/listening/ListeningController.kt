@@ -200,6 +200,8 @@ class ListeningController(
         root.findViewById<ImageButton>(R.id.playlistButton).setOnClickListener { showPlaylist() }
         root.findViewById<ImageButton>(R.id.timerButton).setOnClickListener { showTimerSheet() }
         root.findViewById<ImageButton>(R.id.subtitleButton).setOnClickListener { showSubtitles() }
+        root.findViewById<View>(R.id.makeSrtButton).setOnClickListener { makeSrtForCurrent() }
+        root.findViewById<View>(R.id.subtitleListButton).setOnClickListener { showSubtitleList() }
         root.findViewById<ImageButton>(R.id.settingsButton).setOnClickListener { showSettings() }
         shuffleButton.setOnClickListener {
             val svc = playbackService ?: return@setOnClickListener
@@ -617,6 +619,23 @@ class ListeningController(
         playlistSheet = sheet
         sheet.show()
         syncDeviceFolders()
+    }
+
+    /** The "자막 만들기" button under the title: makes the subtitle file of the track that is playing. */
+    private fun makeSrtForCurrent() {
+        val svc = playbackService ?: return
+        val uri = svc.currentTrackUri
+        if (uri == null) {
+            toast("먼저 오디오 파일을 추가해 주세요.")
+            return
+        }
+        val name = svc.currentTitle ?: "audio"
+        SrtDialog.show(ctx, listOf(TrackStore.Entry(uri, name))) { done -> onSaveFolderPicked = done; pickSaveFolder.launch(null) }
+    }
+
+    private fun showSubtitleList() {
+        val svc = playbackService ?: return
+        SubtitleListSheet(ctx, svc) { subtitleSheet?.reload() }.show()
     }
 
     private fun openSubtitlePicker() {
