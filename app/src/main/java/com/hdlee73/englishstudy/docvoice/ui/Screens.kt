@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -88,6 +90,7 @@ import com.hdlee73.englishstudy.docvoice.OutFile
 import com.hdlee73.englishstudy.docvoice.RecPhase
 import com.hdlee73.englishstudy.docvoice.core.Extractors
 import com.hdlee73.englishstudy.docvoice.core.LiveLang
+import com.hdlee73.englishstudy.docvoice.core.SaveFolder
 import com.hdlee73.englishstudy.docvoice.core.TtsVoices
 import com.hdlee73.englishstudy.docvoice.core.WhisperSize
 import java.util.Locale
@@ -248,6 +251,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.RecordScreen(vm: DocV
     }
 
     if (sheet) SettingsSheet({ sheet = false }) {
+        SaveOptions(vm, "", {}, vm.recFormat, nameField = false)
         SheetTitle("내보내기 설정", "• 정밀 재인식: 녹음이 끝난 뒤 더 정확한 모델로 처음부터 다시 받아써서 문서에 담아요. (시간이 더 걸려요)\n• 화자 구분: 누가 말했는지 나눠 줄을 바꿔요.\n• 줄바꿈 간격: 발언 사이가 이 시간보다 길면 줄을 바꿔요.")
         Group {
             row { ToggleRow(Icons.Rounded.AutoAwesome, Dv.Blue, "정밀 재인식", vm.recRefine) { vm.recRefine = it } }
@@ -296,6 +300,31 @@ private fun RecordButton(recording: Boolean, enabled: Boolean = true, onClick: (
     }
 }
 
+/** Where the result goes: the file name (empty = automatic) and the save folder, both chosen by the user. */
+@Composable
+private fun SaveOptions(vm: DocVoiceViewModel, name: String, onName: (String) -> Unit, ext: String, nameField: Boolean = true) {
+    val folder by vm.saveFolder.collectAsState()
+    val pick = rememberSaveFolderPicker { vm.setSaveFolder(it) }
+    Group {
+        if (nameField) row {
+            RowShell(Icons.Rounded.Edit, Dv.Blue) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = name, onValueChange = onName, singleLine = true,
+                    textStyle = TextStyle(fontSize = 17.sp, color = Dv.Label),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (name.isEmpty()) Text("파일 이름 (비우면 자동) .$ext", fontSize = 17.sp, color = Dv.Secondary)
+                        inner()
+                    },
+                )
+                if (name.isNotEmpty()) RoundIcon(Icons.Rounded.Close, Dv.Secondary, 20.dp) { onName("") }
+            }
+        }
+        row { ValueRow(Icons.Rounded.Folder, Dv.Blue, "저장 폴더", folder, titleColor = Dv.Label) { pick() } }
+        if (vm.saveFolder.value != SaveFolder.DEFAULT_LABEL) row { ValueRow(Icons.Rounded.Close, Dv.Secondary, "기본 폴더(다운로드/DocVoice)로 되돌리기", titleColor = Dv.Blue) { vm.setSaveFolder(null) } }
+    }
+}
+
 // ---- 읽어주기 (문서 → 음성) ---------------------------------------------------------------
 
 @Composable
@@ -305,7 +334,7 @@ private fun TtsScreen(vm: DocVoiceViewModel) {
 
     ScreenHero(
         "🔊", "문서 → MP3", "문서를 남성 목소리 MP3로 만들어요",
-        "문서를 자연스러운 남성 목소리 MP3로 만들어요.\n\n지원 형식: ${Extractors.SUPPORTED.joinToString(", ")}\n\nMicrosoft 신경망 음성을 쓰므로 인터넷 연결이 필요해요. 결과는 다운로드/DocVoice 폴더에 저장돼요.",
+        "문서를 자연스러운 남성 목소리 MP3로 만들어요.\n\n지원 형식: ${Extractors.SUPPORTED.joinToString(", ")}\n\nMicrosoft 신경망 음성을 쓰므로 인터넷 연결이 필요해요. 결과는 아래에서 고른 저장 폴더(처음에는 다운로드/DocVoice)에 저장돼요.",
     )
     ModeSwitch(vm)
     JobPanel(vm)
@@ -334,6 +363,7 @@ private fun TtsScreen(vm: DocVoiceViewModel) {
         }
         row { SliderRow(Icons.Rounded.Speed, Dv.Blue, String.format(Locale.US, "%.1f×", vm.speed), vm.speed, 0.7f..1.5f, 7) { vm.speed = Math.round(it * 10) / 10f; vm.save() } }
     }
+    SaveOptions(vm, vm.ttsName, { vm.ttsName = it }, "mp3")
     FilledButton("MP3 만들기", Icons.Rounded.VolumeUp, enabled = vm.ttsFile != null && !busy) { vm.startTts() }
 }
 
@@ -345,7 +375,7 @@ private fun YoutubeScreen(vm: DocVoiceViewModel) {
     val ctx = LocalContext.current
     ScreenHero(
         "▶️", "유튜브 → MP3", "유튜브 영상의 소리를 MP3로 만들어요",
-        "유튜브 영상 주소를 넣거나, 유튜브 앱의 공유 버튼에서 EngHub를 고르면 영상의 소리를 MP3로 저장해요.\n\n결과는 다운로드/DocVoice 폴더에 저장되고 Listening 탭에서 들을 수 있어요. 인터넷 연결이 필요해요.\n\n유튜브에서 내려받는 것은 유튜브 이용약관과 충돌할 수 있어요. 개인적으로 공부할 때만 쓰고, 저작권이 있는 영상은 퍼뜨리지 마세요.",
+        "유튜브 영상 주소를 넣거나, 유튜브 앱의 공유 버튼에서 EngHub를 고르면 영상의 소리를 MP3로 저장해요.\n\n결과는 아래에서 고른 저장 폴더(처음에는 다운로드/DocVoice)에 저장되고 Listening 탭에서 들을 수 있어요. 인터넷 연결이 필요해요.\n\n유튜브에서 내려받는 것은 유튜브 이용약관과 충돌할 수 있어요. 개인적으로 공부할 때만 쓰고, 저작권이 있는 영상은 퍼뜨리지 마세요.",
     )
     ModeSwitch(vm)
     JobPanel(vm)
@@ -375,6 +405,7 @@ private fun YoutubeScreen(vm: DocVoiceViewModel) {
             }
         }
     }
+    SaveOptions(vm, vm.ytName, { vm.ytName = it }, "mp3")
     FilledButton("MP3 만들기", Icons.Rounded.VolumeUp, enabled = vm.ytUrl.isNotBlank() && !busy) { vm.startYt() }
 }
 
@@ -406,6 +437,7 @@ private fun SttScreen(vm: DocVoiceViewModel) {
         row { ToggleRow(Icons.Rounded.People, Dv.Blue, "화자 구분", vm.diarize) { vm.diarize = it; vm.save() } }
         row { ToggleRow(Icons.Rounded.Schedule, Dv.Blue, "시간 표시", vm.includeTime) { vm.includeTime = it; vm.save() } }
     }
+    SaveOptions(vm, vm.sttName, { vm.sttName = it }, vm.format)
     FilledButton("문서로 변환", Icons.Rounded.Description, enabled = vm.sttFile != null && !busy) { vm.startStt() }
 
     if (sheet) SettingsSheet({ sheet = false }) {
@@ -477,7 +509,7 @@ private fun openFile(ctx: Context, f: OutFile) {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(ctx, "열 수 있는 앱이 없어요. 다운로드/DocVoice 폴더를 확인하세요.", Toast.LENGTH_LONG).show()
+        Toast.makeText(ctx, "열 수 있는 앱이 없어요. 저장 폴더를 확인하세요.", Toast.LENGTH_LONG).show()
     }
 }
 

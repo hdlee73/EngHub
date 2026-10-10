@@ -79,6 +79,10 @@ data class RecentFile(val id: String, val name: String)
 /** A selected passage and its Korean translation ([korean] is null while loading or when it failed). */
 data class Snippet(val text: String, val korean: String?, val loading: Boolean)
 
+/** Daily Upside articles shown at a time, and key expressions listed for one text. */
+internal const val DAILY_UPSIDE_PER_DAY = 3
+internal const val KEY_EXPRESSIONS_PER_TEXT = 5
+
 class ReadingViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("reading", Context.MODE_PRIVATE)
     private val repository = SavedWordsRepository.get(application)
@@ -126,7 +130,9 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
             prune()
-            if (cachedToday == null && fetchJob?.isActive != true) fetchToday(day)
+            // An earlier version fetched a single Daily Upside article a day: top it up to the full set.
+            val needsMore = cachedToday != null && cachedToday.size < DAILY_UPSIDE_PER_DAY && cachedToday.all { it.credit == DailyUpsideSource.CREDIT }
+            if ((cachedToday == null || needsMore) && fetchJob?.isActive != true) fetchToday(day)
         }
     }
 
@@ -142,7 +148,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
         fetchJob = viewModelScope.launch(Dispatchers.IO) {
             _state.update { it.copy(fetching = true) }
             // The Daily Upside first; Wikinews takes over when that is not reachable.
-            val fetched = runCatching { downloadDailyUpside(forDay) ?: downloadDaily(forDay) }.getOrNull()
+            val fetched = runCatching { downloadDailyUpside(forDay, loadDaily(forDay).orEmpty()) ?: downloadDaily(forDay) }.getOrNull()
             if (fetched != null && forDay == day) {
                 storeDaily(forDay, fetched)
                 _state.update {
@@ -157,31 +163,35 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * One article of The Daily Upside for the day: the newest one not read before, taken whole. Null when the site gives no list, no
-     * readable page or only short pages (then the caller falls back to Wikinews).
+     * The Daily Upside articles for the day: the newest ones not read before, each taken whole, up to [DAILY_UPSIDE_PER_DAY] together with
+     * the [existing] ones already fetched today. Null when nothing new could be added (then the caller keeps what it has or falls back
+     * to Wikinews).
      */
-    private fun downloadDailyUpside(forDay: Long): List<ReadingArticle>? {
+    private fun downloadDailyUpside(forDay: Long, existing: List<ReadingArticle>): List<ReadingArticle>? {
+        val have = existing.filter { it.credit == DailyUpsideSource.CREDIT }
+        if (existing.isNotEmpty() && have.size != existing.size) return null
         val seen = loadSeenUrls()
         val agent = "EngHub/1.0 (Android reading app; personal study use)"
         val links = LinkedHashSet<String>()
         for (source in listOf(DailyUpsideSource.FEED, DailyUpsideSource.HOME)) {
             httpGet(source, 12000, agent)?.let { links += DailyUpsideSource.articleLinks(it) }
-            if (links.any { it !in seen }) break
+            if (links.count { it !in seen } >= DAILY_UPSIDE_PER_DAY) break
         }
+        val out = ArrayList<ReadingArticle>(have)
         var tried = 0
         for (url in links) {
+            if (out.size >= DAILY_UPSIDE_PER_DAY) break
             if (url in seen) continue
-            if (tried++ >= 4) break
+            if (tried++ >= 12) break
             val html = httpGet(url, 15000, agent)
             val paragraphs = html?.let { DailyUpsideSource.paragraphs(it) }.orEmpty()
             val title = html?.let { DailyUpsideSource.title(it) }
             seen += url
             if (title == null || !DailyUpsideSource.isWorthReading(paragraphs)) continue
-            saveSeenUrls(seen)
-            return listOf(ReadingArticle("d${forDay}_1", DailyUpsideSource.topicOf(url), title, paragraphs.take(80), "", DailyUpsideSource.CREDIT, url))
+            out += ReadingArticle("d${forDay}_${out.size + 1}", DailyUpsideSource.topicOf(url), title, paragraphs.take(80), "", DailyUpsideSource.CREDIT, url)
         }
         saveSeenUrls(seen)
-        return null
+        return out.takeIf { it.size > have.size }
     }
 
     private fun loadSeenUrls(): MutableSet<String> = runCatching {
@@ -484,7 +494,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
 
     private fun loadExpressions(article: ReadingArticle) {
         if (_state.value.expressions.isNotEmpty()) return
-        val base = KeyExpressions.extract(article.paragraphs, common = commonWords)
+        val base = KeyExpressions.extract(article.paragraphs, max = KEY_EXPRESSIONS_PER_TEXT, common = commonWords)
         val saved = cachedExpressions(article.id)
         val items = base.map { e -> saved[e.expression] ?: ExpressionItem(e.expression, e.sentence) }
         _state.update { it.copy(expressions = items, loadingExpressions = items.any { i -> i.meaning == null }) }

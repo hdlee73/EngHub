@@ -29,7 +29,9 @@ class PlaylistSheet(
     private val context: Context,
     private val svc: PlaybackService,
     private val addFilesTo: (Int) -> Unit,
-    private val importDeviceFolder: () -> Unit
+    private val importDeviceFolder: () -> Unit,
+    /** Opens the system folder picker for the folder subtitles are saved in; calls back once one is chosen. */
+    private val pickSaveFolder: (onPicked: () -> Unit) -> Unit
 ) {
     private val dialog = BottomSheetDialog(context)
     private val root: View = LayoutInflater.from(context).inflate(R.layout.ls_sheet_playlist, null)
@@ -39,6 +41,7 @@ class PlaylistSheet(
     private val menuButton: ImageButton = root.findViewById(R.id.sheetMenuButton)
     private val viewButton: ImageButton = root.findViewById(R.id.sheetViewButton)
     private val fetchButton: android.widget.Button = root.findViewById(R.id.fetchEpisodeButton)
+    private val srtAllButton: android.widget.Button = root.findViewById(R.id.srtAllButton)
     private val prefs = context.getSharedPreferences(TrackStore.PREFS, Context.MODE_PRIVATE)
     /** Folders as a list of rows instead of a grid of cards; remembered. */
     private var listView = prefs.getBoolean(KEY_LIST_VIEW, false)
@@ -83,8 +86,11 @@ class PlaylistSheet(
             applyFolderLayout()
             folders.adapter = folderAdapter
         }
+        srtAllButton.setOnClickListener { SrtDialog.show(context, svc.groupEntries(viewGroup), pickSaveFolder) }
         fetchButton.setOnClickListener {
-            val have = svc.groupEntries(viewGroup).mapNotNull { SixMinuteEnglish.episodeKey(it.name) }
+            // The 6min folder is created by the download itself when it does not exist yet.
+            val have = svc.groups.filter { it.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true) }
+                .flatMap { it.entries }.mapNotNull { SixMinuteEnglish.episodeKey(it.name) }
             SixMinuteEnglish.fetchLatest(context, have)
             toast("최신 에피소드를 확인하고 있어요…")
         }
@@ -119,7 +125,7 @@ class PlaylistSheet(
     }
 
     private fun signature(): String = buildString {
-        append(inFolder).append('|').append(levelParent).append('|').append(viewGroup).append('|').append(svc.activeGroup).append('|').append(svc.player.currentMediaItemIndex)
+        append(SubtitleLinks.version).append('|').append(inFolder).append('|').append(levelParent).append('|').append(viewGroup).append('|').append(svc.activeGroup).append('|').append(svc.player.currentMediaItemIndex)
         svc.groups.forEach { append('|').append(it.name).append(':').append(it.entries.size).append(':').append(it.parentId) }
     }
 
@@ -187,8 +193,8 @@ class PlaylistSheet(
         backButton.visibility = if (inFolder || level != null) View.VISIBLE else View.GONE
         menuButton.visibility = if (inFolder) View.VISIBLE else View.GONE
         viewButton.visibility = if (inFolder) View.GONE else View.VISIBLE
-        val sixMinute = inFolder && svc.groups.getOrNull(viewGroup)?.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true)
-        fetchButton.visibility = if (sixMinute) View.VISIBLE else View.GONE
+        fetchButton.visibility = View.VISIBLE
+        srtAllButton.visibility = if (inFolder && svc.groupEntries(viewGroup).isNotEmpty()) View.VISIBLE else View.GONE
         folders.visibility = if (inFolder) View.GONE else View.VISIBLE
         list.visibility = if (inFolder) View.VISIBLE else View.GONE
         if (!inFolder) {
@@ -337,9 +343,7 @@ class PlaylistSheet(
                 }
                 11 -> {
                     if (group.entries.isEmpty()) toast("비어 있는 폴더입니다.")
-                    else confirm("‘${group.name}’ 폴더의 곡 ${group.entries.size}개로 자막(SRT)을 만들까요?\n말을 받아쓰는 작업이라 곡이 많거나 길면 오래 걸리고, 처음에는 음성 모델을 내려받아요. 이미 자막이 있는 곡은 건너뜁니다.", "만들기") {
-                        SrtMaker.start(context, group.entries.toList())
-                    }
+                    else SrtDialog.show(context, group.entries.toList(), pickSaveFolder)
                 }
                 10 -> {
                     svc.sortGroupByName(index)
@@ -389,7 +393,7 @@ class PlaylistSheet(
                     render()
                 }
                 2 -> chooseTargetGroup(position, entry)
-                5 -> SrtMaker.start(context, listOf(entry))
+                5 -> SrtDialog.show(context, listOf(entry), pickSaveFolder)
                 3 -> {
                     svc.resetProgress(viewGroup, position)
                     render()
@@ -430,6 +434,7 @@ class PlaylistSheet(
         val name: TextView = view.findViewById(R.id.trackName)
         val more: ImageButton = view.findViewById(R.id.trackMore)
         val drag: ImageView = view.findViewById(R.id.trackDrag)
+        val subtitle: ImageButton = view.findViewById(R.id.trackSubtitle)
     }
 
     private inner class TrackAdapter : RecyclerView.Adapter<Holder>() {
@@ -468,6 +473,14 @@ class PlaylistSheet(
                     svc.playIn(viewGroup, pos)
                     dismiss()
                 }
+            }
+            // The subtitle button sits on every row: teal when the track already has subtitles.
+            val hasSubtitle = SubtitleLinks.find(context.applicationContext, entry.uri, entry.name) != null
+            holder.subtitle.imageTintList = android.content.res.ColorStateList.valueOf(context.getColor(if (hasSubtitle) R.color.ls_teal_600 else R.color.ls_text_secondary))
+            holder.subtitle.contentDescription = if (hasSubtitle) "자막 있음" else "자막(SRT) 만들기"
+            holder.subtitle.setOnClickListener {
+                val pos = holder.bindingAdapterPosition
+                if (pos >= 0) SrtDialog.show(context, listOf(rows[pos]), pickSaveFolder)
             }
             holder.more.setOnClickListener {
                 val pos = holder.bindingAdapterPosition

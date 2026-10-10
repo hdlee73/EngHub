@@ -121,7 +121,7 @@ class JobService : Service() {
             progress(title, "음성 만드는 중 ($done/$total)", done.toFloat() / total)
         }
         progress(title, "저장하는 중", null)
-        val name = Storage.baseName(req.doc.name) + ".mp3"
+        val name = req.outName.ifBlank { Storage.baseName(req.doc.name) } + ".mp3"
         val uri = withContext(Dispatchers.IO) { Storage.saveToDownloads(this@JobService, name, mp3) }
         JobHub.state.value = JobState.Done(
             "MP3 변환 완료  (${text.length}자)",
@@ -140,7 +140,7 @@ class JobService : Service() {
         }
         try {
             progress(title, "MP3 로 바꾸는 중", 0f)
-            val name = got.title.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), " ").replace(Regex("\\s+"), " ").trim().take(80).ifBlank { "YouTube" } + ".mp3"
+            val name = req.outName.ifBlank { got.title.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), " ").replace(Regex("\\s+"), " ").trim().take(80).ifBlank { "YouTube" } } + ".mp3"
             val uri = withContext(Dispatchers.IO) {
                 Storage.saveToDownloads(this@JobService, name) { out ->
                     val buffered = out.buffered(1 shl 16)
@@ -172,7 +172,7 @@ class JobService : Service() {
             pcm.close()
         }
         if (result.segments.isEmpty()) throw ExtractException("음성에서 인식된 말이 없습니다.")
-        val bytes = finishDocument(title, result, req.format, Storage.baseName(req.audio.name), req.gap, req.includeTime, req.showSpeaker)
+        val bytes = finishDocument(title, result, req.format, req.outName.ifBlank { Storage.baseName(req.audio.name) }, req.gap, req.includeTime, req.showSpeaker)
         // An SRT made from an audio file becomes that file's subtitle in the Listening player.
         if (req.format == "srt") runCatching {
             com.hdlee73.englishstudy.listening.SubtitleLinks.remember(this, req.audio.uri.toString(), req.audio.name, bytes)
@@ -187,7 +187,7 @@ class JobService : Service() {
         req.audios.forEachIndexed { i, audio ->
             val step = "${i + 1}/${req.audios.size} · ${audio.name}"
             try {
-                runStt(JobRequest.Stt(audio, "srt", req.opts, 1.5, true, false), "$title ($step)")
+                runStt(JobRequest.Stt(audio, "srt", req.opts, 1.5, true, false, req.outNames[audio.uri.toString()].orEmpty()), "$title ($step)")
                 (JobHub.state.value as? JobState.Done)?.let { files += it.files }
                 made++
             } catch (e: CancellationException) {
