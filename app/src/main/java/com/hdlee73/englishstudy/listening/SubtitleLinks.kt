@@ -29,6 +29,7 @@ object SubtitleLinks {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("u:$audioUri", link)
             .putString("n:${key(audioName)}", link)
+            .putString("t:$link", audioName)
             .apply()
         version++
     }
@@ -40,6 +41,34 @@ object SubtitleLinks {
         if (title != null) prefs.getString("n:${key(title)}", null)?.let { return it }
         val display = names.getOrPut(uri) { displayName(context, uri) ?: "" }
         return if (display.isNotEmpty()) prefs.getString("n:${key(display)}", null) else null
+    }
+
+    /** One subtitle file the app holds a private copy of. */
+    class Item(val link: String, val audioName: String, val sizeBytes: Long, val savedAt: Long)
+
+    /** Every subtitle file made or linked through the app (newest first). */
+    fun list(context: Context): List<Item> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val all = prefs.all
+        val links = all.filterKeys { it.startsWith("u:") || it.startsWith("n:") }.values.filterIsInstance<String>().toSet()
+        return links.mapNotNull { link ->
+            val file = runCatching { File(Uri.parse(link).path ?: return@mapNotNull null) }.getOrNull() ?: return@mapNotNull null
+            if (!file.exists()) return@mapNotNull null
+            val name = (all["t:$link"] as? String)
+                ?: all.entries.firstOrNull { it.value == link && it.key.startsWith("n:") }?.key?.removePrefix("n:")
+                ?: file.nameWithoutExtension
+            Item(link, name, file.length(), file.lastModified())
+        }.sortedByDescending { it.savedAt }
+    }
+
+    /** Deletes the private copy and every link to it. */
+    fun remove(context: Context, link: String) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        prefs.all.forEach { (k, v) -> if (v == link && (k.startsWith("u:") || k.startsWith("n:"))) editor.remove(k) }
+        editor.remove("t:$link").apply()
+        runCatching { Uri.parse(link).path?.let { File(it).delete() } }
+        version++
     }
 
     private fun displayName(context: Context, uri: String): String? = runCatching {
