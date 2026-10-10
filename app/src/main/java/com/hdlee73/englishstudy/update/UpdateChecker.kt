@@ -31,10 +31,11 @@ object UpdateChecker {
     private const val PREFS = "update_check"
     private const val KEY_VERSION = "latest_version"
     private const val KEY_URL = "latest_url"
+    private const val KEY_APK = "latest_apk"
     private const val KEY_NOTIFIED = "notified_version"
     private const val CHANNEL = "app_update"
 
-    data class Release(val version: String, val url: String)
+    data class Release(val version: String, val url: String, val apkUrl: String? = null)
 
     private val client by lazy { OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).build() }
 
@@ -63,7 +64,7 @@ object UpdateChecker {
         val p = prefs(context)
         val version = p.getString(KEY_VERSION, null) ?: return null
         if (!isNewer(version, installedVersion(context))) return null
-        return Release(version, p.getString(KEY_URL, null) ?: RELEASES_URL)
+        return Release(version, p.getString(KEY_URL, null) ?: RELEASES_URL, p.getString(KEY_APK, null))
     }
 
     /** Asks GitHub for the latest release and remembers it. Returns the newer release, or null if up to date or offline. */
@@ -75,7 +76,14 @@ object UpdateChecker {
         }.getOrNull() ?: return@withContext available(context)
         val tag = json.optString("tag_name")
         if (tag.isBlank() || json.optBoolean("draft") || json.optBoolean("prerelease")) return@withContext available(context)
-        prefs(context).edit().putString(KEY_VERSION, tag).putString(KEY_URL, json.optString("html_url").ifBlank { RELEASES_URL }).apply()
+        val assets = json.optJSONArray("assets")
+        var apk: String? = null
+        if (assets != null) for (i in 0 until assets.length()) {
+            val a = assets.optJSONObject(i) ?: continue
+            if (a.optString("name").endsWith(".apk")) { apk = a.optString("browser_download_url").ifBlank { null }; break }
+        }
+        prefs(context).edit().putString(KEY_VERSION, tag).putString(KEY_URL, json.optString("html_url").ifBlank { RELEASES_URL })
+            .putString(KEY_APK, apk).apply()
         available(context)
     }
 
