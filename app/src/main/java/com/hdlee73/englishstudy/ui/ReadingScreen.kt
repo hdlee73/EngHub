@@ -17,6 +17,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -79,23 +89,57 @@ fun ReadingScreen(
     savedScroll: Int = 0,
     onScroll: (Int) -> Unit = {},
     savedSelection: Triple<Int, Int, Int>? = null,
-    onSelection: (Triple<Int, Int, Int>?) -> Unit = {}
+    onSelection: (Triple<Int, Int, Int>?) -> Unit = {},
+    onOpenFile: () -> Unit = {},
+    onOpenRecent: (String) -> Unit = {},
+    onDeleteRecent: (String) -> Unit = {},
+    onFontSp: (Int) -> Unit = {},
+    onSaveWord: (text: String, sentence: String) -> Unit = { _, _ -> },
+    savedPage: Int = 0,
+    onPage: (Int) -> Unit = {},
+    savedZoom: Float = 1f,
+    onZoom: (Float) -> Unit = {}
 ) {
     Box(Modifier.fillMaxSize()) {
         val article = state.open
         if (article == null) {
-            ReadingList(state, onOpen)
+            ReadingList(state, onOpen, onOpenFile, onOpenRecent, onDeleteRecent)
         } else {
-            ArticleView(article, state, onClose, onMode, onSaveExpression, onLookup, onSpeak, onTranslateSnippet, onClearSnippet, savedScroll, onScroll, savedSelection, onSelection)
+            ArticleView(
+                article, state, onClose, onMode, onSaveExpression, onLookup, onSpeak, onTranslateSnippet, onClearSnippet, savedScroll, onScroll,
+                savedSelection, onSelection, onFontSp, onSaveWord, savedPage, onPage, savedZoom, onZoom
+            )
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
     }
 }
 
 @Composable
-private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit) {
+private fun ReadingList(state: ReadingUiState, onOpen: (String) -> Unit, onOpenFile: () -> Unit, onOpenRecent: (String) -> Unit, onDeleteRecent: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Hero("📰", "오늘의 리딩", if (state.loaded) "${state.dateLabel} · 오늘 ${state.readIds.size}/${state.today.size} 읽음" else "불러오는 중…")
+        Hero("📰", "Reading", if (state.loaded) "${state.dateLabel} · 오늘 ${state.readIds.size}/${state.today.size} 읽음" else "불러오는 중…")
+        // The learner's own files.
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("📂 내 파일 읽기", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Button(onClick = onOpenFile, enabled = !state.loadingFile, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                    Text(if (state.loadingFile) "여는 중…" else "파일 열기", fontSize = 14.sp)
+                }
+            }
+            Text("txt, pdf, docx, pptx, xlsx, hwp 등을 불러와 읽어요. 글을 눌러 단어·문장을 고르면 읽어주기, 단어장, 번역, 복사를 쓸 수 있습니다.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+            state.recentFiles.forEach { file ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SoftBlue).clickable { onOpenRecent(file.id) }.padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        file.name, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 12.dp)
+                    )
+                    TextButton(onClick = { onDeleteRecent(file.id) }) { Text("✕", color = Muted) }
+                }
+            }
+        }
         if (state.fetching) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -150,9 +194,24 @@ private fun ArticleView(
     savedScroll: Int,
     onScroll: (Int) -> Unit,
     savedSelection: Triple<Int, Int, Int>?,
-    onSelection: (Triple<Int, Int, Int>?) -> Unit
+    onSelection: (Triple<Int, Int, Int>?) -> Unit,
+    onFontSp: (Int) -> Unit,
+    onSaveWord: (String, String) -> Unit,
+    savedPage: Int,
+    onPage: (Int) -> Unit,
+    savedZoom: Float,
+    onZoom: (Float) -> Unit
 ) {
     val context = LocalContext.current
+    val isFile = state.fileArticle?.id == article.id
+    val pageSize = 30
+    val pageCount = maxOf(1, (article.paragraphs.size + pageSize - 1) / pageSize)
+    var page by remember(article.id) { mutableStateOf(savedPage.coerceIn(0, pageCount - 1)) }
+    // Zoom of the whole screen (pinch with two fingers); the text size is changed with the A buttons and reflows the text.
+    var zoom by remember(article.id) { mutableStateOf(savedZoom.coerceIn(1f, 4f)) }
+    LaunchedEffect(zoom) { onZoom(zoom) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val fontSp = state.fontSp
     // The selection: which paragraph and which characters (a word, a phrase or a sentence).
     // After a dictionary lookup the tab is drawn again: the selection and the scroll position come back from where they were left.
     var selected by remember(article.id) {
@@ -173,16 +232,27 @@ private fun ArticleView(
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onClose) { Text("← 목록") }
             Spacer(Modifier.weight(1f))
+            if (zoom > 1.01f) TextButton(onClick = { zoom = 1f }) { Text("🔍 ${(zoom * 100).roundToInt()}% · 원래대로", fontSize = 12.sp) }
+            OutlinedButton(onClick = { onFontSp(fontSp - 2) }, enabled = fontSp > 12, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("가−", fontSize = 14.sp) }
+            Spacer(Modifier.width(6.dp))
+            OutlinedButton(onClick = { onFontSp(fontSp + 2) }, enabled = fontSp < 40, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("가+", fontSize = 14.sp) }
+            Spacer(Modifier.width(8.dp))
             if (state.translating || state.loadingExpressions) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!isFile) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = state.mode == ReadingMode.TEXT, onClick = { onMode(ReadingMode.TEXT) }, label = { Text("원문") })
             FilterChip(selected = state.mode == ReadingMode.TRANSLATION, onClick = { onMode(ReadingMode.TRANSLATION) }, label = { Text("🇰🇷 번역") })
             FilterChip(selected = state.mode == ReadingMode.EXPRESSIONS, onClick = { onMode(ReadingMode.EXPRESSIONS) }, label = { IconText("💡 주요 표현") })
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        val viewportW = constraints.maxWidth
+        val viewportH = constraints.maxHeight
+        val panState = rememberScrollState()
+        Box(
+            Modifier.fillMaxSize().pinchZoom({ zoom }) { zoom = it }.horizontalScroll(panState, enabled = zoom > 1.01f)
+        ) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal = 18.dp),
+            Modifier.zoomed(zoom, viewportW, viewportH).verticalScroll(scrollState).padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(article.topic, color = Blue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -194,7 +264,8 @@ private fun ArticleView(
             if (state.mode == ReadingMode.EXPRESSIONS) {
                 ExpressionList(state.expressions, state.loadingExpressions, onSaveExpression, onSpeak)
             } else article.paragraphs.forEachIndexed { index, paragraph ->
-                TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, { dragging = it }) { range -> selected = index to range }
+                if (index / pageSize != page) return@forEachIndexed
+                TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, fontSp, { dragging = it }) { range -> selected = index to range }
                 if (state.showTranslation) {
                     val korean = state.translations[index]
                     Text(
@@ -209,8 +280,16 @@ private fun ArticleView(
                     color = Muted, fontSize = 11.sp, lineHeight = 15.sp
                 )
             }
+            if (pageCount > 1 && state.mode != ReadingMode.EXPRESSIONS) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { page -= 1; onPage(page); selected = null; scope.launch { scrollState.scrollTo(0) } }, enabled = page > 0) { Text("← 이전") }
+                    Text("${page + 1} / $pageCount", color = Muted, fontSize = 14.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    OutlinedButton(onClick = { page += 1; onPage(page); selected = null; scope.launch { scrollState.scrollTo(0) } }, enabled = page < pageCount - 1) { Text("다음 →") }
+                }
+            }
             // Constant room at the end, so showing or hiding the panel never moves the text.
             Spacer(Modifier.height(280.dp))
+        }
         }
         val current = selected
         if (selectedText != null && current != null && !dragging && state.mode != ReadingMode.EXPRESSIONS) {
@@ -241,6 +320,11 @@ private fun ArticleView(
                         Button(
                             onClick = { onLookup(query) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)
                         ) { IconText("📖 사전", fontSize = 14.sp, maxLines = 1) }
+                        OutlinedButton(onClick = {
+                            val paragraph = article.paragraphs[current.first]
+                            val sentence = ReadingWords.sentenceRange(paragraph, current.second.first)?.let { r -> paragraph.substring(r.first, r.last + 1) }.orEmpty()
+                            onSaveWord(selectedText, sentence)
+                        }, shape = RoundedCornerShape(12.dp)) { IconText("⭐ 단어장", fontSize = 14.sp, maxLines = 1) }
                         OutlinedButton(onClick = { onTranslateSnippet(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🌐 번역", fontSize = 14.sp, maxLines = 1) }
                         OutlinedButton(onClick = { copyToClipboard(context, selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("📋 복사", fontSize = 14.sp, maxLines = 1) }
                         OutlinedButton(onClick = { onSpeak(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🔊", fontSize = 14.sp) }
@@ -257,7 +341,7 @@ private fun ArticleView(
  * then has a handle at each end that can be dragged to widen or narrow it freely (words, phrases, whole sentences).
  */
 @Composable
-private fun TappableParagraph(text: String, highlight: IntRange?, onDragging: (Boolean) -> Unit, onSelect: (IntRange) -> Unit) {
+private fun TappableParagraph(text: String, highlight: IntRange?, fontSp: Int, onDragging: (Boolean) -> Unit, onSelect: (IntRange) -> Unit) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val styled = remember(text, highlight) {
         buildAnnotatedString {
@@ -279,7 +363,7 @@ private fun TappableParagraph(text: String, highlight: IntRange?, onDragging: (B
 
     Box(Modifier.fillMaxWidth()) {
         Text(
-            styled, color = Ink, fontSize = 18.sp, lineHeight = 29.sp,
+            styled, color = Ink, fontSize = fontSp.sp, lineHeight = (fontSp * 1.6f).sp,
             onTextLayout = { layout = it },
             modifier = Modifier.fillMaxWidth()
                 .pointerInput(text) {
@@ -410,4 +494,35 @@ private fun highlightExpression(sentence: String, expression: String) = buildAnn
     append(sentence.substring(0, at))
     withStyle(SpanStyle(background = Highlight, fontWeight = FontWeight.Bold)) { append(sentence.substring(at, at + expression.length)) }
     append(sentence.substring(at + expression.length))
+}
+
+
+/**
+ * Magnifies the whole screen like a picture: the content is laid out at its normal width and then drawn [scale] times bigger,
+ * so the lines keep wrapping where they were (unlike a bigger text size). The vertical scroll inside sees a viewport that is [scale] times smaller.
+ */
+private fun Modifier.zoomed(scale: Float, width: Int, height: Int): Modifier = layout { measurable, _ ->
+    val placeable = measurable.measure(Constraints.fixed(width, (height / scale).roundToInt().coerceAtLeast(1)))
+    layout((width * scale).roundToInt(), height) {
+        placeable.placeWithLayer(0, 0) {
+            scaleX = scale
+            scaleY = scale
+            transformOrigin = TransformOrigin(0f, 0f)
+        }
+    }
+}
+
+/** Two fingers pinching change the zoom (1x to 4x); one finger is left alone for scrolling and selecting. */
+private fun Modifier.pinchZoom(current: () -> Float, onZoom: (Float) -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.changes.count { it.pressed } >= 2) {
+                val change = event.calculateZoom()
+                if (change != 1f) onZoom((current() * change).coerceIn(1f, 4f))
+                event.changes.forEach { it.consume() }
+            }
+        } while (event.changes.any { it.pressed })
+    }
 }
