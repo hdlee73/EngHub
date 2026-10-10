@@ -263,17 +263,6 @@ private fun LessonCard(state: LearningUiState, expanded: Boolean, compact: Boole
                 if (translationVisible) {
                     Text(item.korean, fontSize = if (item.korean.length > 70) 12.sp else 14.sp, lineHeight = 19.sp, color = Color(0xFF6B7D7A), textAlign = TextAlign.Center)
                 }
-                if (state.phase == LessonPhase.LISTENING && !state.retryText.isNullOrBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text("다시 말할 부분: ${state.retryText}", fontSize = 16.sp, color = Miss, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Text("이 부분만 다시 말해도 됩니다.", fontSize = 12.sp, color = Color.Gray)
-                }
-                state.score?.let {
-                    if (state.heardText.isNotBlank()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("인식: ${state.heardText}", color = Color(0xFF6B7D7A), fontSize = 11.sp, lineHeight = 15.sp, textAlign = TextAlign.Center, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                }
             }
             Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
             when (state.phase) {
@@ -484,7 +473,7 @@ private fun PlayerControls(state: LearningUiState, tight: Boolean, expanded: Boo
         if (hint != null) { delay(2500); hint = null }
     }
     val auto = state.settings.autoAdvanceSentence
-    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = if (tight) 4.dp else 12.dp, top = if (tight) 2.dp else 8.dp)) {
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = if (tight) 20.dp else 24.dp, top = if (tight) 2.dp else 8.dp)) {
         Row(
             Modifier.align(Alignment.Center),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
