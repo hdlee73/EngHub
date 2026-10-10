@@ -101,6 +101,15 @@ class ListeningController(
         if (tree != null) importFolder(tree)
     }
 
+    /** Called once the user has picked the folder subtitles are saved to. */
+    private var onSaveFolderPicked: (() -> Unit)? = null
+    private val pickSaveFolder = activity.activityResultRegistry.register("ls_pick_save_folder", ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            com.hdlee73.englishstudy.docvoice.core.SaveFolder.set(ctx, tree)
+            onSaveFolderPicked?.invoke()
+        }
+    }
+
     private val pickSubtitle = activity.activityResultRegistry.register("ls_pick_subtitle", ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode != Activity.RESULT_OK || uri == null) return@register
@@ -604,7 +613,7 @@ class ListeningController(
 
     private fun showPlaylist() {
         val svc = playbackService ?: return
-        val sheet = PlaylistSheet(ctx, svc, { group -> openFilePicker(group) }, { pickFolder.launch(null) })
+        val sheet = PlaylistSheet(ctx, svc, { group -> openFilePicker(group) }, { pickFolder.launch(null) }, { done -> onSaveFolderPicked = done; pickSaveFolder.launch(null) })
         playlistSheet = sheet
         sheet.show()
         syncDeviceFolders()

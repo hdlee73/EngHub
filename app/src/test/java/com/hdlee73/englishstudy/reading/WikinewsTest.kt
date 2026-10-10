@@ -99,4 +99,16 @@ class WikinewsTest {
         assertTrue(found.toString(), "unprecedented" in found || "volatility" in found)
         assertTrue(found.toString(), found.none { it.lowercase() in common })
     }
+
+    @Test fun aboutFiveExpressionsMixPhrasesAndHardWords() {
+        val text = listOf(
+            "The central bank moved to rein in inflation in the wake of a sharp rise in energy prices last quarter.",
+            "Analysts warned that the policy could take a toll on small firms that are already struggling to stay afloat.",
+            "Officials have not ruled out further measures, citing unprecedented volatility in global markets this year.",
+            "The government offered a wide range of subsidies, hoping to shore up fragile household confidence quickly."
+        )
+        val found = KeyExpressions.extract(text, 5)
+        assertEquals(5, found.size)
+        assertTrue(found.toString(), found.count { it.expression.contains(' ') } >= 3)
+    }
 }

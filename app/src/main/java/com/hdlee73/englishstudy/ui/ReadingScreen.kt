@@ -260,7 +260,18 @@ private fun ArticleView(
             if (zoom > 1.01f) TextButton(onClick = { zoom = 1f }) { Text("🔍 ${(zoom * 100).roundToInt()}% · 원래대로", fontSize = 12.sp) }
         }
         if (pdfMode && pdfPath != null) {
-            PdfPagesView(pdfPath, Modifier.weight(1f).fillMaxWidth())
+            var pdfSelection by remember(pdfPath) { mutableStateOf<PdfSelection?>(null) }
+            LaunchedEffect(pdfSelection?.text) { onClearSnippet() }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                PdfPagesView(pdfPath, pdfSelection, { pdfSelection = it }, Modifier.fillMaxSize())
+                pdfSelection?.let { picked ->
+                    SelectionPanel(
+                        Modifier.align(Alignment.BottomCenter), picked.text, state.snippet?.takeIf { it.text == picked.text },
+                        sentence = { picked.sentence }, onClose = { pdfSelection = null },
+                        onLookup = onLookup, onSaveWord = onSaveWord, onTranslateSnippet = onTranslateSnippet, onSpeak = onSpeak
+                    )
+                }
+            }
         } else {
         if (!isFile) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = state.mode == ReadingMode.TEXT, onClick = { onMode(ReadingMode.TEXT) }, label = { Text("원문") })
@@ -316,46 +327,68 @@ private fun ArticleView(
         }
         val current = selected
         if (selectedText != null && current != null && !dragging && state.mode != ReadingMode.EXPRESSIONS) {
-            val query = ReadingWords.lookupText(selectedText)
             val snippet = state.snippet?.takeIf { it.text == selectedText }
-            Surface(Modifier.align(Alignment.BottomCenter), shadowElevation = 12.dp, color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            selectedText, color = Ink, fontSize = if (selectedText.length > 40) 15.sp else 20.sp, fontWeight = FontWeight.Bold,
-                            maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = { selected = null }) { Text("✕", color = Muted) }
-                    }
-                    if (snippet != null) {
-                        Box(Modifier.fillMaxWidth().heightIn(max = 140.dp).clip(RoundedCornerShape(12.dp)).background(SoftBlue).verticalScroll(rememberScrollState()).padding(12.dp)) {
-                            Text(
-                                when {
-                                    snippet.loading -> "번역 중…"
-                                    snippet.korean != null -> snippet.korean
-                                    else -> "번역하지 못했어요."
-                                },
-                                color = if (snippet.korean == null) Muted else Ink, fontSize = 15.sp, lineHeight = 22.sp
-                            )
-                        }
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { onLookup(query) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)
-                        ) { IconText("📖 사전", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = {
-                            val paragraph = article.paragraphs[current.first]
-                            val sentence = ReadingWords.sentenceRange(paragraph, current.second.first)?.let { r -> paragraph.substring(r.first, r.last + 1) }.orEmpty()
-                            onSaveWord(selectedText, sentence)
-                        }, shape = RoundedCornerShape(12.dp)) { IconText("⭐ 단어장", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = { onTranslateSnippet(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🌐 번역", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = { copyToClipboard(context, selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("📋 복사", fontSize = 14.sp, maxLines = 1) }
-                        OutlinedButton(onClick = { onSpeak(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🔊", fontSize = 14.sp) }
-                    }
+            SelectionPanel(
+                Modifier.align(Alignment.BottomCenter), selectedText, snippet,
+                sentence = {
+                    val paragraph = article.paragraphs[current.first]
+                    ReadingWords.sentenceRange(paragraph, current.second.first)?.let { r -> paragraph.substring(r.first, r.last + 1) }.orEmpty()
+                },
+                onClose = { selected = null }, onLookup = onLookup, onSaveWord = onSaveWord, onTranslateSnippet = onTranslateSnippet, onSpeak = onSpeak
+            )
+        }
+        }
+        }
+    }
+}
+
+/** The panel under the text with what can be done with the picked word or sentence: dictionary, wordbook, translation, copy, read aloud. */
+@Composable
+private fun SelectionPanel(
+    modifier: Modifier,
+    selectedText: String,
+    snippet: com.hdlee73.englishstudy.reading.Snippet?,
+    sentence: () -> String,
+    onClose: () -> Unit,
+    onLookup: (String) -> Unit,
+    onSaveWord: (String, String) -> Unit,
+    onTranslateSnippet: (String) -> Unit,
+    onSpeak: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val query = ReadingWords.lookupText(selectedText)
+    Surface(modifier, shadowElevation = 12.dp, color = Color.White, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    selectedText, color = Ink, fontSize = if (selectedText.length > 40) 15.sp else 20.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onClose) { Text("✕", color = Muted) }
+            }
+            if (snippet != null) {
+                Box(Modifier.fillMaxWidth().heightIn(max = 140.dp).clip(RoundedCornerShape(12.dp)).background(SoftBlue).verticalScroll(rememberScrollState()).padding(12.dp)) {
+                    Text(
+                        when {
+                            snippet.loading -> "번역 중…"
+                            snippet.korean != null -> snippet.korean
+                            else -> "번역하지 못했어요."
+                        },
+                        color = if (snippet.korean == null) Muted else Ink, fontSize = 15.sp, lineHeight = 22.sp
+                    )
                 }
             }
-        }
-        }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onLookup(query) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)
+                ) { IconText("📖 사전", fontSize = 14.sp, maxLines = 1) }
+                OutlinedButton(onClick = {
+                    onSaveWord(selectedText, sentence())
+                }, shape = RoundedCornerShape(12.dp)) { IconText("⭐ 단어장", fontSize = 14.sp, maxLines = 1) }
+                OutlinedButton(onClick = { onTranslateSnippet(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🌐 번역", fontSize = 14.sp, maxLines = 1) }
+                OutlinedButton(onClick = { copyToClipboard(context, selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("📋 복사", fontSize = 14.sp, maxLines = 1) }
+                OutlinedButton(onClick = { onSpeak(selectedText) }, shape = RoundedCornerShape(12.dp)) { IconText("🔊", fontSize = 14.sp) }
+            }
         }
     }
 }

@@ -84,13 +84,29 @@
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="4dp"
         android:backgroundTint="@color/ls_teal_600"
-        android:text="새 에피소드 가져오기"
+        android:text="6 Minute English 새 에피소드 받기"
         android:textColor="@android:color/white"
         android:textStyle="bold"
         android:visibility="gone"
         app:cornerRadius="14dp"
         app:icon="@drawable/ls_ic_add"
         app:iconTint="@android:color/white" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/srtAllButton"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="4dp"
+        android:text="이 폴더 곡 자막(SRT) 만들기"
+        android:textColor="@color/ls_teal_700"
+        android:visibility="gone"
+        app:cornerRadius="14dp"
+        app:icon="@drawable/ls_ic_subtitles"
+        app:iconTint="@color/ls_teal_700" />
 
     <FrameLayout
         android:layout_width="match_parent"

@@ -21,6 +21,8 @@ sealed interface JobRequest {
         val koVoice: String,
         val enVoice: String,
         val speed: Double,
+        /** File name the user chose (no extension); empty = named after the document. */
+        val outName: String = "",
     ) : JobRequest
 
     data class Stt(
@@ -30,13 +32,14 @@ sealed interface JobRequest {
         val gap: Double,
         val includeTime: Boolean,
         val showSpeaker: Boolean,
+        val outName: String = "",
     ) : JobRequest
 
     /** 재생목록(Listening)의 곡들을 차례로 받아쓰기해 곡마다 SRT 자막을 만든다. */
-    data class SttBatch(val audios: List<Storage.Picked>, val opts: SttOptions) : JobRequest
+    data class SttBatch(val audios: List<Storage.Picked>, val opts: SttOptions, val outNames: Map<String, String> = emptyMap()) : JobRequest
 
     /** 유튜브 영상의 소리를 mp3 로 */
-    data class Yt(val url: String) : JobRequest
+    data class Yt(val url: String, val outName: String = "") : JobRequest
 
     /** 실시간 인식 모델 미리 내려받기 */
     data class ModelDownload(val lang: com.hdlee73.englishstudy.docvoice.core.LiveLang) : JobRequest

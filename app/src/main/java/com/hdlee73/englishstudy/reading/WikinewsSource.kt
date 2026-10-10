@@ -137,7 +137,8 @@ internal object KeyExpressions {
             }
         }
         val chosen = ArrayList<Pair<Int, KeyExpression>>()
-        chosen += phrases.take((max * 5 + 7) / 8)
+        // Idioms, phrasal verbs and patterns take about 3 of 5, the hard words the rest.
+        chosen += phrases.take((max * 3 + 4) / 5)
         // Spread the words over the text instead of taking only the first ones.
         val room = max - chosen.size
         if (room > 0 && words.isNotEmpty()) {
@@ -173,7 +174,7 @@ internal object KeyExpressions {
 
     private val phrasesByFirstForm: Map<String, List<Phrase>> by lazy {
         val map = HashMap<String, MutableList<Phrase>>()
-        for (text in (IDIOMS + "," + PHRASAL_VERBS).split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
+        for (text in (IDIOMS + "," + PHRASAL_VERBS + "," + PATTERNS).split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
             val parts = text.split(" ")
             val phrase = Phrase(parts.drop(1), parts.size)
             for (form in com.hdlee73.englishstudy.study.Blanker.variants(parts.first())) map.getOrPut(form) { ArrayList() } += phrase
@@ -251,7 +252,7 @@ internal object KeyExpressions {
         ).split(" ").toSet()
 
     /** Fixed expressions and idioms common in news and business writing. */
-    private const val IDIOMS =
+    internal const val IDIOMS =
         "in the wake of, on the back of, at odds with, take a toll on, take its toll, come to a head, a far cry from, in the long run, " +
         "in the short run, keep tabs on, by and large, on the line, bear the brunt of, foot the bill, on the table, off the table, " +
         "behind the scenes, in the pipeline, up in the air, at stake, in the red, in the black, on track, off track, on the rise, " +
@@ -278,8 +279,21 @@ internal object KeyExpressions {
         "head start, ballpark figure, rule of thumb, red tape, silver lining, track record, wild card, worst-case scenario, " +
         "trial and error, pros and cons, ups and downs, bread and butter, by the book, hands-on, on the ground, low-hanging fruit"
 
+    /** Conventional patterns and collocations of news and business writing. */
+    internal const val PATTERNS =
+        "a wide range of, a growing number of, a wave of, a host of, a series of, a string of, a raft of, a slew of, in an effort to, " +
+        "in a bid to, with a view to, as opposed to, in addition to, in contrast to, in comparison with, by contrast, due to, owing to, " +
+        "thanks to, on the heels of, ahead of schedule, amid growing, against the backdrop of, at a time when, to the extent that, " +
+        "in the absence of, in the event of, on the condition that, under the terms of, in exchange for, in the context of, " +
+        "in the wake of, as part of, as a whole, as of now, to date, so far this year, year over year, year to date, quarter over quarter, " +
+        "poised to, slated to, geared toward, geared towards, aimed at, bound to, set to, hinge on, in the works, on the cusp of, " +
+        "on a case by case basis, across the board, for the most part, to a certain degree, in the same vein, along the lines of, " +
+        "a number of, the vast majority of, a significant portion of, a substantial amount of, over the course of, in the course of, " +
+        "at the same time, at the time of, for the first time, on the whole, with the exception of, in spite of, regardless of, " +
+        "in anticipation of, in preparation for, in conjunction with, in accordance with, pursuant to, subject to"
+
     /** Phrasal verbs above the everyday level (everyday ones such as "go back" or "get up" are left out on purpose). */
-    private const val PHRASAL_VERBS =
+    internal const val PHRASAL_VERBS =
         "rein in, roll out, roll back, ramp up, scale back, scale up, phase out, phase in, crack down on, crack down, step up, step down, " +
         "step in, wind down, wind up, spill over, shore up, iron out, weigh in, weigh on, factor in, bank on, cash in on, cash in, " +
         "buy into, buy out, sell off, sell out, splash out, shell out, fork out, pay off, pay out, pay down, pile up, prop up, " +
