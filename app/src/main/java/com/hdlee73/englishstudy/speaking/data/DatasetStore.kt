@@ -40,6 +40,17 @@ class DatasetStore(private val context: Context) {
      */
     fun syncSavedWords(pairs: List<SentencePair>): SavedDataset? = syncManaged(SAVED_WORDS_ID, SAVED_WORDS_NAME, pairs)
 
+    /**
+     * The example sentences of the bundled Phrases collection, as a dataset for Speaking, Cards and Quiz. Rewritten only when the
+     * collection changed (a different number of sentences), so a later app version with more phrases refreshes it.
+     */
+    fun syncPhraseExamples(pairs: List<SentencePair>): SavedDataset? {
+        if (pairs.isEmpty()) return null
+        val existing = list().firstOrNull { it.id == PHRASES_ID }
+        if (existing != null && existing.sentenceCount == pairs.size) return existing
+        return syncManaged(PHRASES_ID, PHRASES_NAME, pairs)
+    }
+
     /** Same for the starred sentences: they live in their own dataset next to the saved-words one. */
     fun syncFavorites(pairs: List<SentencePair>): SavedDataset? = syncManaged(FAVORITES_ID, FAVORITES_NAME, pairs)
 
@@ -155,6 +166,8 @@ class DatasetStore(private val context: Context) {
         /** The name must end in ".csv": the parser is chosen from it when the dataset is loaded. */
         const val SAVED_WORDS_NAME = "저장 단어 예문.csv"
         const val FAVORITES_ID = "favorites"
+        const val PHRASES_ID = "phrase_examples"
+        const val PHRASES_NAME = "패턴·표현 예문.csv"
         const val FAVORITES_NAME = "즐겨찾기 문장.csv"
         const val TRANSLATED_ID = "translated"
         const val TRANSLATED_NAME = "번역 저장 문장.csv"

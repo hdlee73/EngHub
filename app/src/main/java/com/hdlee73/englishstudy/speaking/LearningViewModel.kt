@@ -328,6 +328,14 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /** Makes the example sentences of the Phrases tab available as a dataset (Speaking, Cards, Quiz). */
+    fun syncPhraseExamples(pairs: List<SentencePair>) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { datasetStore.syncPhraseExamples(pairs) }
+            _state.update { it.copy(savedDatasets = datasetStore.list()) }
+        }
+    }
+
     fun syncSavedWordsDataset(sentences: List<SentencePair>) {
         viewModelScope.launch {
             runCatching { datasetStore.syncSavedWords(sentences) }

@@ -289,6 +289,7 @@ class PlaylistSheet(
             IconMenu.Item(9, "뒤로 (아래로) 옮기기", R.drawable.ls_ic_arrow_down),
             IconMenu.Item(10, "곡을 이름순으로 정렬", R.drawable.ls_ic_sort),
             IconMenu.Item(3, "이름 변경", R.drawable.ls_ic_edit),
+            IconMenu.Item(11, "폴더 곡 모두 자막(SRT) 만들기", R.drawable.ls_ic_subtitles),
             IconMenu.Item(4, "폴더 비우기", R.drawable.ls_ic_clear_list, dividerBefore = true),
             IconMenu.Item(5, if (svc.groups.size > 1) "폴더 삭제" else "폴더 삭제 (마지막 폴더는 비우기만)", R.drawable.ls_ic_delete, destructive = true)
         )
@@ -334,6 +335,12 @@ class PlaylistSheet(
                     else viewGroup = svc.groups.indexOf(group)
                     render()
                 }
+                11 -> {
+                    if (group.entries.isEmpty()) toast("비어 있는 폴더입니다.")
+                    else confirm("‘${group.name}’ 폴더의 곡 ${group.entries.size}개로 자막(SRT)을 만들까요?\n말을 받아쓰는 작업이라 곡이 많거나 길면 오래 걸리고, 처음에는 음성 모델을 내려받아요. 이미 자막이 있는 곡은 건너뜁니다.", "만들기") {
+                        SrtMaker.start(context, group.entries.toList())
+                    }
+                }
                 10 -> {
                     svc.sortGroupByName(index)
                     toast("곡을 이름순으로 정렬했습니다.")
@@ -370,6 +377,7 @@ class PlaylistSheet(
         val entry = svc.groupEntries(viewGroup).getOrNull(position) ?: return
         val items = mutableListOf(IconMenu.Item(1, "이 파일 반복 재생", R.drawable.ls_ic_repeat_one))
         if (svc.groups.size > 1) items += IconMenu.Item(2, "다른 폴더로 이동", R.drawable.ls_ic_folder_move)
+        items += IconMenu.Item(5, "자막(SRT) 만들기", R.drawable.ls_ic_subtitles)
         items += IconMenu.Item(3, "이어듣기 기록 초기화", R.drawable.ls_ic_refresh)
         items += IconMenu.Item(4, "목록에서 삭제", R.drawable.ls_ic_delete, destructive = true, dividerBefore = true)
         IconMenu.show(context, anchor, items, alignEnd = true) { id ->
@@ -381,6 +389,7 @@ class PlaylistSheet(
                     render()
                 }
                 2 -> chooseTargetGroup(position, entry)
+                5 -> SrtMaker.start(context, listOf(entry))
                 3 -> {
                     svc.resetProgress(viewGroup, position)
                     render()

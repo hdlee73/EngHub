@@ -32,6 +32,9 @@ sealed interface JobRequest {
         val showSpeaker: Boolean,
     ) : JobRequest
 
+    /** 재생목록(Listening)의 곡들을 차례로 받아쓰기해 곡마다 SRT 자막을 만든다. */
+    data class SttBatch(val audios: List<Storage.Picked>, val opts: SttOptions) : JobRequest
+
     /** 유튜브 영상의 소리를 mp3 로 */
     data class Yt(val url: String) : JobRequest
 

@@ -24,6 +24,8 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
     private var generation = 0
     private var sequence = 0
     private var errorDialog: AlertDialog? = null
+    private var onSequenceStart: ((Int) -> Unit)? = null
+    private var onSequenceEnd: (() -> Unit)? = null
 
     init { initialize() }
 
@@ -63,8 +65,13 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
                 speech.setSpeechRate(0.9f)
                 speech.setPitch(1f)
                 speech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-                    override fun onDone(utteranceId: String?) {}
+                    override fun onStart(utteranceId: String?) {
+                        val index = utteranceId?.removePrefix("seq-")?.toIntOrNull()?.takeIf { utteranceId.startsWith("seq-") } ?: return
+                        main.post { if (current == generation) onSequenceStart?.invoke(index) }
+                    }
+                    override fun onDone(utteranceId: String?) {
+                        if (utteranceId == "seq-end") main.post { if (current == generation) onSequenceEnd?.invoke() }
+                    }
                     @Deprecated("Required by platform listener")
                     override fun onError(utteranceId: String?) = reportError(current)
                     override fun onError(utteranceId: String?, errorCode: Int) = reportError(current)
@@ -98,11 +105,47 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
             notice("미디어 음량을 올린 뒤 다시 눌러 주세요.")
             return
         }
+        cancelSequence()
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) }
         if (engine?.speak(text, TextToSpeech.QUEUE_FLUSH, params, "word-" + ++sequence) != TextToSpeech.SUCCESS) {
             ready = false
             showProblem("음성 재생을 시작하지 못했습니다. 음성 설정을 확인한 뒤 다시 눌러 주세요.")
         }
+    }
+
+    /**
+     * Reads [texts] one after another with a pause between them (the Phrases "continuous listening"); [onStart] gets the index of the
+     * sentence being read and [onEnd] is called after the last one. A new [speak], [stop] or [speakAll] cancels the rest.
+     */
+    fun speakAll(texts: List<String>, gapMs: Long, onStart: (Int) -> Unit, onEnd: () -> Unit) {
+        val items = texts.map { com.hdlee73.englishstudy.study.WordIpa.speakable(it) }
+        if (closed || items.isEmpty()) return
+        if (!ready) {
+            initialize()
+            notice("영어 음성을 준비하고 있습니다. 잠시 뒤 다시 눌러 주세요.")
+            onEnd()
+            return
+        }
+        val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
+            notice("미디어 음량을 올린 뒤 다시 눌러 주세요.")
+            onEnd()
+            return
+        }
+        cancelSequence()
+        onSequenceStart = onStart
+        onSequenceEnd = onEnd
+        val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) }
+        val speech = engine ?: return
+        var mode = TextToSpeech.QUEUE_FLUSH
+        items.forEachIndexed { i, text ->
+            if (text.isBlank()) return@forEachIndexed
+            speech.speak(text, mode, params, "seq-$i")
+            mode = TextToSpeech.QUEUE_ADD
+            speech.playSilentUtterance(gapMs, TextToSpeech.QUEUE_ADD, if (i == items.lastIndex) "seq-end" else "gap-$i")
+        }
+        if (mode == TextToSpeech.QUEUE_FLUSH) onEnd()
     }
 
     private fun showProblem(message: String) {
@@ -119,8 +162,16 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
     }
 
     /** Stops a word that is being read out, e.g. when the learner leaves the screen. */
+    private fun cancelSequence() {
+        val end = onSequenceEnd
+        onSequenceStart = null
+        onSequenceEnd = null
+        end?.invoke()
+    }
+
     fun stop() {
         pending = null
+        cancelSequence()
         if (!closed && ready) engine?.stop()
     }
 

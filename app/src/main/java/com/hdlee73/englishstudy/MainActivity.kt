@@ -278,6 +278,17 @@ class MainActivity : AppCompatActivity() {
             // The saved words' example sentences become a dataset of their own, always up to date.
             LaunchedEffect(savedSentences) { learningVm.syncSavedWordsDataset(savedSentences) }
 
+            // The Phrases tab's example sentences become a dataset too (for Speaking, Cards and Quiz).
+            LaunchedEffect(Unit) {
+                val pairs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        assets.open("phrases_us_uk.txt").bufferedReader(Charsets.UTF_8).use { com.hdlee73.englishstudy.phrases.PhraseBank.parse(it.readText()) }
+                            .map { com.hdlee73.englishstudy.speaking.model.SentencePair(it.exampleKo, it.example) }
+                    }.getOrDefault(emptyList())
+                }
+                learningVm.syncPhraseExamples(pairs)
+            }
+
             sharedText?.let { text ->
                 com.hdlee73.englishstudy.ui.EnglishStudyTheme {
                     androidx.compose.material3.AlertDialog(
@@ -477,6 +488,8 @@ class MainActivity : AppCompatActivity() {
                     )
                     AppTab.PHRASES -> com.hdlee73.englishstudy.ui.PhrasesScreen(
                         onSpeak = wordSpeaker::speak,
+                        onSpeakAll = wordSpeaker::speakAll,
+                        onStopSpeaking = wordSpeaker::stop,
                         onLookup = { text ->
                             dictionaryVm.pickSuggestion(text)
                             wordSpeaker.stop()
