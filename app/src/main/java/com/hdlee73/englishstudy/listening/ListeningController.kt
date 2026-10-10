@@ -45,7 +45,10 @@ import java.util.Locale
 class ListeningController(
     private val activity: ComponentActivity,
     private val ctx: Context,
-    private val root: View
+    private val root: View,
+    /** Words picked in the subtitles are sent on to the dictionary / word list and to the translator. */
+    private val onLookup: (String) -> Unit = {},
+    private val onTranslate: (String) -> Unit = {}
 ) {
     /** An intent (open-with, widget button, notification) waiting for the service to be ready. */
     var launchIntent: Intent? = null
@@ -618,7 +621,7 @@ class ListeningController(
             toast("먼저 오디오 파일을 추가해 주세요.")
             return
         }
-        val sheet = SubtitleSheet(ctx, svc) { openSubtitlePicker() }
+        val sheet = SubtitleSheet(ctx, svc, onLookup = { subtitleSheet?.dismiss(); onLookup(it) }, onTranslate = { subtitleSheet?.dismiss(); onTranslate(it) }) { openSubtitlePicker() }
         subtitleSheet = sheet
         sheet.show()
     }
