@@ -9,6 +9,12 @@ import java.util.Locale
  * are never chosen, and neither are names, numbers or contractions.
  */
 internal object KeyWordPicker {
+    /**
+     * The most frequent English words (the app loads the list at start): a sentence's key word is the hardest word outside it. Empty in
+     * tests and until loaded, then only the short built-in list of everyday words is used.
+     */
+    @Volatile var frequent: Set<String> = emptySet()
+
     /** The chosen text exactly as it is written in [sentence], or null when nothing suitable is in it. */
     fun pick(sentence: String): String? {
         val tokens = tokenize(sentence)
@@ -32,7 +38,8 @@ internal object KeyWordPicker {
 
     private val phrasesByFirstForm: Map<String, List<Phrase>> by lazy {
         val map = HashMap<String, MutableList<Phrase>>()
-        for (text in PHRASES.split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
+        for (text in (PHRASES + "," + com.hdlee73.englishstudy.reading.KeyExpressions.IDIOMS + "," +
+            com.hdlee73.englishstudy.reading.KeyExpressions.PHRASAL_VERBS + "," + com.hdlee73.englishstudy.reading.KeyExpressions.PATTERNS).split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
             val words = text.split(" ")
             val phrase = Phrase(words.drop(1), words.size)
             for (form in Blanker.variants(words.first())) map.getOrPut(form) { ArrayList() } += phrase
@@ -41,10 +48,14 @@ internal object KeyWordPicker {
         map
     }
 
+    /** The longest phrase of the sentence (an idiom or pattern over a two-word phrasal verb); the first one when equally long. */
     private fun phrase(sentence: String, tokens: List<Token>): String? {
+        var best: String? = null
+        var bestSize = 0
         for (i in tokens.indices) {
             val candidates = phrasesByFirstForm[tokens[i].lower] ?: continue
             for (phrase in candidates) {
+                if (phrase.size <= bestSize) continue
                 // A short phrasal verb may be split by a pronoun: "figure this out", "pick it up".
                 val gaps = if (phrase.size == 2) listOf(0, 1) else listOf(0)
                 for (gap in gaps) {
@@ -55,12 +66,14 @@ internal object KeyWordPicker {
                     val last = tokens[lastIndex]
                     // The words must be neighbours, separated by spaces only.
                     if (matches && sentence.substring(tokens[i].start, last.end).all { it.isLetter() || it == ' ' }) {
-                        return sentence.substring(tokens[i].start, last.end)
+                        best = sentence.substring(tokens[i].start, last.end)
+                        bestSize = phrase.size
+                        break
                     }
                 }
             }
         }
-        return null
+        return best
     }
 
     // ---- single words ----
@@ -73,11 +86,30 @@ internal object KeyWordPicker {
             if (w.length < 3 || '\'' in w || '’' in w || w in STOP) continue
             // A capital letter inside a sentence marks a name ("Seoul"); "I" is already a stop word.
             if (index > 0 && token.text[0].isUpperCase()) continue
-            val score = minOf(w.length, 10) - (if (w in COMMON) 4 else 0)
+            var score = minOf(w.length, 10) - (if (w in COMMON) 4 else 0)
             if (score < 1) continue
+            // With the word-frequency list at hand: rare words first, Latin-rooted (abstract, formal) ones ahead of plain ones.
+            if (frequent.isNotEmpty()) {
+                if (isFrequent(w)) score -= 6
+                if (LATINATE.any { w.endsWith(it) }) score += 2
+            }
             if (score > bestScore) { best = token; bestScore = score }
         }
         return best?.text
+    }
+
+    private val LATINATE = listOf("tion", "sion", "ment", "ance", "ence", "ity", "ous", "ive", "ize", "ise", "ate", "ible", "able", "ism", "ical")
+
+    private fun isFrequent(w: String): Boolean {
+        if (w in frequent) return true
+        val base = when {
+            w.length > 4 && w.endsWith("ies") -> w.dropLast(3) + "y"
+            w.length > 5 && w.endsWith("ing") -> w.dropLast(3)
+            w.length > 4 && w.endsWith("ed") -> w.dropLast(2)
+            w.length > 3 && w.endsWith("s") && !w.endsWith("ss") -> w.dropLast(1)
+            else -> w
+        }
+        return base in frequent || base + "e" in frequent
     }
 
     private val STOP: Set<String> = (

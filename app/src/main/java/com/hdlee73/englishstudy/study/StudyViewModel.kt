@@ -93,6 +93,13 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile private var datasetQuizCounts: Map<String, Int> = emptyMap()
 
     init {
+        // The everyday-word list lets the quiz blank hard words instead of arbitrary ones.
+        viewModelScope.launch(Dispatchers.IO) {
+            if (KeyWordPicker.frequent.isEmpty()) KeyWordPicker.frequent = runCatching {
+                application.assets.open("common_words.txt").bufferedReader().useLines { lines -> lines.map { it.trim() }.filter { it.isNotEmpty() }.toHashSet() }
+            }.getOrDefault(emptySet())
+            refreshSetup()
+        }
         viewModelScope.launch { repository.words.collect { refreshSetup() } }
     }
 
