@@ -27,6 +27,10 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 class SubtitleSheet(
     private val context: Context,
     private val svc: PlaybackService,
+    /** Sends the words picked in the subtitles to the dictionary / word list ... */
+    private val onLookup: (String) -> Unit,
+    /** ... or to the translator. */
+    private val onTranslate: (String) -> Unit,
     private val pickFile: () -> Unit
 ) {
     private val dialog = BottomSheetDialog(context)
@@ -46,6 +50,8 @@ class SubtitleSheet(
     private var currentIndex = -1
     private var lastUserScroll = 0L
     private var lastActive: Boolean? = null
+    /** When on, the words of a subtitle can be selected like any text (a word, a phrase), without regard to the time stamps. */
+    private var selectMode = false
     private var dragAnchor = -1
     private var dragEnd = -1
     private var dragY = 0f
@@ -254,17 +260,81 @@ class SubtitleSheet(
     }
 
     private fun showMenu(anchor: View) {
-        val items = mutableListOf(IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles))
+        val items = mutableListOf(IconMenu.Item(3, if (selectMode) "글자 선택 모드 끄기" else "글자 선택 모드 (단어·구절 고르기)", R.drawable.ls_ic_edit))
+        items += IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles)
         if (svc.subtitleUri != null) items += IconMenu.Item(2, "이 곡의 자막 제거", R.drawable.ls_ic_delete, destructive = true)
         IconMenu.show(context, anchor, items, alignEnd = true) { id ->
             when (id) {
                 1 -> pickFile()
+                3 -> {
+                    selectMode = !selectMode
+                    hint.let { (it as? TextView)?.text = if (selectMode) SELECT_HINT else NORMAL_HINT }
+                    adapter.notifyDataSetChanged()
+                    Toast.makeText(context, if (selectMode) "자막 글자를 길게 눌러 단어나 구절을 고르세요." else "글자 선택 모드를 껐습니다.", Toast.LENGTH_SHORT).show()
+                }
                 2 -> {
                     svc.setSubtitle(null)
                     reload()
                 }
             }
         }
+    }
+
+    /**
+     * The menu shown over selected subtitle text: play just that part, look it up, translate it. (Copy stays in the system menu.)
+     * Subtitles only carry times for whole sentences, so the part's time is estimated from where it sits in the sentence.
+     */
+    private fun selectionCallback(holder: CueHolder) = object : android.view.ActionMode.Callback {
+        override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+            menu.add(0, MENU_PLAY, 0, "이 부분 재생")
+            menu.add(0, MENU_LOOKUP, 1, "단어장·사전")
+            menu.add(0, MENU_TRANSLATE, 2, "번역")
+            return true
+        }
+
+        override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) = false
+
+        override fun onActionItemClicked(mode: android.view.ActionMode, item: android.view.MenuItem): Boolean {
+            val field = holder.text
+            val start = minOf(field.selectionStart, field.selectionEnd).coerceAtLeast(0)
+            val end = maxOf(field.selectionStart, field.selectionEnd).coerceAtLeast(0)
+            val whole = field.text.toString()
+            if (start >= end || end > whole.length) return false
+            val picked = whole.substring(start, end).trim()
+            when (item.itemId) {
+                MENU_PLAY -> cues.getOrNull(holder.bindingAdapterPosition)?.let { playPart(it, start, end) }
+                MENU_LOOKUP -> if (picked.isNotEmpty()) onLookup(picked)
+                MENU_TRANSLATE -> if (picked.isNotEmpty()) onTranslate(picked)
+                else -> return false
+            }
+            mode.finish()
+            return true
+        }
+
+        override fun onDestroyActionMode(mode: android.view.ActionMode) {}
+    }
+
+    /** Loops the selected characters of [cue] (a little early and late so the words are not cut off). */
+    private fun playPart(cue: Cue, start: Int, end: Int) {
+        val length = cue.text.length.coerceAtLeast(1)
+        val duration = (cue.endMs - cue.startMs).coerceAtLeast(1L)
+        val from = cue.startMs + duration * start / length
+        val to = cue.startMs + duration * end / length
+        val a = (from - 350L).coerceAtLeast(maxOf(0L, cue.startMs - 300L))
+        val b = maxOf(to + 450L, a + 800L)
+        svc.setA(a)
+        if (svc.setB(b)) {
+            svc.resume()
+            Toast.makeText(context, "고른 부분을 반복 재생합니다. (시간은 문장 안의 위치로 추정)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private companion object {
+        const val MENU_PLAY = 1
+        const val MENU_LOOKUP = 2
+        const val MENU_TRANSLATE = 3
+        const val NORMAL_HINT = "문장을 누르면 그 위치로 이동 · 길게 누르면 그 문장을 구간 반복 · 길게 누른 채 끌면 여러 문장을 구간 반복"
+        const val SELECT_HINT = "글자 선택 모드: 자막 글자를 길게 눌러 단어나 구절을 고른 뒤 ‘이 부분 재생 · 단어장·사전 · 번역’을 고르세요. (메뉴 ⋮ 에서 끌 수 있어요)"
     }
 
     private inner class CueHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -285,6 +355,16 @@ class SubtitleSheet(
             holder.text.setTextColor(context.getColor(if (current) R.color.ls_teal_700 else R.color.ls_text_secondary))
             holder.text.setTypeface(null, if (current) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
             holder.itemView.setBackgroundResource(if (current) R.drawable.ls_bg_row_current else 0)
+            holder.text.setTextIsSelectable(selectMode)
+            if (selectMode) {
+                holder.text.customSelectionActionModeCallback = selectionCallback(holder)
+                holder.itemView.setOnClickListener(null)
+                holder.itemView.setOnLongClickListener(null)
+                holder.itemView.isClickable = false
+                holder.itemView.isLongClickable = false
+                return
+            }
+            holder.text.customSelectionActionModeCallback = null
             holder.itemView.setOnClickListener {
                 val pos = holder.bindingAdapterPosition
                 cues.getOrNull(pos)?.let { svc.player.seekTo(it.startMs) }

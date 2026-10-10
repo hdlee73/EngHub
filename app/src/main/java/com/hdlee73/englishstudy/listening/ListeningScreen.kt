@@ -46,7 +46,15 @@ private class ControllerHolder {
  * [pendingIntent] is an audio file opened from elsewhere, or a tap on the widget / notification; [onIntentConsumed] is called once it is handed over.
  */
 @Composable
-fun ListeningScreen(pendingIntent: Intent?, onIntentConsumed: () -> Unit, modifier: Modifier = Modifier) {
+fun ListeningScreen(
+    pendingIntent: Intent?,
+    onIntentConsumed: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLookup: (String) -> Unit = {},
+    onTranslate: (String) -> Unit = {}
+) {
+    val latestLookup = androidx.compose.runtime.rememberUpdatedState(onLookup)
+    val latestTranslate = androidx.compose.runtime.rememberUpdatedState(onTranslate)
     val hostContext = LocalContext.current
     val activity = remember(hostContext) { hostContext.findActivity() } ?: return
     val themed = remember(activity) { ContextThemeWrapper(activity, R.style.ls_Theme_Listening) }
@@ -59,7 +67,7 @@ fun ListeningScreen(pendingIntent: Intent?, onIntentConsumed: () -> Unit, modifi
             modifier = Modifier.weight(1f).fillMaxWidth(),
             factory = {
                 val view = LayoutInflater.from(themed).inflate(R.layout.ls_activity_main, null)
-                val controller = ListeningController(activity, themed, view)
+                val controller = ListeningController(activity, themed, view, { latestLookup.value(it) }, { latestTranslate.value(it) })
                 holder.controller = controller
                 controller.start()
                 view
