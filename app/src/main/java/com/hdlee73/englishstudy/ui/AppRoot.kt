@@ -89,8 +89,8 @@ enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vect
 }
 
 /** The menu groups, in the order the left menu lists them. */
-private val STUDY_TABS = listOf(AppTab.DICTIONARY, AppTab.FLASHCARDS, AppTab.QUIZ, AppTab.READING, AppTab.TRANSLATE, AppTab.PHRASES)
-private val PRACTICE_TABS = listOf(AppTab.SPEAKING, AppTab.LISTENING, AppTab.DOCVOICE)
+private val STUDY_TABS = listOf(AppTab.DICTIONARY, AppTab.FLASHCARDS, AppTab.QUIZ, AppTab.TRANSLATE, AppTab.PHRASES, AppTab.DOCVOICE)
+private val PRACTICE_TABS = listOf(AppTab.SPEAKING, AppTab.LISTENING, AppTab.READING)
 
 /** The left menu (like the DailyHabit app): every tab, in two groups, with app info at the bottom. */
 @Composable
@@ -195,13 +195,7 @@ fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, onOpenUrl: (String) -> Unit, c
         if (aboutOpen) AboutDialog(onOpenUrl = onOpenUrl, onDismiss = { aboutOpen = false })
         val release = newer
         if (updatePrompt && release != null && !aboutOpen) {
-            AlertDialog(
-                onDismissRequest = { updatePrompt = false },
-                title = { Text("새 버전이 있어요", fontWeight = FontWeight.Bold) },
-                text = { Text("EngHub ${release.version.removePrefix("v")}이(가) 나왔어요 (지금 ${UpdateChecker.installedVersion(context)}).\n업데이트하기 전까지 앱을 열 때마다 알려 드려요.") },
-                confirmButton = { TextButton(onClick = { updatePrompt = false; onOpenUrl(release.url) }) { Text("업데이트 받기") } },
-                dismissButton = { TextButton(onClick = { updatePrompt = false }) { Text("나중에") } }
-            )
+            UpdateDialog(release, onOpenUrl = onOpenUrl, onDismiss = { updatePrompt = false })
         }
     }
 }

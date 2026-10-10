@@ -24,7 +24,10 @@ fun AboutDialog(onOpenUrl: (String) -> Unit, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val version = remember { UpdateChecker.installedVersion(ctx) }
     var newer by remember { mutableStateOf(UpdateChecker.available(ctx)) }
+    var updating by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { newer = UpdateChecker.check(ctx) }
+    val pending = newer
+    if (updating && pending != null) { UpdateDialog(pending, onOpenUrl = onOpenUrl, onDismiss = { updating = false; onDismiss() }); return }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("앱 정보", fontWeight = FontWeight.Bold) },
@@ -34,7 +37,7 @@ fun AboutDialog(onOpenUrl: (String) -> Unit, onDismiss: () -> Unit) {
                 Text("버전 $version")
                 val release = newer
                 if (release != null) {
-                    Text("새 버전 ${release.version.removePrefix("v")}이(가) 나왔어요. 아래 버튼으로 받아 업데이트하세요.", color = Blue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("새 버전 ${release.version.removePrefix("v")}이(가) 나왔어요. 아래 버튼으로 앱 안에서 받아 바로 설치할 수 있어요.", color = Blue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 } else {
                     Text("최신 버전을 쓰고 있어요.", color = Color.Gray, fontSize = 13.sp)
                 }
@@ -42,7 +45,7 @@ fun AboutDialog(onOpenUrl: (String) -> Unit, onDismiss: () -> Unit) {
                 Text("업데이트 정보는 GitHub Release 페이지에서 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
             }
         },
-        confirmButton = { TextButton(onClick = { onDismiss(); onOpenUrl(newer?.url ?: UpdateChecker.RELEASES_URL) }) { Text(if (newer != null) "업데이트 받기" else "Release 페이지 열기") } },
+        confirmButton = { TextButton(onClick = { if (newer != null) updating = true else { onDismiss(); onOpenUrl(UpdateChecker.RELEASES_URL) } }) { Text(if (newer != null) "업데이트 받기·설치" else "Release 페이지 열기") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
     )
 }
