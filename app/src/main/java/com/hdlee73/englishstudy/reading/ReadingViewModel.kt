@@ -52,11 +52,21 @@ data class ReadingUiState(
     val loadingExpressions: Boolean = false,
     val message: String? = null,
     /** The translation of the words the learner selected in the open article. */
-    val snippet: Snippet? = null
+    val snippet: Snippet? = null,
+    /** The file the learner opened (a document of their own), shown instead of today's texts while it is [openId]. */
+    val fileArticle: ReadingArticle? = null,
+    /** Files opened before, newest first; they are kept inside the app so they open again without the picker. */
+    val recentFiles: List<RecentFile> = emptyList(),
+    val loadingFile: Boolean = false,
+    /** Text size of the open text in sp. */
+    val fontSp: Int = 18
 ) {
-    val open: ReadingArticle? get() = today.firstOrNull { it.id == openId }
+    val open: ReadingArticle? get() = fileArticle?.takeIf { it.id == openId } ?: today.firstOrNull { it.id == openId }
     val showTranslation: Boolean get() = mode == ReadingMode.TRANSLATION
 }
+
+/** A file opened in the Reading tab: [id] names its saved copy of the text, [name] is the file name. */
+data class RecentFile(val id: String, val name: String)
 
 /** A selected passage and its Korean translation ([korean] is null while loading or when it failed). */
 data class Snippet(val text: String, val korean: String?, val loading: Boolean)
@@ -81,7 +91,10 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
     }
     private var fetchJob: Job? = null
 
-    init { refresh() }
+    init {
+        _state.update { it.copy(recentFiles = loadRecent(), fontSp = prefs.getInt("font_sp", 18)) }
+        refresh()
+    }
 
     /** Loads today's texts (from the cache, else the web, else the bundled library); call again when the tab is shown. */
     fun refresh() {
@@ -98,7 +111,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
             val read = prefs.getStringSet("read_$day", emptySet()).orEmpty()
             _state.update {
                 // Keep an article open across a refresh unless the day has moved on.
-                val stillOpen = it.openId?.takeIf { id -> list.any { a -> a.id == id } }
+                val stillOpen = it.openId?.takeIf { id -> id == it.fileArticle?.id || list.any { a -> a.id == id } }
                 it.copy(
                     loaded = true, today = list, fromWeb = cachedToday != null, readIds = read.filter { id -> list.any { a -> a.id == id } }.toSet(),
                     dateLabel = "${date.monthValue}월 ${date.dayOfMonth}일", openId = stillOpen
@@ -125,7 +138,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
             if (fetched != null && forDay == day) {
                 storeDaily(forDay, fetched)
                 _state.update {
-                    val stillOpen = it.openId?.takeIf { id -> fetched.any { a -> a.id == id } }
+                    val stillOpen = it.openId?.takeIf { id -> id == it.fileArticle?.id || fetched.any { a -> a.id == id } }
                     it.copy(today = fetched, fromWeb = true, fetching = false, openId = stillOpen,
                         readIds = it.readIds.filter { id -> fetched.any { a -> a.id == id } }.toSet())
                 }
@@ -260,10 +273,113 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
         val read = (prefs.getStringSet("read_$day", emptySet()).orEmpty() + id).toSet()
         prefs.edit().putStringSet("read_$day", read).apply()
         translateJob?.cancel(); expressionJob?.cancel()
-        scrollPosition = 0; savedSelection = null
+        scrollPosition = 0; savedSelection = null; savedPage = 0; savedZoom = 1f
         _state.update {
             it.copy(openId = id, readIds = it.readIds + id, mode = ReadingMode.TEXT, translating = false, translations = cached(id),
                 expressions = emptyList(), loadingExpressions = false, snippet = null)
+        }
+    }
+
+    // ---- files of the learner's own ----
+
+    private fun loadRecent(): List<RecentFile> = runCatching {
+        val a = JSONArray(prefs.getString("recent_files", "[]"))
+        (0 until a.length()).map { a.getJSONObject(it) }.map { RecentFile(it.getString("id"), it.getString("name")) }
+            .filter { java.io.File(filesDir(), it.id + ".txt").exists() }
+    }.getOrDefault(emptyList())
+
+    private fun filesDir() = java.io.File(getApplication<Application>().filesDir, "reading_files").apply { mkdirs() }
+
+    private fun saveRecent(list: List<RecentFile>) {
+        val a = JSONArray()
+        list.forEach { a.put(JSONObject().put("id", it.id).put("name", it.name)) }
+        prefs.edit().putString("recent_files", a.toString()).apply()
+    }
+
+    /** One paragraph per blank-line-separated block; text with no blank lines at all has one paragraph per line. */
+    internal fun toParagraphs(text: String): List<String> {
+        val blocks = if (text.contains("\n\n")) text.split(Regex("\\n\\s*\\n")).map { it.lines().joinToString(" ") { l -> l.trim() } } else text.lines()
+        return blocks.map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    /** Reads the picked file (text, Word, PDF, Excel, PowerPoint, HWP...), keeps its text inside the app and opens it. */
+    fun openFile(uri: android.net.Uri) {
+        _state.update { it.copy(loadingFile = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val result = runCatching {
+                val name = app.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) c.getString(0) else null
+                } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "file.txt"
+                val data = app.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("파일을 열 수 없습니다.")
+                if (data.size > 30_000_000) error("파일이 너무 큽니다. (30MB 이하)")
+                val text = com.hdlee73.englishstudy.docvoice.core.Extractors.extract(name, data, com.hdlee73.englishstudy.docvoice.core.PdfText.reader(app))
+                name to text
+            }
+            result.onSuccess { (name, text) ->
+                val id = "f" + Integer.toHexString((name + text.length + text.take(200)).hashCode())
+                java.io.File(filesDir(), "$id.txt").writeText(text)
+                val recent = (listOf(RecentFile(id, name)) + loadRecent().filter { it.id != id }).take(12)
+                saveRecent(recent)
+                showFile(id, name, text, recent)
+            }.onFailure { e ->
+                _state.update { it.copy(loadingFile = false, message = e.message ?: "파일을 읽지 못했습니다.") }
+            }
+        }
+    }
+
+    fun openRecent(id: String) {
+        val file = _state.value.recentFiles.firstOrNull { it.id == id } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val text = runCatching { java.io.File(filesDir(), "$id.txt").readText() }.getOrNull()
+            if (text == null) _state.update { it.copy(message = "저장된 파일을 찾을 수 없습니다.") }
+            else showFile(id, file.name, text, _state.value.recentFiles)
+        }
+    }
+
+    fun deleteRecent(id: String) {
+        runCatching { java.io.File(filesDir(), "$id.txt").delete() }
+        val recent = _state.value.recentFiles.filter { it.id != id }
+        saveRecent(recent)
+        _state.update { it.copy(recentFiles = recent) }
+    }
+
+    private fun showFile(id: String, name: String, text: String, recent: List<RecentFile>) {
+        val article = ReadingArticle(id, "내 파일", name.substringBeforeLast('.'), toParagraphs(text), credit = "")
+        translateJob?.cancel(); expressionJob?.cancel()
+        scrollPosition = 0; savedSelection = null; savedPage = 0; savedZoom = 1f
+        _state.update {
+            it.copy(
+                fileArticle = article, recentFiles = recent, loadingFile = false, openId = id, mode = ReadingMode.TEXT, translating = false,
+                translations = emptyMap(), expressions = emptyList(), loadingExpressions = false, snippet = null
+            )
+        }
+    }
+
+    fun setFontSp(value: Int) {
+        val v = value.coerceIn(12, 40)
+        prefs.edit().putInt("font_sp", v).apply()
+        _state.update { it.copy(fontSp = v) }
+    }
+
+    /** Page of a long file and the zoom of the screen, kept while a word is looked up in the dictionary. */
+    var savedPage = 0
+    var savedZoom = 1f
+
+    /** Saves the selected words (or phrase) to the word list, with the sentence they were read in and their Korean meaning. */
+    fun saveToWordbook(text: String, sentence: String) {
+        val article = _state.value.open
+        viewModelScope.launch(Dispatchers.IO) {
+            val korean = _state.value.snippet?.takeIf { it.text == text }?.korean
+                ?: snippetTranslator.translate(text, Direction.EN_KO).orEmpty()
+            val sentenceKo = if (sentence.isNotBlank() && sentence != text) snippetTranslator.translate(sentence, Direction.EN_KO).orEmpty() else ""
+            val entry = WordEntry(
+                word = text.trim(), ipa = "", korean = korean, english = "",
+                examples = if (sentence.isBlank()) "" else sentence + "\t" + sentenceKo,
+                source = "리딩" + (article?.title?.let { " · $it" } ?: "")
+            )
+            val ok = repository.save(entry)
+            _state.update { it.copy(message = if (ok) "‘${text.trim()}’을(를) 단어장에 저장했습니다." else "저장하지 못했습니다.") }
         }
     }
 

@@ -176,6 +176,9 @@ class MainActivity : AppCompatActivity() {
             val flashListPicker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Multiple()) { uris ->
                 studyVm.importFlashDatasets(uris)
             }
+            val readingFilePicker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Single()) { uri ->
+                if (uri != null) readingVm.openFile(uri)
+            }
             val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
             // Update notices are notifications, so ask once for the permission on Android 13+.
             LaunchedEffect(Unit) {
@@ -384,7 +387,24 @@ class MainActivity : AppCompatActivity() {
                         savedScroll = readingVm.scrollPosition,
                         onScroll = readingVm::saveScroll,
                         savedSelection = readingVm.savedSelection,
-                        onSelection = readingVm::saveSelection
+                        onSelection = readingVm::saveSelection,
+                        onOpenFile = {
+                            readingFilePicker.launch(arrayOf(
+                                "text/plain", "text/markdown", "text/csv", "application/pdf", "application/msword",
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                "application/x-hwp", "application/haansofthwp", "application/vnd.hancom.hwpx", "application/octet-stream"
+                            ))
+                        },
+                        onOpenRecent = readingVm::openRecent,
+                        onDeleteRecent = readingVm::deleteRecent,
+                        onFontSp = readingVm::setFontSp,
+                        onSaveWord = readingVm::saveToWordbook,
+                        savedPage = readingVm.savedPage,
+                        onPage = { readingVm.savedPage = it },
+                        savedZoom = readingVm.savedZoom,
+                        onZoom = { readingVm.savedZoom = it }
                     )
                     AppTab.TRANSLATE -> TranslateScreen(
                         state = translation,
@@ -445,7 +465,18 @@ class MainActivity : AppCompatActivity() {
                     AppTab.DOCVOICE -> DocVoiceScreen(docVoiceVm)
                     AppTab.LISTENING -> ListeningScreen(
                         pendingIntent = listeningIntent,
-                        onIntentConsumed = { listeningIntent = null }
+                        onIntentConsumed = { listeningIntent = null },
+                        onLookup = { text ->
+                            dictionaryVm.pickSuggestion(text)
+                            wordSpeaker.stop()
+                            returnTab = AppTab.LISTENING.ordinal
+                            tabIndex = AppTab.DICTIONARY.ordinal
+                        },
+                        onTranslate = { text ->
+                            translateVm.setInput(text)
+                            translateVm.translate()
+                            tabIndex = AppTab.TRANSLATE.ordinal
+                        }
                     )
                 }
             }
