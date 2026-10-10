@@ -1,0 +1,189 @@
+# EngHub 미국·영국 패턴·표현 모음 (앱 제작자가 직접 정리한 학습용 데이터)
+# 형식: 표현|지역(미국/영국/공통)|분류|한국어 뜻|참고|영어 예문|예문 번역
+# 분류: 패턴 / 일상 표현 / 관용구 / 슬랭 / 미영 차이
+I was wondering if you could ...|공통|패턴|~해 주실 수 있을까요? (공손한 부탁)|could를 쓰면 더 공손해요|I was wondering if you could give me a hand.|저를 좀 도와주실 수 있을까요?
+Would you mind ...ing?|공통|패턴|~해 주시겠어요? (공손한 부탁)|대답이 No면 '괜찮아요'라는 뜻|Would you mind opening the window?|창문 좀 열어 주시겠어요?
+How come ...?|미국|패턴|어째서 ~야? (이유를 묻는 구어체)|why보다 가볍고 어순은 평서문|How come you didn't call me?|왜 전화 안 했어?
+It's no use ...ing.|공통|패턴|~해 봐야 소용없다|It's no good ...ing 도 같은 뜻(영국에서 흔함)|It's no use crying over spilt milk.|엎질러진 물은 소용없다.
+There's no point in ...ing.|공통|패턴|~할 이유가 없다, 소용없다||There's no point in arguing with him.|그와 다퉈 봐야 소용없다.
+I'd rather ... than ...|공통|패턴|~하느니 차라리 …하겠다||I'd rather walk than take the bus.|버스를 타느니 차라리 걷겠다.
+It's about time ...|공통|패턴|이제 ~할 때다 (뒤에 과거형)|이미 늦었다는 느낌|It's about time you went to bed.|이제 잘 시간이야.
+I can't help ...ing.|공통|패턴|~하지 않을 수 없다||I can't help laughing when I see him.|그를 보면 웃지 않을 수 없다.
+I have no idea.|공통|일상 표현|전혀 모르겠어요||I have no idea where he went.|그가 어디로 갔는지 전혀 모르겠어.
+be about to + 동사|공통|패턴|막 ~하려는 참이다||I was about to call you.|막 너한테 전화하려던 참이었어.
+be supposed to + 동사|공통|패턴|~하기로 되어 있다, ~해야 한다||You are supposed to be here at nine.|너는 9시까지 여기 있어야 해.
+used to + 동사|공통|패턴|(예전에) ~하곤 했다|be used to ...ing(~에 익숙하다)와 구별|I used to live in Busan.|나는 예전에 부산에 살았다.
+It takes + 시간 + to + 동사|공통|패턴|~하는 데 …이 걸린다||It takes an hour to get there.|거기 가는 데 한 시간 걸린다.
+It's worth ...ing.|공통|패턴|~할 가치가 있다||This museum is worth visiting.|이 박물관은 가볼 만하다.
+the more ..., the more ...|공통|패턴|~할수록 더 …하다||The more you practice, the better you get.|연습할수록 더 잘하게 된다.
+Not only ... but also ...|공통|패턴|~뿐만 아니라 …도||She is not only smart but also kind.|그녀는 똑똑할 뿐 아니라 친절하다.
+What do you say to ...ing?|공통|패턴|~하는 게 어때요?||What do you say to going for a walk?|산책하는 게 어때요?
+Why don't we ...?|공통|패턴|우리 ~하는 게 어때?||Why don't we grab some coffee?|우리 커피 한잔하는 게 어때?
+Let me know if ...|공통|패턴|~하면 알려 주세요||Let me know if you need anything.|필요한 게 있으면 알려 주세요.
+Do you happen to know ...?|공통|패턴|혹시 ~를 아세요?||Do you happen to know where the station is?|혹시 역이 어디인지 아세요?
+It depends on ...|공통|패턴|~에 달려 있다, 경우에 따라 다르다||It depends on the weather.|날씨에 달려 있어요.
+I'm looking forward to ...ing.|공통|패턴|~하기를 기대한다|to 뒤에 동사원형이 아니라 -ing|I'm looking forward to seeing you.|당신을 만나기를 기대하고 있어요.
+I'm afraid ...|공통|패턴|유감이지만 ~인 것 같아요 (완곡하게 거절·나쁜 소식)||I'm afraid I can't make it tonight.|아쉽지만 오늘 밤엔 못 갈 것 같아요.
+Could you possibly ...?|공통|패턴|혹시 ~해 주실 수 있나요? (매우 공손)||Could you possibly send me the file?|혹시 그 파일을 보내 주실 수 있나요?
+no matter what|공통|패턴|무엇이 ~하더라도||I'll support you no matter what.|무슨 일이 있어도 널 응원할게.
+as soon as possible (ASAP)|공통|일상 표현|가능한 한 빨리||Please reply as soon as possible.|가능한 한 빨리 답장해 주세요.
+Long time no see.|미국|일상 표현|오랜만이에요||Hey, long time no see!|야, 오랜만이다!
+What's up?|미국|일상 표현|잘 지내? 뭐 해? (가벼운 인사)||What's up, man?|잘 지내, 친구?
+How's it going?|미국|일상 표현|잘 지내요? (가벼운 인사)||Hi Tom, how's it going?|안녕 톰, 잘 지내?
+You're all set.|미국|일상 표현|준비 다 됐어요, 끝났어요 (점원·직원이 자주 씀)||You're all set. Have a nice day!|다 됐습니다. 좋은 하루 보내세요!
+No worries.|공통|일상 표현|괜찮아요, 걱정 마세요 (영국·호주에서 특히 흔함)||Sorry I'm late. — No worries.|늦어서 미안해요. — 괜찮아요.
+Take care.|공통|일상 표현|잘 지내요 (헤어질 때)||Thanks for coming. Take care!|와 줘서 고마워요. 잘 가요!
+Sounds good.|미국|일상 표현|좋아요 (제안에 동의)||Dinner at seven? — Sounds good.|7시에 저녁? — 좋아요.
+Works for me.|미국|일상 표현|저는 괜찮아요 (일정·제안)||Friday works for me.|금요일이면 저는 괜찮아요.
+I'm good.|미국|일상 표현|전 괜찮아요 (거절하거나 '잘 지낸다')||Want some more? — I'm good, thanks.|더 드실래요? — 괜찮아요, 고마워요.
+Excuse me?|공통|일상 표현|뭐라고요? (되묻기) / 실례합니다||Excuse me? Could you say that again?|네? 다시 말씀해 주시겠어요?
+Pardon?|영국|일상 표현|뭐라고요? (되묻기)|미국에서는 What? / Sorry? 가 더 흔함|Pardon? I didn't catch that.|네? 못 알아들었어요.
+Cheers!|영국|일상 표현|건배! / 고마워요 / 안녕히 (영국에서 감사·작별 인사로도 씀)||Cheers, mate! Thanks for the lift.|고마워, 친구! 태워 줘서.
+You alright?|영국|일상 표현|잘 지내? (인사말로, 대답을 꼭 바라지 않음)|Are you all right? 의 줄임|Hiya! You alright?|안녕! 잘 지내?
+Ta.|영국|일상 표현|고마워 (가볍게)|Thank you의 구어체|Here's your tea. — Ta.|차 여기 있어요. — 고마워요.
+Fancy a cuppa?|영국|일상 표현|차 한잔 할래요?|cuppa = cup of tea. Fancy ...? = ~하고 싶어?|Fancy a cuppa?|차 한잔 할래?
+Mind the gap.|영국|일상 표현|(지하철) 승강장과 열차 사이 틈을 조심하세요||Please mind the gap.|발밑 틈을 조심하세요.
+I'm knackered.|영국|슬랭|녹초가 됐어요|미국에서는 I'm beat / exhausted|I'm knackered after the long flight.|긴 비행 후라 녹초가 됐어.
+It's a piece of cake.|공통|관용구|식은 죽 먹기다||The exam was a piece of cake.|그 시험은 식은 죽 먹기였다.
+Break a leg!|공통|관용구|행운을 빌어요! (공연·발표 전)|'행운을 빌어'를 직접 말하면 불운하다는 미신에서|Break a leg tonight!|오늘 밤 잘해!
+Hit the books.|미국|관용구|열심히 공부하다||I need to hit the books tonight.|오늘 밤엔 공부 좀 해야 해.
+Hit the sack.|미국|관용구|잠자리에 들다||I'm tired. I'm going to hit the sack.|피곤해. 자러 갈래.
+Call it a day.|공통|관용구|오늘은 여기까지 하다, 마무리하다||Let's call it a day.|오늘은 여기까지 합시다.
+Cost an arm and a leg.|공통|관용구|엄청나게 비싸다||That car costs an arm and a leg.|그 차는 엄청 비싸다.
+Under the weather.|공통|관용구|몸이 안 좋은||I'm feeling a bit under the weather.|몸이 좀 안 좋아요.
+Once in a blue moon.|공통|관용구|아주 드물게||We eat out once in a blue moon.|우리는 아주 가끔 외식한다.
+Spill the beans.|공통|관용구|비밀을 누설하다||Don't spill the beans about the party.|파티 얘기는 비밀로 해 줘.
+Bite the bullet.|공통|관용구|(싫어도) 이를 악물고 해내다||I just had to bite the bullet and apologize.|그냥 이를 악물고 사과해야 했다.
+Beat around the bush.|공통|관용구|말을 빙빙 돌리다||Stop beating around the bush and tell me.|돌려 말하지 말고 말해 봐.
+The ball is in your court.|공통|관용구|이제 네가 결정할 차례다||I've made my offer; the ball is in your court.|제안은 했으니 이제 네가 결정할 차례야.
+Let the cat out of the bag.|공통|관용구|무심코 비밀을 누설하다||He let the cat out of the bag.|그가 무심코 비밀을 털어놨다.
+Speak of the devil.|공통|관용구|호랑이도 제 말 하면 온다||Speak of the devil — here he is!|호랑이도 제 말 하면 온다더니, 왔네!
+Kill two birds with one stone.|공통|관용구|일석이조, 한 번에 두 가지를 해결하다||Walking to work kills two birds with one stone.|걸어서 출근하면 일석이조다.
+Raining cats and dogs.|공통|관용구|비가 억수같이 쏟아지다||It's raining cats and dogs outside.|밖에 비가 억수같이 와.
+On the same page.|미국|관용구|같은 생각이다, 의견이 일치하다||Let's make sure we're on the same page.|우리가 같은 생각인지 확인해 봅시다.
+Touch base.|미국|관용구|(간단히) 연락해서 상황을 공유하다|업무에서 흔함|Let's touch base next week.|다음 주에 잠깐 연락해서 이야기합시다.
+Heads-up.|미국|일상 표현|미리 알려주는 정보, 귀띔||Just a heads-up: the meeting moved to 3.|미리 알려드려요. 회의가 3시로 옮겨졌어요.
+Ballpark figure.|미국|관용구|대략적인 수치||Can you give me a ballpark figure?|대략적인 금액만 말해 줄 수 있나요?
+Out of the blue.|공통|관용구|갑자기, 난데없이||She called me out of the blue.|그녀가 난데없이 전화했다.
+Back to square one.|영국|관용구|원점으로 돌아가다|미국에서는 back to the drawing board|The plan failed, so we're back to square one.|계획이 실패해서 원점으로 돌아왔다.
+Chuffed to bits.|영국|슬랭|아주 기쁜||I'm chuffed to bits with the result.|결과가 정말 기뻐요.
+Gutted.|영국|슬랭|몹시 실망한, 속상한||I was gutted when we lost.|지고 나서 정말 속상했다.
+Bob's your uncle.|영국|관용구|그러면 끝이야, 간단해||Add water, stir, and Bob's your uncle.|물을 넣고 저으면 끝이에요.
+Sort it out.|영국|일상 표현|해결하다, 정리하다||I'll sort it out tomorrow.|내일 해결할게요.
+A bit much.|영국|일상 표현|좀 지나치다||Three desserts is a bit much.|디저트 세 개는 좀 지나쳐.
+Fair enough.|영국|일상 표현|그럴 만하네요, 알겠어요|미국에서도 쓰지만 영국에서 더 흔함|You want to leave early? Fair enough.|일찍 가고 싶다고요? 그럴 만하네요.
+Quite good.|영국|일상 표현|꽤 좋은 (영국에서는 '썩 괜찮다'는 약한 칭찬)|미국에서는 보통 '꽤' 강한 의미|The film was quite good.|영화는 꽤 괜찮았어요.
+I couldn't care less.|공통|관용구|전혀 신경 안 쓴다||I couldn't care less about the score.|점수는 전혀 신경 안 써.
+Get the ball rolling.|공통|관용구|일을 시작하다||Let's get the ball rolling.|이제 시작해 봅시다.
+Cut corners.|공통|관용구|(질을 희생하며) 대충 하다, 편법을 쓰다||They cut corners to save money.|그들은 돈을 아끼려고 대충 했다.
+Go the extra mile.|공통|관용구|더 노력하다, 기대 이상을 하다||She always goes the extra mile for customers.|그녀는 늘 고객에게 기대 이상으로 한다.
+Pull an all-nighter.|미국|관용구|밤을 새우다||I pulled an all-nighter to finish the report.|보고서를 끝내려고 밤을 새웠다.
+Have a blast.|미국|일상 표현|아주 즐거운 시간을 보내다||We had a blast at the concert.|콘서트에서 정말 즐거웠다.
+I'm swamped.|미국|일상 표현|일에 파묻혀 있어요||Sorry, I'm swamped this week.|미안, 이번 주는 일에 파묻혀 있어.
+It's on me.|미국|일상 표현|제가 살게요||Dinner is on me tonight.|오늘 저녁은 내가 살게.
+Let's split the bill.|공통|일상 표현|나눠서 계산합시다|영국에서는 'go Dutch', 'split the bill' 모두 흔함|Let's split the bill.|나눠서 계산하자.
+My round.|영국|일상 표현|이번 술은 제가 살게요 (술집에서 돌아가며 사는 문화)||It's my round. What are you having?|이번엔 내가 살게. 뭐 마실래?
+Grab a bite.|미국|일상 표현|간단히 먹다||Let's grab a bite before the movie.|영화 전에 간단히 먹자.
+Catch you later.|미국|일상 표현|나중에 봐요||Gotta go. Catch you later!|가야 해. 나중에 봐!
+See you around.|공통|일상 표현|또 봐요 (언제 만날지는 정하지 않고)||See you around!|또 보자!
+Hang in there.|미국|일상 표현|힘내요, 버텨요||Hang in there — it gets easier.|힘내, 점점 쉬워질 거야.
+No big deal.|미국|일상 표현|별일 아니에요||It's no big deal, really.|정말 별일 아니야.
+Don't mention it.|공통|일상 표현|천만에요||Thanks a lot! — Don't mention it.|정말 고마워요! — 천만에요.
+You bet.|미국|일상 표현|물론이죠, 천만에요||Thanks for helping. — You bet!|도와줘서 고마워요. — 물론이죠!
+Sure thing.|미국|일상 표현|물론이죠||Can you send it today? — Sure thing.|오늘 보내 줄 수 있어요? — 물론이죠.
+My bad.|미국|슬랭|내 잘못이야||Oops, my bad.|아이쿠, 내 잘못이야.
+Dude|미국|슬랭|야, 친구 (격의 없는 호칭)||Dude, that's awesome!|야, 그거 대박이다!
+Awesome|미국|슬랭|멋진, 최고인||That's awesome!|그거 최고다!
+Cool|공통|슬랭|멋진, 좋아요||Cool, see you then.|좋아, 그때 봐.
+Totally|미국|슬랭|완전히, 정말||I totally agree.|완전히 동의해.
+Mate|영국|슬랭|친구, 동료||Alright, mate?|잘 지내, 친구?
+Brilliant|영국|슬랭|아주 좋은, 훌륭한 (영국에서 칭찬에 매우 흔함)||Brilliant! That works perfectly.|좋아요! 딱 맞아요.
+Lovely|영국|슬랭|좋은, 멋진 (영국에서 매우 흔함)||Thanks, that's lovely.|고마워요, 정말 좋네요.
+Cheeky|영국|슬랭|건방지지만 귀여운, 당돌한||He gave me a cheeky grin.|그가 당돌한 미소를 지었다.
+Dodgy|영국|슬랭|수상한, 믿을 수 없는||That looks a bit dodgy.|그거 좀 수상해 보여.
+Rubbish|영국|슬랭|쓰레기, 형편없는||The film was rubbish.|영화가 형편없었어.
+Taking the mickey|영국|슬랭|놀리다, 비웃다||Are you taking the mickey?|지금 날 놀리는 거야?
+Blimey|영국|슬랭|어머나, 세상에 (감탄)||Blimey, that's expensive!|세상에, 엄청 비싸네!
+Bloody|영국|슬랭|빌어먹을, 엄청 (강조·비속어에 가까움)|거친 표현이라 격식 있는 자리에서는 피하세요|It's bloody cold today.|오늘 엄청 춥다.
+elevator|미국|미영 차이|엘리베이터|영국: lift|Take the elevator to the fifth floor.|엘리베이터로 5층까지 가세요.
+lift|영국|미영 차이|엘리베이터|미국: elevator|The lift is out of order.|엘리베이터가 고장 났어요.
+apartment|미국|미영 차이|아파트(한 가구)|영국: flat|We rent an apartment downtown.|우리는 시내에 아파트를 빌려 산다.
+flat|영국|미영 차이|아파트(한 가구)|미국: apartment|She shares a flat with two friends.|그녀는 친구 둘과 아파트를 함께 쓴다.
+truck|미국|미영 차이|트럭|영국: lorry|A truck blocked the road.|트럭이 길을 막고 있었다.
+lorry|영국|미영 차이|트럭|미국: truck|The lorry delivered the furniture.|트럭이 가구를 배달했다.
+gas / gasoline|미국|미영 차이|휘발유|영국: petrol|We stopped to get gas.|기름을 넣으려고 멈췄다.
+petrol|영국|미영 차이|휘발유|미국: gas / gasoline|Petrol prices went up again.|휘발유 가격이 또 올랐다.
+cookie|미국|미영 차이|쿠키|영국: biscuit|Do you want a cookie?|쿠키 먹을래?
+biscuit|영국|미영 차이|비스킷, 쿠키|미국에서 biscuit은 부드러운 롤빵 비슷한 빵|Would you like a biscuit with your tea?|차랑 비스킷 드실래요?
+chips|영국|미영 차이|감자튀김|미국: french fries / (영국의 crisps = 미국의 chips)|Fish and chips, please.|피시앤칩스 주세요.
+french fries|미국|미영 차이|감자튀김|영국: chips|I'll have a burger and french fries.|버거랑 감자튀김 주세요.
+crisps|영국|미영 차이|감자칩 (봉지 과자)|미국: chips|A packet of crisps, please.|감자칩 한 봉지 주세요.
+candy|미국|미영 차이|사탕, 과자류|영국: sweets|Kids love candy.|아이들은 사탕을 좋아한다.
+sweets|영국|미영 차이|사탕, 과자류|미국: candy|He bought a bag of sweets.|그는 사탕 한 봉지를 샀다.
+sidewalk|미국|미영 차이|인도, 보도|영국: pavement|Please stay on the sidewalk.|인도로 다니세요.
+pavement|영국|미영 차이|인도, 보도|미국에서 pavement는 '포장도로 노면'|Watch out for the cyclists on the pavement.|인도의 자전거를 조심하세요.
+subway|미국|미영 차이|지하철|영국: the Underground / the Tube (영국의 subway는 지하도)|I take the subway to work.|지하철로 출근한다.
+the Tube|영국|미영 차이|(런던) 지하철|미국: subway|The Tube was packed this morning.|오늘 아침 지하철이 만원이었다.
+trash can|미국|미영 차이|쓰레기통|영국: bin / dustbin|Put it in the trash can.|쓰레기통에 넣어.
+bin|영국|미영 차이|쓰레기통|미국: trash can|Throw it in the bin.|쓰레기통에 버려.
+vacation|미국|미영 차이|휴가|영국: holiday|We're going on vacation next week.|우리는 다음 주에 휴가를 간다.
+holiday|영국|미영 차이|휴가|미국에서 holiday는 '공휴일·명절'을 뜻하는 경우가 많음|They're on holiday in Spain.|그들은 스페인에서 휴가 중이다.
+soccer|미국|미영 차이|축구|영국: football|My son plays soccer.|우리 아들은 축구를 한다.
+football|영국|미영 차이|축구|미국의 football은 미식축구|Let's watch the football tonight.|오늘 밤 축구 보자.
+cell phone|미국|미영 차이|휴대폰|영국: mobile (phone)|Turn off your cell phone.|휴대폰을 꺼 주세요.
+mobile|영국|미영 차이|휴대폰|미국: cell phone|I left my mobile at home.|휴대폰을 집에 두고 왔다.
+diaper|미국|미영 차이|기저귀|영국: nappy|The baby needs a new diaper.|아기 기저귀를 갈아야 한다.
+nappy|영국|미영 차이|기저귀|미국: diaper|She changed the baby's nappy.|그녀는 아기 기저귀를 갈았다.
+line (줄)|미국|미영 차이|줄(대기 줄)|영국: queue|There was a long line at the bank.|은행에 줄이 길었다.
+queue|영국|미영 차이|줄(대기 줄)|미국: line|We queued for an hour.|우리는 한 시간 줄을 섰다.
+check (식당 계산서)|미국|미영 차이|계산서|영국: bill|Could we have the check, please?|계산서 주시겠어요?
+bill (식당 계산서)|영국|미영 차이|계산서|미국에서 bill은 지폐·청구서|Could we get the bill, please?|계산서 부탁합니다.
+pants|미국|미영 차이|바지|영국에서 pants는 속옷, 바지는 trousers|These pants are too long.|이 바지는 너무 길다.
+trousers|영국|미영 차이|바지|미국: pants|He wore black trousers.|그는 검은 바지를 입었다.
+sneakers|미국|미영 차이|운동화|영국: trainers|I bought new sneakers.|새 운동화를 샀다.
+trainers|영국|미영 차이|운동화|미국: sneakers|Where did you get those trainers?|그 운동화 어디서 샀어?
+fall|미국|미영 차이|가을|영국: autumn|The leaves change color in the fall.|가을에 나뭇잎 색이 변한다.
+autumn|영국|미영 차이|가을|미국에서도 쓰이지만 fall이 더 흔함|Autumn is my favourite season.|가을은 내가 가장 좋아하는 계절이다.
+movie|미국|미영 차이|영화|영국: film (movie도 쓰임)|Let's go see a movie.|영화 보러 가자.
+film|영국|미영 차이|영화|미국: movie|Have you seen the new film?|새 영화 봤어?
+color / favorite|미국|미영 차이|철자: -or|영국 철자: colour / favourite|My favorite color is blue.|내가 제일 좋아하는 색은 파랑이다.
+colour / favourite|영국|미영 차이|철자: -our|미국 철자: color / favorite|My favourite colour is blue.|내가 제일 좋아하는 색은 파랑이다.
+center / theater|미국|미영 차이|철자: -er|영국 철자: centre / theatre|The theater is in the city center.|극장은 시내 중심에 있다.
+centre / theatre|영국|미영 차이|철자: -re|미국 철자: center / theater|The theatre is in the city centre.|극장은 시내 중심에 있다.
+I have got ...|영국|패턴|~을 가지고 있다 (have got)|미국에서는 보통 I have|I've got two sisters.|나는 자매가 둘 있어.
+Do you have ...?|미국|패턴|~가 있나요?|영국에서는 Have you got ...? 도 흔함|Do you have a pen?|펜 있어요?
+Have you got ...?|영국|패턴|~가 있나요?|미국에서는 Do you have ...?|Have you got a minute?|잠깐 시간 있어요?
+I've just done it.|영국|패턴|방금 했어요 (현재완료)|미국에서는 I just did it. 도 자연스러움|I've just finished my homework.|방금 숙제를 끝냈어.
+I just did it.|미국|패턴|방금 했어요 (과거형)|영국에서는 보통 I've just done it.|I just finished my homework.|방금 숙제를 끝냈어.
+different from / than|미국|패턴|~와 다른|미국 구어에서 different than도 씀. 영국: different from / to|This is different from what I expected.|이건 내가 예상한 것과 다르다.
+different to|영국|패턴|~와 다른|영국에서만 흔함. 공통으로는 different from|It's different to what I expected.|내가 예상한 것과 달라.
+at the weekend|영국|패턴|주말에|미국: on the weekend|What are you doing at the weekend?|주말에 뭐 해요?
+on the weekend|미국|패턴|주말에|영국: at the weekend|What are you doing on the weekend?|주말에 뭐 해요?
+Monday through Friday|미국|패턴|월요일부터 금요일까지|영국: Monday to Friday|We're open Monday through Friday.|월요일부터 금요일까지 엽니다.
+Monday to Friday|영국|패턴|월요일부터 금요일까지|미국: Monday through Friday|We're open Monday to Friday.|월요일부터 금요일까지 엽니다.
+quarter after / quarter of|미국|패턴|(시각) 15분 지난 / 15분 전|영국: quarter past / quarter to|It's a quarter after three.|3시 15분이다.
+quarter past / quarter to|영국|패턴|(시각) 15분 지난 / 15분 전|미국: quarter after / quarter of|It's quarter past three.|3시 15분이다.
+I'll have ...|공통|일상 표현|~로 할게요 (주문)||I'll have the soup, please.|수프로 할게요.
+Could I get ...?|미국|일상 표현|~ 좀 주시겠어요? (주문·요청)||Could I get a coffee, please?|커피 한 잔 주시겠어요?
+Could I have ...?|영국|일상 표현|~ 좀 주시겠어요? (주문·요청)|미국에서도 쓰이지만 Could I get ...?이 더 흔함|Could I have a tea, please?|차 한 잔 주시겠어요?
+For here or to go?|미국|일상 표현|드시고 가시나요, 포장이신가요?||For here or to go?|매장에서 드시나요, 포장이신가요?
+Eat in or take away?|영국|일상 표현|드시고 가시나요, 포장이신가요?|미국: for here or to go / takeout|Eat in or take away?|드시고 가시나요, 포장이신가요?
+How much is it?|공통|일상 표현|얼마예요?||How much is this jacket?|이 재킷 얼마예요?
+Keep the change.|공통|일상 표현|잔돈은 가지세요||Here's twenty. Keep the change.|20달러예요. 잔돈은 가지세요.
+Could you give me a ride?|미국|일상 표현|태워 주실 수 있나요?|영국: Could you give me a lift?|Could you give me a ride to the airport?|공항까지 태워 주실 수 있나요?
+Could you give me a lift?|영국|일상 표현|태워 주실 수 있나요?|미국: ride|Could you give me a lift home?|집까지 태워 주실 수 있나요?
+I'll be right back.|미국|일상 표현|금방 올게요||Wait here. I'll be right back.|여기서 기다려요. 금방 올게요.
+I'll be back in a minute.|영국|일상 표현|금방 올게요||I'll be back in a minute.|금방 올게.
+Do you mind if I ...?|공통|패턴|제가 ~해도 될까요?||Do you mind if I sit here?|여기 앉아도 될까요?
+Is it okay if I ...?|공통|패턴|제가 ~해도 괜찮을까요?||Is it okay if I leave early today?|오늘 일찍 가도 괜찮을까요?
+I'm not sure if ...|공통|패턴|~인지 잘 모르겠어요||I'm not sure if this is the right bus.|이 버스가 맞는지 잘 모르겠어요.
+It seems like ...|미국|패턴|~인 것 같아요||It seems like it's going to rain.|비가 올 것 같아요.
+It looks as if ...|영국|패턴|~인 것 같아요|미국에서도 쓰지만 as if가 약간 격식|It looks as if it's going to rain.|비가 올 것 같아요.
+I guess so.|미국|일상 표현|그런 것 같아요|영국에서는 I suppose so가 더 흔함|Is it ready? — I guess so.|준비됐어? — 그런 것 같아.
+I suppose so.|영국|일상 표현|그런 것 같아요|미국: I guess so|Is he coming? — I suppose so.|그 사람 와? — 그런 것 같아.
+Tell me about it.|공통|일상 표현|내 말이 그 말이야 (격하게 공감)||It's so hot today! — Tell me about it.|오늘 너무 덥다! — 내 말이!
+You can say that again.|공통|일상 표현|정말 그래요||That was a long day. — You can say that again.|긴 하루였어. — 정말 그래.
+That makes sense.|공통|일상 표현|말이 되네요, 이해가 돼요||Oh, that makes sense now.|아, 이제 이해가 돼요.
+I'm on it.|미국|일상 표현|제가 처리할게요||I'm on it — I'll send it now.|제가 처리할게요. 지금 보낼게요.
+Let's get down to business.|공통|관용구|본론으로 들어갑시다||Let's get down to business.|본론으로 들어갑시다.
+Sorry to bother you.|공통|일상 표현|귀찮게 해서 죄송합니다||Sorry to bother you, but do you know the time?|귀찮게 해서 죄송한데, 몇 시인지 아세요?

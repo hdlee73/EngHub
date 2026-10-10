@@ -82,15 +82,14 @@ enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vect
     QUIZ("Quiz", androidx.compose.material.icons.Icons.Outlined.Quiz),
     READING("Reading", androidx.compose.material.icons.Icons.Outlined.Newspaper),
     TRANSLATE("Translate", androidx.compose.material.icons.Icons.Outlined.Translate),
+    PHRASES("Phrases", androidx.compose.material.icons.Icons.Outlined.Forum),
     SPEAKING("Speaking", androidx.compose.material.icons.Icons.Outlined.Mic),
     LISTENING("Listening", androidx.compose.material.icons.Icons.Outlined.Headphones),
     DOCVOICE("DocVoice", androidx.compose.material.icons.Icons.Outlined.GraphicEq)
 }
 
-private val Muted = Color(0xFF7A8794)
-
 /** The menu groups, in the order the left menu lists them. */
-private val STUDY_TABS = listOf(AppTab.DICTIONARY, AppTab.FLASHCARDS, AppTab.QUIZ, AppTab.READING, AppTab.TRANSLATE)
+private val STUDY_TABS = listOf(AppTab.DICTIONARY, AppTab.FLASHCARDS, AppTab.QUIZ, AppTab.READING, AppTab.TRANSLATE, AppTab.PHRASES)
 private val PRACTICE_TABS = listOf(AppTab.SPEAKING, AppTab.LISTENING, AppTab.DOCVOICE)
 
 /** The left menu (like the DailyHabit app): every tab, in two groups, with app info at the bottom. */
