@@ -51,6 +51,21 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- Shows EngHub in the menu that appears when text is selected in another app (the "⋮" / "더보기" part of the selection bar). -->
+        <activity
+            android:name=".ProcessTextActivity"
+            android:exported="true"
+            android:label="EngHub 사전·번역"
+            android:icon="@mipmap/ic_launcher"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <service
             android:name=".docvoice.JobService"
             android:exported="false"

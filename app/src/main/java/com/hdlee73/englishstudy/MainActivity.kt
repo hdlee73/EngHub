@@ -78,6 +78,19 @@ class MainActivity : AppCompatActivity() {
     private data class ExternalLookup(val word: String, val returnPackage: String?, val serial: Long = System.nanoTime())
     private var externalLookup by mutableStateOf<ExternalLookup?>(null)
 
+    /** Text selected in another app (or shared to EngHub): the app asks whether to look it up or translate it. */
+    private var sharedText by mutableStateOf<String?>(null)
+
+    private fun readSharedText(intent: Intent?) {
+        val text = when (intent?.action) {
+            Intent.ACTION_PROCESS_TEXT -> intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT)
+            Intent.ACTION_SEND ->
+                if (DocVoiceLink.sharedYoutubeUrl(intent) == null) intent.getStringExtra(Intent.EXTRA_TEXT)?.takeUnless { it.trim().startsWith("http") } else null
+            else -> null
+        }?.trim()?.take(2000)
+        if (!text.isNullOrEmpty()) sharedText = text
+    }
+
     private fun readExternalLookup(intent: Intent?) {
         val word = intent?.getStringExtra(EXTRA_LOOKUP_WORD)?.trim().orEmpty()
         if (word.isEmpty()) return
@@ -91,6 +104,7 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) DocVoiceLink.sharedYoutubeUrl(intent)?.let(docVoiceVm::openYoutube)
         if (savedInstanceState == null && DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
         if (savedInstanceState == null) readExternalLookup(intent)
+        if (savedInstanceState == null) readSharedText(intent)
         // Fetches each new BBC 6 Minute English episode into the Listening tab's "6min" folder.
         com.hdlee73.englishstudy.listening.SixMinuteEnglish.schedule(applicationContext)
         // Tells the user (notification and app info) when GitHub has a newer release.
@@ -264,6 +278,35 @@ class MainActivity : AppCompatActivity() {
             // The saved words' example sentences become a dataset of their own, always up to date.
             LaunchedEffect(savedSentences) { learningVm.syncSavedWordsDataset(savedSentences) }
 
+            sharedText?.let { text ->
+                com.hdlee73.englishstudy.ui.EnglishStudyTheme {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { sharedText = null },
+                        title = { androidx.compose.material3.Text("선택한 글", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+                        text = { androidx.compose.material3.Text(text, maxLines = 8) },
+                        confirmButton = {
+                            androidx.compose.foundation.layout.Row {
+                                androidx.compose.material3.TextButton(onClick = {
+                                    sharedText = null
+                                    if (tabIndex == AppTab.SPEAKING.ordinal) { learningVm.pauseForBackground(); speech.stop() }
+                                    dictionaryVm.pickSuggestion(text)
+                                    returnTab = null
+                                    returnApp = null
+                                    tabIndex = AppTab.DICTIONARY.ordinal
+                                }) { androidx.compose.material3.Text("📖 사전·단어장") }
+                                androidx.compose.material3.TextButton(onClick = {
+                                    sharedText = null
+                                    if (tabIndex == AppTab.SPEAKING.ordinal) { learningVm.pauseForBackground(); speech.stop() }
+                                    translateVm.setInput(text)
+                                    translateVm.translate()
+                                    tabIndex = AppTab.TRANSLATE.ordinal
+                                }) { androidx.compose.material3.Text("🌐 번역") }
+                            }
+                        },
+                        dismissButton = { androidx.compose.material3.TextButton(onClick = { sharedText = null }) { androidx.compose.material3.Text("닫기") } }
+                    )
+                }
+            }
             AppRoot(
                 tab = tab,
                 onOpenUrl = { openUrl(it) },
@@ -432,6 +475,15 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     )
+                    AppTab.PHRASES -> com.hdlee73.englishstudy.ui.PhrasesScreen(
+                        onSpeak = wordSpeaker::speak,
+                        onLookup = { text ->
+                            dictionaryVm.pickSuggestion(text)
+                            wordSpeaker.stop()
+                            returnTab = AppTab.PHRASES.ordinal
+                            tabIndex = AppTab.DICTIONARY.ordinal
+                        }
+                    )
                     AppTab.SPEAKING -> SpeakFlowApp(
                         state = learning,
                         settingsOpen = settingsOpen,
@@ -490,6 +542,7 @@ class MainActivity : AppCompatActivity() {
         DocVoiceLink.sharedYoutubeUrl(intent)?.let(docVoiceVm::openYoutube)
         if (DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
         readExternalLookup(intent)
+        readSharedText(intent)
     }
 
     companion object {
