@@ -448,12 +448,14 @@ class MainActivity : AppCompatActivity() {
                                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                 "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                                "application/x-hwp", "application/haansofthwp", "application/vnd.hancom.hwpx", "application/octet-stream"
+                                "application/epub+zip", "application/x-hwp", "application/haansofthwp", "application/vnd.hancom.hwpx", "application/octet-stream"
                             ))
                         },
                         onOpenRecent = readingVm::openRecent,
                         onDeleteRecent = readingVm::deleteRecent,
                         onFontSp = readingVm::setFontSp,
+                        onLineSpacing = readingVm::setLineSpacing,
+                        onPdfOriginal = readingVm::setPdfOriginal,
                         onSaveWord = readingVm::saveToWordbook,
                         savedPage = readingVm.savedPage,
                         onPage = { readingVm.savedPage = it },
