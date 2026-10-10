@@ -87,8 +87,6 @@ enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vect
     DOCVOICE("DocVoice", androidx.compose.material.icons.Icons.Outlined.GraphicEq)
 }
 
-private val Muted = Color(0xFF7A8794)
-
 /** The menu groups, in the order the left menu lists them. */
 private val STUDY_TABS = listOf(AppTab.DICTIONARY, AppTab.FLASHCARDS, AppTab.QUIZ, AppTab.READING, AppTab.TRANSLATE)
 private val PRACTICE_TABS = listOf(AppTab.SPEAKING, AppTab.LISTENING, AppTab.DOCVOICE)
