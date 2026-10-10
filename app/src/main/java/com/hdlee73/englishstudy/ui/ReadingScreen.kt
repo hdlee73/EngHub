@@ -94,6 +94,8 @@ fun ReadingScreen(
     onOpenRecent: (String) -> Unit = {},
     onDeleteRecent: (String) -> Unit = {},
     onFontSp: (Int) -> Unit = {},
+    onLineSpacing: (Float) -> Unit = {},
+    onPdfOriginal: (Boolean) -> Unit = {},
     onSaveWord: (text: String, sentence: String) -> Unit = { _, _ -> },
     savedPage: Int = 0,
     onPage: (Int) -> Unit = {},
@@ -107,7 +109,7 @@ fun ReadingScreen(
         } else {
             ArticleView(
                 article, state, onClose, onMode, onSaveExpression, onLookup, onSpeak, onTranslateSnippet, onClearSnippet, savedScroll, onScroll,
-                savedSelection, onSelection, onFontSp, onSaveWord, savedPage, onPage, savedZoom, onZoom
+                savedSelection, onSelection, onFontSp, onLineSpacing, onPdfOriginal, onSaveWord, savedPage, onPage, savedZoom, onZoom
             )
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
@@ -196,6 +198,8 @@ private fun ArticleView(
     savedSelection: Triple<Int, Int, Int>?,
     onSelection: (Triple<Int, Int, Int>?) -> Unit,
     onFontSp: (Int) -> Unit,
+    onLineSpacing: (Float) -> Unit,
+    onPdfOriginal: (Boolean) -> Unit,
     onSaveWord: (String, String) -> Unit,
     savedPage: Int,
     onPage: (Int) -> Unit,
@@ -204,6 +208,8 @@ private fun ArticleView(
 ) {
     val context = LocalContext.current
     val isFile = state.fileArticle?.id == article.id
+    val pdfPath = if (isFile) state.pdfPath else null
+    val pdfMode = pdfPath != null && state.pdfOriginal
     val pageSize = 30
     val pageCount = maxOf(1, (article.paragraphs.size + pageSize - 1) / pageSize)
     var page by remember(article.id) { mutableStateOf(savedPage.coerceIn(0, pageCount - 1)) }
@@ -232,13 +238,30 @@ private fun ArticleView(
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onClose) { Text("← 목록") }
             Spacer(Modifier.weight(1f))
-            if (zoom > 1.01f) TextButton(onClick = { zoom = 1f }) { Text("🔍 ${(zoom * 100).roundToInt()}% · 원래대로", fontSize = 12.sp) }
-            OutlinedButton(onClick = { onFontSp(fontSp - 2) }, enabled = fontSp > 12, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("가−", fontSize = 14.sp) }
-            Spacer(Modifier.width(6.dp))
-            OutlinedButton(onClick = { onFontSp(fontSp + 2) }, enabled = fontSp < 40, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("가+", fontSize = 14.sp) }
-            Spacer(Modifier.width(8.dp))
+            if (pdfPath != null) {
+                FilterChip(selected = state.pdfOriginal, onClick = { onPdfOriginal(true) }, label = { Text("원본 PDF") })
+                Spacer(Modifier.width(6.dp))
+                FilterChip(selected = !state.pdfOriginal, onClick = { onPdfOriginal(false) }, label = { Text("글자 모드") })
+                Spacer(Modifier.width(8.dp))
+            }
             if (state.translating || state.loadingExpressions) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
         }
+        if (!pdfMode) Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("글자", color = Muted, fontSize = 12.sp)
+            OutlinedButton(onClick = { onFontSp(fontSp - 2) }, enabled = fontSp > 12, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("가−", fontSize = 14.sp) }
+            OutlinedButton(onClick = { onFontSp(fontSp + 2) }, enabled = fontSp < 40, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("가+", fontSize = 14.sp) }
+            Spacer(Modifier.width(6.dp))
+            Text("줄간격", color = Muted, fontSize = 12.sp)
+            OutlinedButton(onClick = { onLineSpacing(state.lineSpacing - 0.2f) }, enabled = state.lineSpacing > 1.21f, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("좁게", fontSize = 13.sp) }
+            OutlinedButton(onClick = { onLineSpacing(state.lineSpacing + 0.2f) }, enabled = state.lineSpacing < 2.59f, shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) { Text("넓게", fontSize = 13.sp) }
+            if (zoom > 1.01f) TextButton(onClick = { zoom = 1f }) { Text("🔍 ${(zoom * 100).roundToInt()}% · 원래대로", fontSize = 12.sp) }
+        }
+        if (pdfMode && pdfPath != null) {
+            PdfPagesView(pdfPath, Modifier.weight(1f).fillMaxWidth())
+        } else {
         if (!isFile) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = state.mode == ReadingMode.TEXT, onClick = { onMode(ReadingMode.TEXT) }, label = { Text("원문") })
             FilterChip(selected = state.mode == ReadingMode.TRANSLATION, onClick = { onMode(ReadingMode.TRANSLATION) }, label = { Text("🇰🇷 번역") })
@@ -265,7 +288,7 @@ private fun ArticleView(
                 ExpressionList(state.expressions, state.loadingExpressions, onSaveExpression, onSpeak)
             } else article.paragraphs.forEachIndexed { index, paragraph ->
                 if (index / pageSize != page) return@forEachIndexed
-                TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, fontSp, { dragging = it }) { range -> selected = index to range }
+                TappableParagraph(paragraph, selected?.takeIf { it.first == index }?.second, fontSp, state.lineSpacing, { dragging = it }) { range -> selected = index to range }
                 if (state.showTranslation) {
                     val korean = state.translations[index]
                     Text(
@@ -333,6 +356,7 @@ private fun ArticleView(
             }
         }
         }
+        }
     }
 }
 
@@ -341,7 +365,7 @@ private fun ArticleView(
  * then has a handle at each end that can be dragged to widen or narrow it freely (words, phrases, whole sentences).
  */
 @Composable
-private fun TappableParagraph(text: String, highlight: IntRange?, fontSp: Int, onDragging: (Boolean) -> Unit, onSelect: (IntRange) -> Unit) {
+private fun TappableParagraph(text: String, highlight: IntRange?, fontSp: Int, lineSpacing: Float, onDragging: (Boolean) -> Unit, onSelect: (IntRange) -> Unit) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val styled = remember(text, highlight) {
         buildAnnotatedString {
@@ -363,7 +387,7 @@ private fun TappableParagraph(text: String, highlight: IntRange?, fontSp: Int, o
 
     Box(Modifier.fillMaxWidth()) {
         Text(
-            styled, color = Ink, fontSize = fontSp.sp, lineHeight = (fontSp * 1.6f).sp,
+            styled, color = Ink, fontSize = fontSp.sp, lineHeight = (fontSp * lineSpacing).sp,
             onTextLayout = { layout = it },
             modifier = Modifier.fillMaxWidth()
                 .pointerInput(text) {
@@ -513,7 +537,7 @@ private fun Modifier.zoomed(scale: Float, width: Int, height: Int): Modifier = l
 }
 
 /** Two fingers pinching change the zoom (1x to 4x); one finger is left alone for scrolling and selecting. */
-private fun Modifier.pinchZoom(current: () -> Float, onZoom: (Float) -> Unit): Modifier = pointerInput(Unit) {
+internal fun Modifier.pinchZoom(current: () -> Float, onZoom: (Float) -> Unit): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
         do {
