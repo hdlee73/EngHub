@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     private val studyVm: StudyViewModel by viewModels()
     private val readingVm: ReadingViewModel by viewModels()
     private val translateVm: TranslateViewModel by viewModels()
+    private val toeicVm: com.hdlee73.englishstudy.toeic.ToeicViewModel by viewModels()
     private val docVoiceVm: DocVoiceViewModel by viewModels()
     private lateinit var speech: SpeechEngine
     private lateinit var wordSpeaker: WordSpeaker
@@ -330,6 +331,7 @@ class MainActivity : AppCompatActivity() {
                     // Words saved or datasets loaded since the last visit show up in the study setup screens.
                     if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
                     if (next == AppTab.READING) readingVm.refresh()
+                    if (next == AppTab.TOEIC) toeicVm.refresh()
                     returnTab = null
                     returnApp = null
                     tabIndex = next.ordinal
@@ -530,6 +532,19 @@ class MainActivity : AppCompatActivity() {
                         onMessageDismiss = learningVm::clearMessage
                     )
                     AppTab.DOCVOICE -> DocVoiceScreen(docVoiceVm)
+                    AppTab.TOEIC -> {
+                        val toeic by toeicVm.state.collectAsStateWithLifecycle()
+                        com.hdlee73.englishstudy.ui.ToeicScreen(
+                            state = toeic,
+                            onStart = toeicVm::start,
+                            onChoose = toeicVm::choose,
+                            onNext = toeicVm::next,
+                            onPause = toeicVm::pause,
+                            onRestart = toeicVm::restart,
+                            onSpeakLines = { texts, rate, onStart, onEnd -> wordSpeaker.speakLines(texts, 900L, rate, onStart, onEnd) },
+                            onStopSpeaking = wordSpeaker::stop
+                        )
+                    }
                     AppTab.LISTENING -> ListeningScreen(
                         pendingIntent = listeningIntent,
                         onIntentConsumed = { listeningIntent = null },

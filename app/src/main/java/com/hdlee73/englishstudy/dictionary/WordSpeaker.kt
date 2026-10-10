@@ -106,6 +106,7 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
             return
         }
         cancelSequence()
+        engine?.setSpeechRate(0.9f)
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) }
         if (engine?.speak(text, TextToSpeech.QUEUE_FLUSH, params, "word-" + ++sequence) != TextToSpeech.SUCCESS) {
             ready = false
@@ -117,7 +118,10 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
      * Reads [texts] one after another with a pause between them (the Phrases "continuous listening"); [onStart] gets the index of the
      * sentence being read and [onEnd] is called after the last one. A new [speak], [stop] or [speakAll] cancels the rest.
      */
-    fun speakAll(texts: List<String>, gapMs: Long, onStart: (Int) -> Unit, onEnd: () -> Unit) {
+    fun speakAll(texts: List<String>, gapMs: Long, onStart: (Int) -> Unit, onEnd: () -> Unit) = speakLines(texts, gapMs, 0.9f, onStart, onEnd)
+
+    /** Same as [speakAll] with a chosen speech rate (1.0 is normal speed); a later [speak] returns to the usual rate. */
+    fun speakLines(texts: List<String>, gapMs: Long, rate: Float, onStart: (Int) -> Unit, onEnd: () -> Unit) {
         val items = texts.map { com.hdlee73.englishstudy.study.WordIpa.speakable(it) }
         if (closed || items.isEmpty()) return
         if (!ready) {
@@ -138,6 +142,7 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
         onSequenceEnd = onEnd
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1f) }
         val speech = engine ?: return
+        speech.setSpeechRate(rate)
         var mode = TextToSpeech.QUEUE_FLUSH
         items.forEachIndexed { i, text ->
             if (text.isBlank()) return@forEachIndexed
