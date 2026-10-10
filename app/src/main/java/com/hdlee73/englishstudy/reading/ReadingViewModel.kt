@@ -59,11 +59,19 @@ data class ReadingUiState(
     val recentFiles: List<RecentFile> = emptyList(),
     val loadingFile: Boolean = false,
     /** Text size of the open text in sp. */
-    val fontSp: Int = 18
+    val fontSp: Int = 18,
+    /** Line height as a multiple of the text size. */
+    val lineSpacing: Float = 1.6f,
+    /** The saved PDF of the open file, when the file is a PDF; null otherwise. */
+    val pdfPath: String? = null,
+    /** True to show the PDF itself (pages as they are), false for the reflowing text (text size and line spacing apply). */
+    val pdfOriginal: Boolean = true
 ) {
     val open: ReadingArticle? get() = fileArticle?.takeIf { it.id == openId } ?: today.firstOrNull { it.id == openId }
     val showTranslation: Boolean get() = mode == ReadingMode.TRANSLATION
 }
+
+private const val NO_TEXT = "이 PDF에서는 글자를 읽어내지 못했어요(스캔한 그림일 수 있어요). ‘원본 PDF’ 보기로 읽어 주세요."
 
 /** A file opened in the Reading tab: [id] names its saved copy of the text, [name] is the file name. */
 data class RecentFile(val id: String, val name: String)
@@ -92,7 +100,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
     private var fetchJob: Job? = null
 
     init {
-        _state.update { it.copy(recentFiles = loadRecent(), fontSp = prefs.getInt("font_sp", 18)) }
+        _state.update { it.copy(recentFiles = loadRecent(), fontSp = prefs.getInt("font_sp", 18), lineSpacing = prefs.getFloat("line_spacing", 1.6f), pdfOriginal = prefs.getBoolean("pdf_original", true)) }
         refresh()
     }
 
@@ -313,12 +321,16 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
                 } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "file.txt"
                 val data = app.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("파일을 열 수 없습니다.")
                 if (data.size > 30_000_000) error("파일이 너무 큽니다. (30MB 이하)")
-                val text = com.hdlee73.englishstudy.docvoice.core.Extractors.extract(name, data, com.hdlee73.englishstudy.docvoice.core.PdfText.reader(app))
-                name to text
+                val isPdf = name.lowercase().endsWith(".pdf")
+                // A PDF can be read as the PDF itself even when it has no text layer (a scan), so a failed text extraction is not fatal there.
+                val text = runCatching { com.hdlee73.englishstudy.docvoice.core.Extractors.extract(name, data, com.hdlee73.englishstudy.docvoice.core.PdfText.reader(app)) }
+                    .getOrElse { e -> if (isPdf) NO_TEXT else throw e }
+                Triple(name, text, if (isPdf) data else null)
             }
-            result.onSuccess { (name, text) ->
-                val id = "f" + Integer.toHexString((name + text.length + text.take(200)).hashCode())
+            result.onSuccess { (name, text, pdf) ->
+                val id = "f" + Integer.toHexString((name + text.length + text.take(200) + (pdf?.size ?: 0)).hashCode())
                 java.io.File(filesDir(), "$id.txt").writeText(text)
+                if (pdf != null) java.io.File(filesDir(), "$id.pdf").writeBytes(pdf)
                 val recent = (listOf(RecentFile(id, name)) + loadRecent().filter { it.id != id }).take(12)
                 saveRecent(recent)
                 showFile(id, name, text, recent)
@@ -339,6 +351,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteRecent(id: String) {
         runCatching { java.io.File(filesDir(), "$id.txt").delete() }
+        runCatching { java.io.File(filesDir(), "$id.pdf").delete() }
         val recent = _state.value.recentFiles.filter { it.id != id }
         saveRecent(recent)
         _state.update { it.copy(recentFiles = recent) }
@@ -350,7 +363,8 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
         scrollPosition = 0; savedSelection = null; savedPage = 0; savedZoom = 1f
         _state.update {
             it.copy(
-                fileArticle = article, recentFiles = recent, loadingFile = false, openId = id, mode = ReadingMode.TEXT, translating = false,
+                fileArticle = article, recentFiles = recent, loadingFile = false,
+                pdfPath = java.io.File(filesDir(), "$id.pdf").takeIf { f -> f.exists() }?.absolutePath, openId = id, mode = ReadingMode.TEXT, translating = false,
                 translations = emptyMap(), expressions = emptyList(), loadingExpressions = false, snippet = null
             )
         }
@@ -360,6 +374,17 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
         val v = value.coerceIn(12, 40)
         prefs.edit().putInt("font_sp", v).apply()
         _state.update { it.copy(fontSp = v) }
+    }
+
+    fun setLineSpacing(value: Float) {
+        val v = (Math.round(value * 10) / 10f).coerceIn(1.2f, 2.6f)
+        prefs.edit().putFloat("line_spacing", v).apply()
+        _state.update { it.copy(lineSpacing = v) }
+    }
+
+    fun setPdfOriginal(original: Boolean) {
+        prefs.edit().putBoolean("pdf_original", original).apply()
+        _state.update { it.copy(pdfOriginal = original) }
     }
 
     /** Page of a long file and the zoom of the screen, kept while a word is looked up in the dictionary. */

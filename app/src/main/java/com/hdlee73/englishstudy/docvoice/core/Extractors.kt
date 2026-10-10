@@ -39,7 +39,7 @@ internal fun local(q: String) = q.substringAfter(':')
 
 /** 문서 → 텍스트 추출 (PDF 를 제외한 모든 형식은 Android 의존 없이 JVM 에서 동작). */
 object Extractors {
-    val SUPPORTED = listOf("pdf", "docx", "doc", "xlsx", "xlsm", "xls", "pptx", "ppt", "hwpx", "hwp", "txt", "md", "csv")
+    val SUPPORTED = listOf("pdf", "docx", "doc", "xlsx", "xlsm", "xls", "pptx", "ppt", "hwpx", "hwp", "epub", "txt", "md", "csv")
 
     /** PDF 는 Android 에서만 가능(PDFBox)하므로 호출 측이 리더를 주입한다. */
     fun extract(name: String, data: ByteArray, pdfReader: ((ByteArray) -> String)? = null): String {
@@ -51,6 +51,7 @@ object Extractors {
             "xlsx", "xlsm" -> xlsx(data)
             "pptx" -> pptx(data)
             "hwpx" -> hwpx(data)
+            "epub" -> Epub.extract(data)
             "hwp" -> HwpBinary.extract(data)
             "doc" -> DocBinary.extract(data)
             "xls" -> XlsBinary.extract(data)
