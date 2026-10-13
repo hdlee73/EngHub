@@ -45,6 +45,14 @@ object SrtDialog {
         } else {
             column.addView(TextView(context).apply { text = "파일 이름은 곡 이름을 그대로 써요."; textSize = 12f; setPadding(0, pad / 3, 0, 0) })
         }
+        // English uses the English-only model; Korean (or automatic detection) needs the multilingual one.
+        val languages = listOf("en" to "영어", "ko" to "한국어", "" to "자동 감지")
+        column.addView(TextView(context).apply { text = "말하는 언어"; textSize = 14f; setPadding(0, pad / 2, 0, 0) })
+        val group = android.widget.RadioGroup(context).apply { orientation = LinearLayout.HORIZONTAL }
+        languages.forEachIndexed { i, (_, label) ->
+            group.addView(android.widget.RadioButton(context).apply { id = 1000 + i; text = label; isChecked = i == 0 })
+        }
+        column.addView(group)
         val folderLabel = TextView(context).apply { textSize = 14f; setPadding(0, pad / 2, 0, 0) }
         val reset = Button(context).apply { text = "기본 폴더로" }
         fun refresh() {
@@ -66,7 +74,7 @@ object SrtDialog {
             .setPositiveButton("만들기") { _, _ ->
                 val typed = input?.text?.toString().orEmpty()
                 val names = if (single) mapOf(todo[0].uri to Storage.cleanName(typed, "srt")) else emptyMap()
-                SrtMaker.start(context, todo, names = names)
+                SrtMaker.start(context, todo, languages.getOrNull(group.checkedRadioButtonId - 1000)?.first ?: "en", names)
             }
             .setNegativeButton("취소", null)
             .show()
