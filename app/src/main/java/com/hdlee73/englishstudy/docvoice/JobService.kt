@@ -27,6 +27,10 @@ import com.hdlee73.englishstudy.docvoice.core.Stt
 import com.hdlee73.englishstudy.docvoice.core.TtsEngine
 import com.hdlee73.englishstudy.docvoice.core.TtsException
 import com.hdlee73.englishstudy.docvoice.core.TtsPlanner
+import com.hdlee73.englishstudy.docvoice.core.XlsxTranslate
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +62,7 @@ class JobService : Service() {
         }
         JobHub.pending = null
         ensureChannel()
-        val title = when (req) { is JobRequest.Tts -> "문서 → 음성"; is JobRequest.Stt -> "음성 → 문서"; is JobRequest.RecExport -> "녹음 → 문서"; is JobRequest.ModelDownload -> "모델 내려받기"; is JobRequest.Yt -> "유튜브 → MP3"; is JobRequest.SttBatch -> "재생목록 → 자막" }
+        val title = when (req) { is JobRequest.Tts -> "문서 → 음성"; is JobRequest.Stt -> "음성 → 문서"; is JobRequest.RecExport -> "녹음 → 문서"; is JobRequest.ModelDownload -> "모델 내려받기"; is JobRequest.Yt -> "유튜브 → MP3"; is JobRequest.SttBatch -> "재생목록 → 자막"; is JobRequest.XlsxTr -> "엑셀 번역" }
         startForeground(NOTIF_ID, buildNotification(title, "준비 중", null), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DocVoice:job").apply { acquire(3 * 60 * 60 * 1000L) }
@@ -73,6 +77,7 @@ class JobService : Service() {
                     is JobRequest.ModelDownload -> runModelDownload(req, title)
                     is JobRequest.Yt -> runYt(req, title)
                     is JobRequest.SttBatch -> runSttBatch(req, title)
+                    is JobRequest.XlsxTr -> runXlsxTr(req, title)
                 }
             } catch (e: CancellationException) {
                 JobHub.state.value = JobState.Failed("작업을 취소했습니다.")
@@ -128,6 +133,58 @@ class JobService : Service() {
             listOf(OutFile(name, uri, "audio/mpeg")),
             null,
         )
+    }
+
+    // ---- 엑셀 번역 ------------------------------------------------------------
+
+    /** Fills column B of the first sheet with the Korean for the English in column A and saves the result as a new file. */
+    private suspend fun runXlsxTr(req: JobRequest.XlsxTr, title: String) {
+        progress(title, "엑셀 읽는 중", null)
+        val book = withContext(Dispatchers.IO) { XlsxTranslate.open(Storage.readBytes(this@JobService, req.doc.uri)) }
+        val texts = book.targets.map { it.text }.distinct()
+        if (texts.isEmpty()) {
+            throw ExtractException(
+                if (book.alreadyFilled > 0) "번역할 칸이 없어요. 2열이 이미 채워져 있어요."
+                else "1열에서 영어를 찾지 못했어요. 영어는 1열(A열)에 있어야 해요."
+            )
+        }
+        val translator = com.hdlee73.englishstudy.translate.OnlineTranslator()
+        val direction = com.hdlee73.englishstudy.translate.Direction.EN_KO
+        val results = java.util.concurrent.ConcurrentHashMap<String, String>()
+        val done = java.util.concurrent.atomic.AtomicInteger(0)
+        val failed = java.util.concurrent.atomic.AtomicInteger(0)
+        val gate = kotlinx.coroutines.sync.Semaphore(3)
+        progress(title, "번역하는 중 (0/${texts.size})", 0f)
+        withContext(Dispatchers.IO) {
+            coroutineScope {
+                for (text in texts) launch {
+                    gate.withPermit {
+                        // The free service sometimes refuses a request: try again after a short pause before giving up on a cell.
+                        var ko: String? = null
+                        for (attempt in 0..2) {
+                            ko = translator.translate(text, direction)
+                            if (ko != null) break
+                            delay(600L * (attempt + 1))
+                        }
+                        if (ko != null) results[text] = ko else failed.incrementAndGet()
+                        val n = done.incrementAndGet()
+                        // Nothing came back for the first cells: the service is unreachable, so stop instead of grinding through the file.
+                        if (results.isEmpty() && failed.get() >= 6) throw ExtractException("번역 서비스에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.")
+                        progress(title, "번역하는 중 ($n/${texts.size})", n.toFloat() / texts.size)
+                    }
+                }
+            }
+        }
+        progress(title, "저장하는 중", null)
+        val bytes = withContext(Dispatchers.IO) { book.write(results) }
+        val name = req.outName.ifBlank { Storage.baseName(req.doc.name) + "_번역" } + ".xlsx"
+        val uri = withContext(Dispatchers.IO) { Storage.saveToDownloads(this@JobService, name, bytes) }
+        val rows = book.targets.count { results.containsKey(it.text) }
+        val notes = buildList {
+            if (failed.get() > 0) add("번역하지 못한 칸 ${book.targets.count { !results.containsKey(it.text) }}개는 비워 뒀어요. 다시 변환하면 비어 있는 칸만 채워져요.")
+            if (book.alreadyFilled > 0) add("2열이 이미 채워진 ${book.alreadyFilled}줄은 그대로 뒀어요.")
+        }
+        JobHub.state.value = JobState.Done("번역 완료  (${rows}줄)", listOf(OutFile(name, uri, Storage.mimeFor(name))), notes.joinToString("\n").ifEmpty { null })
     }
 
     // ---- 유튜브 → MP3 ---------------------------------------------------------
