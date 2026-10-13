@@ -38,6 +38,9 @@ sealed interface JobRequest {
     /** 재생목록(Listening)의 곡들을 차례로 받아쓰기해 곡마다 SRT 자막을 만든다. */
     data class SttBatch(val audios: List<Storage.Picked>, val opts: SttOptions, val outNames: Map<String, String> = emptyMap()) : JobRequest
 
+    /** 엑셀 1열의 영어를 2열에 한글로 번역해 새 파일로 저장 */
+    data class XlsxTr(val doc: Storage.Picked, val outName: String = "") : JobRequest
+
     /** 유튜브 영상의 소리를 mp3 로 */
     data class Yt(val url: String, val outName: String = "") : JobRequest
 
