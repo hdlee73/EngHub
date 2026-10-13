@@ -21,6 +21,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp3.Mp3Extractor
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
@@ -233,7 +236,11 @@ class PlaybackService : MediaSessionService() {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(30_000, 120_000, 2_500, 5_000)
             .build()
-        player = ExoPlayer.Builder(this)
+        // MP3s without a Xing/VBRI header (VBR files, YouTube/recorder conversions) are otherwise treated as constant bitrate,
+        // so the player's time drifts away from the real audio and from the subtitles after seeking. Index seeking maps
+        // time to byte position from the frames actually read.
+        val extractors = DefaultExtractorsFactory().setMp3ExtractorFlags(Mp3Extractor.FLAG_ENABLE_INDEX_SEEKING)
+        player = ExoPlayer.Builder(this, DefaultMediaSourceFactory(this, extractors))
             .setLoadControl(loadControl)
             .build().apply {
                 // Audio focus is handled by [focus] below instead of ExoPlayer: ExoPlayer pauses for every other
