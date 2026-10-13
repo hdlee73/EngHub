@@ -427,7 +427,7 @@ class SubtitleSheet(
     }
 
     private fun showMenu(anchor: View) {
-        val items = mutableListOf(IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles)
+        val items = mutableListOf(IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles))
         if (svc.subtitleUri != null) items += IconMenu.Item(2, "이 곡의 자막 제거", R.drawable.ls_ic_delete, destructive = true)
         IconMenu.show(context, anchor, items, alignEnd = true) { id ->
             when (id) {
