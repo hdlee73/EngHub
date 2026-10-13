@@ -49,6 +49,55 @@
         android:textColor="@color/ls_text_secondary"
         android:textSize="12sp" />
 
+    <TextView
+        android:id="@+id/timerCustomLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:text="30분"
+        android:textColor="@color/ls_text_primary"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/timerMinus"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="48dp"
+            android:text="−1" />
+
+        <SeekBar
+            android:id="@+id/timerSeek"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="59"
+            android:progress="29" />
+
+        <Button
+            android:id="@+id/timerPlus"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="48dp"
+            android:text="+1" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/timerStart"
+        style="@style/ls_TimerTile"
+        android:layout_width="match_parent"
+        android:layout_weight="0"
+        android:text="이 시간으로 시작 (1~60분)" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

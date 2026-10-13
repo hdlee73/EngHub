@@ -37,6 +37,9 @@ object Stt {
     /** 화자 구분은 전체 음성을 메모리에 올리므로 너무 긴 파일에서는 건너뛴다. */
     const val MAX_DIARIZE_SECONDS = 50 * 60
 
+    /** Audio added on each side of a detected speech piece before it is recognized (0.2 s at 16 kHz). */
+    private const val PAD_SAMPLES = 3200
+
     fun transcribe(
         store: ModelStore,
         pcm: PcmSource,
@@ -49,7 +52,17 @@ object Stt {
 
         // 1) 모델 준비
         store.ensureVad(isActive) { m, f -> onStage(m, f) }
-        store.ensureWhisper(opts.size, isActive) { m, f -> onStage(m, f) }
+        var opts = opts
+        try {
+            store.ensureWhisper(opts.size, isActive) { m, f -> onStage(m, f) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The English-only model could not be downloaded: fall back to the multilingual one.
+            if (!opts.size.englishOnly) throw e
+            opts = opts.copy(size = WhisperSize.SMALL)
+            store.ensureWhisper(opts.size, isActive) { m, f -> onStage(m, f) }
+        }
         if (opts.diarize) store.ensureDiar(isActive) { m, f -> onStage(m, f) }
 
         // 2) 받아쓰기
@@ -62,7 +75,12 @@ object Stt {
                 while (!vad.empty()) {
                     val seg = vad.front()
                     vad.pop()
-                    decodeSegment(recognizer, seg.samples, seg.start)?.let { segments.add(it) }
+                    // The detector tends to clip the first and last word: give the recognizer a little audio on both sides,
+                    // but report the detected times.
+                    val from = maxOf(0, seg.start - PAD_SAMPLES)
+                    val to = minOf(total, seg.start + seg.samples.size + PAD_SAMPLES)
+                    val padded = runCatching { pcm.toFloats(from, to) }.getOrDefault(seg.samples)
+                    decodeSegment(recognizer, padded, from, reportStart = seg.start, reportSamples = seg.samples.size)?.let { segments.add(it) }
                 }
             }
             val window = 1600
@@ -114,7 +132,8 @@ object Stt {
                     whisper = OfflineWhisperModelConfig(
                         encoder = wf.encoder.path,
                         decoder = wf.decoder.path,
-                        language = opts.language,
+                        // English-only models take no language.
+                        language = if (opts.size.englishOnly) "" else opts.language,
                         task = "transcribe",
                         tailPaddings = 1000,
                     ),
@@ -152,11 +171,12 @@ object Stt {
         config = VadModelConfig(
             sileroVadModelConfig = SileroVadModelConfig(
                 model = store.vadFile.path,
-                threshold = 0.5f,
-                minSilenceDuration = 0.4f,
+                threshold = 0.45f,
+                // Longer pauses only: shorter pieces gave the recognizer too little context and cut sentences in two.
+                minSilenceDuration = 0.65f,
                 minSpeechDuration = 0.25f,
                 windowSize = 512,
-                maxSpeechDuration = 25f,
+                maxSpeechDuration = 28f,
             ),
             sampleRate = AudioDecoder.SAMPLE_RATE,
             numThreads = 1,
@@ -164,17 +184,22 @@ object Stt {
         )
     )
 
-    /** VAD 가 잘라낸 한 구간을 Whisper 로 인식. startSample 은 16kHz 기준 샘플 위치. */
-    fun decodeSegment(recognizer: OfflineRecognizer, samples: FloatArray, startSample: Int): Segment? {
+    /**
+     * VAD 가 잘라낸 한 구간을 Whisper 로 인식. startSample 은 16kHz 기준 샘플 위치.
+     * [reportStart] / [reportSamples] 가 주어지면 samples 에 여유 구간이 붙어 있어도 그 시간으로 기록한다.
+     */
+    fun decodeSegment(
+        recognizer: OfflineRecognizer, samples: FloatArray, startSample: Int,
+        reportStart: Int = startSample, reportSamples: Int = samples.size,
+    ): Segment? {
         val sr = AudioDecoder.SAMPLE_RATE
-        val start = startSample / sr.toDouble()
-        val dur = samples.size / sr.toDouble()
+        val start = reportStart / sr.toDouble()
+        val dur = reportSamples / sr.toDouble()
         val stream = recognizer.createStream()
         try {
             stream.acceptWaveform(samples, sr)
             recognizer.decode(stream)
-            val text = recognizer.getResult(stream).text.trim()
-            if (text.isEmpty()) return null
+            val text = Segmenter.cleanAsr(recognizer.getResult(stream).text, dur) ?: return null
             if (Segmenter.englishWordCount(text) + (if (Segmenter.hasHangul(text)) 1 else 0) == 0) return null
             return Segment(start, start + dur, text)
         } finally {
