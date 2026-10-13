@@ -13,7 +13,11 @@ import java.util.concurrent.TimeUnit
 /** 받아쓰기 정확도 선택 (Whisper int8). */
 enum class WhisperSize(val key: String, val label: String, val hint: String) {
     BASE("base", "빠름", "base · 약 150MB"),
-    SMALL("small", "정확 (권장)", "small · 약 370MB");
+    SMALL("small", "정확 (권장)", "small · 약 370MB"),
+    /** English-only small model: more accurate than the multilingual small one on English speech (e.g. Listening subtitles), same size. */
+    SMALL_EN("small.en", "영어 전용 정확", "small.en · 약 370MB");
+
+    val englishOnly: Boolean get() = key.endsWith(".en")
 }
 
 /** 실시간(스트리밍) 인식 언어 */

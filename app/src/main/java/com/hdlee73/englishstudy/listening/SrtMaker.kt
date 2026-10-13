@@ -31,7 +31,7 @@ object SrtMaker {
             return 0
         }
         val audios = todo.map { Storage.Picked(Uri.parse(it.uri), it.name, -1L) }
-        JobHub.pending = JobRequest.SttBatch(audios, SttOptions(language, WhisperSize.SMALL, false), names.filterValues { it.isNotBlank() })
+        JobHub.pending = JobRequest.SttBatch(audios, SttOptions(language, if (language == "en") WhisperSize.SMALL_EN else WhisperSize.SMALL, false), names.filterValues { it.isNotBlank() })
         JobHub.state.value = JobState.Running("준비 중", "시작하는 중", null)
         ContextCompat.startForegroundService(app, Intent(app, JobService::class.java))
         Toast.makeText(app, "자막 ${audios.size}개를 만들기 시작했어요. 알림이나 DocVoice 탭에서 진행 상황을 볼 수 있어요.", Toast.LENGTH_LONG).show()

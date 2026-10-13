@@ -119,7 +119,7 @@ class ListeningController(
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            playbackService = (binder as PlaybackService.LocalBinder).getService()
+            playbackService = (binder as PlaybackService.LocalBinder).getService().also { it.onUiAttached() }
             initializeUi()
         }
 
@@ -134,6 +134,8 @@ class ListeningController(
     fun start() {
         bindViews()
         askNotificationPermissionOnce()
+        // Start the service too (not only bind): a bound-only service is destroyed, with its player, when this tab is left.
+        runCatching { ctx.startService(Intent(ctx, PlaybackService::class.java)) }
         serviceBound = ctx.bindService(
             Intent(ctx, PlaybackService::class.java).setAction(PlaybackService.ACTION_LOCAL_BIND),
             serviceConnection,
@@ -161,6 +163,7 @@ class ListeningController(
         pickFiles.unregister()
         pickSubtitle.unregister()
         if (serviceBound) {
+            playbackService?.onUiDetached()
             ctx.unbindService(serviceConnection)
             serviceBound = false
         }
@@ -218,6 +221,17 @@ class ListeningController(
         launchIntent?.let { handleLaunchAction(it) }
         launchIntent = null
         startUiTicker()
+        resumeAfterLookup()
+    }
+
+    /** Back from the dictionary / word list after picking words in the subtitles: play on from those words, with the subtitles open again. */
+    private fun resumeAfterLookup() {
+        val svc = playbackService ?: return
+        val pos = svc.takeLookupReturn()
+        if (pos < 0L) return
+        svc.player.seekTo(pos)
+        svc.resume()
+        handler.post { if (!disposed) showSubtitles() }
     }
 
     private fun askNotificationPermissionOnce() {
@@ -649,7 +663,7 @@ class ListeningController(
             toast("먼저 오디오 파일을 추가해 주세요.")
             return
         }
-        val sheet = SubtitleSheet(ctx, svc, onLookup = { subtitleSheet?.dismiss(); onLookup(it) }, onTranslate = { subtitleSheet?.dismiss(); onTranslate(it) }) { openSubtitlePicker() }
+        val sheet = SubtitleSheet(ctx, svc, onLookup = { text, positionMs -> svc.rememberLookup(positionMs); subtitleSheet?.dismiss(); onLookup(text) }, onTranslate = { subtitleSheet?.dismiss(); onTranslate(it) }) { openSubtitlePicker() }
         subtitleSheet = sheet
         sheet.show()
     }
@@ -674,6 +688,27 @@ class ListeningController(
                 update()
                 handler.postDelayed(this, 500)
             }
+        }
+        // Free choice: 1 to 60 minutes in 1-minute steps (slider, -1 / +1), started with the button below.
+        val seek = view.findViewById<SeekBar>(R.id.timerSeek)
+        val customLabel = view.findViewById<TextView>(R.id.timerCustomLabel)
+        fun customMinutes() = seek.progress + 1
+        fun showCustom() { customLabel.text = "${customMinutes()}분" }
+        seek.progress = (prefs.getInt("sleep_custom_minutes", 30).coerceIn(1, 60)) - 1
+        showCustom()
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) = showCustom()
+            override fun onStartTrackingTouch(bar: SeekBar?) {}
+            override fun onStopTrackingTouch(bar: SeekBar?) {}
+        })
+        view.findViewById<Button>(R.id.timerMinus).setOnClickListener { seek.progress = (seek.progress - 1).coerceAtLeast(0) }
+        view.findViewById<Button>(R.id.timerPlus).setOnClickListener { seek.progress = (seek.progress + 1).coerceAtMost(59) }
+        view.findViewById<Button>(R.id.timerStart).setOnClickListener {
+            val minutes = customMinutes()
+            prefs.edit().putInt("sleep_custom_minutes", minutes).apply()
+            svc.setSleepTimer(minutes)
+            toast("${minutes}분 뒤에 재생이 멈춥니다.")
+            dialog.dismiss()
         }
         listOf(R.id.timer15 to 15, R.id.timer30 to 30, R.id.timer45 to 45, R.id.timer60 to 60, R.id.timer90 to 90)
             .forEach { (id, minutes) ->

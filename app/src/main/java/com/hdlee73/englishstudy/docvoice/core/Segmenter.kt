@@ -38,6 +38,26 @@ object Segmenter {
 
     fun hasHangul(text: String) = HANGUL.containsMatchIn(text)
 
+    private val SOUND_TAG = Regex("""\[[^\]]{0,40}]|\([^)]{0,40}\)|♪[^♪]*♪?|♪""")
+    private val LOOP = Regex("""(?i)\b([\w']+(?:\s+[\w']+){0,3}?)(?:[,.!?\s]+\1\b){3,}""")
+    private val NOISE_PHRASES = setOf(
+        "thank you", "thanks", "thank you for watching", "thanks for watching", "please subscribe", "subscribe", "you", "bye", "bye bye", "the end",
+    )
+
+    /**
+     * Cleans one recognized piece: removes "[Music]" / "(applause)" tags and music notes, collapses a phrase the model got stuck repeating,
+     * and drops the stock phrases it invents over silence or music ("Thank you.") when the piece is short. Returns null when nothing is left.
+     */
+    fun cleanAsr(text: String, durationSec: Double = Double.MAX_VALUE): String? {
+        var t = SOUND_TAG.replace(text, " ")
+        t = LOOP.replace(t) { it.groupValues[1] }
+        t = t.replace(Regex("\\s+"), " ").trim()
+        if (t.isEmpty()) return null
+        val key = t.lowercase(Locale.ROOT).replace(Regex("[^a-z ]"), "").trim()
+        if (durationSec < 2.5 && key in NOISE_PHRASES) return null
+        return t
+    }
+
     /** 한글 비율이 일정 이상이면 한국어 문장으로 본다. */
     fun isKorean(text: String, ratio: Double = 0.15): Boolean {
         var letters = 0
@@ -147,11 +167,16 @@ object Segmenter {
         return if (s.c1 == s.c0) s.t0 else s.t0 + (p - s.c0).toDouble() / (s.c1 - s.c0) * (s.t1 - s.t0)
     }
 
+    /**
+     * Whisper 세그먼트(VAD 로 잘린 구간)를 문장으로 이어 붙인다.
+     * 문장 중간에서 잠깐 쉬었다고(또는 구간이 잘렸다고) 문장을 끊지 않는다: 앞 구간이 문장부호로 끝났거나 아주 오래(longPause) 쉬었을 때만 끊는다.
+     */
     fun buildSentences(
         segments: List<Segment>,
         minEnWords: Int = 3,
         pauseBoundary: Double = 0.8,
-        maxPendingChars: Int = 160,
+        maxPendingChars: Int = 280,
+        longPause: Double = 2.5,
     ): List<Sentence> {
         val segs = segments.filter { it.text.isNotBlank() }
         if (segs.isEmpty()) return emptyList()
@@ -164,9 +189,18 @@ object Segmenter {
             if (prev != null) {
                 val tail = full.substring(full.lastIndexOf("\n") + 1)
                 val gap = seg.start - prev.end
-                val boundary = gap >= pauseBoundary ||
-                    tail.length >= maxPendingChars ||
-                    (endsSentence(tail) && hasHangul(tail))
+                val ended = endsSentence(tail)
+                val boundary = tail.length >= maxPendingChars ||
+                    (gap >= pauseBoundary && (ended || hasHangul(tail) || gap >= longPause)) ||
+                    (ended && hasHangul(tail))
+                // The recognizer often ends a cut-off piece with a full stop; a lower-case start right after shows the sentence goes on.
+                if (!boundary && gap < 1.0 && t.firstOrNull()?.isLowerCase() == true) {
+                    val trimmed = full.trimEnd()
+                    if (trimmed.endsWith(".") && !trimmed.endsWith("..") && !isAbbrev(trimmed.toString(), trimmed.length - 1, trimmed.length)) {
+                        full.setLength(trimmed.length - 1)
+                        full.append(',')
+                    }
+                }
                 full.append(if (boundary) "\n" else " ")
             }
             val c0 = full.length
