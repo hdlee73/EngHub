@@ -156,13 +156,13 @@ private fun BarButton(icon: androidx.compose.ui.graphics.vector.ImageVector, des
 
 /**
  * The tabs of the app, reached from the left menu (the ☰ button, or a swipe from the left edge); the screen of the selected tab is drawn by [content].
- * The menu is open when the app starts (unless another app sent something to a particular tab), and a popup at start asks to update while a newer release is not installed.
+ * The menu is open when the app starts ([openMenuAtStart]: not when another app sent something to a particular tab), and a popup at start asks to update while a newer release is not installed.
  */
 @Composable
-fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, onOpenUrl: (String) -> Unit, content: @Composable (AppTab) -> Unit) {
+fun AppRoot(tab: AppTab, onTab: (AppTab) -> Unit, onOpenUrl: (String) -> Unit, openMenuAtStart: Boolean = false, content: @Composable (AppTab) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val drawer = rememberDrawerState(if (openMenuAtStart) DrawerValue.Open else DrawerValue.Closed)
     var aboutOpen by remember { mutableStateOf(false) }
     var newer by remember { mutableStateOf(UpdateChecker.available(context)) }
     var updatePrompt by remember { mutableStateOf(false) }

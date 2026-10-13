@@ -200,7 +200,10 @@ object Exporter {
         return String.format(java.util.Locale.US, "%02d:%02d:%02d,%03d", ms / 3600000, ms / 60000 % 60, ms / 1000 % 60, ms % 1000)
     }
 
-    /** 자막(.srt): 문장 하나를 한 줄 자막으로, 너무 길면 단어 단위로 나눠 시간을 글자 수에 비례해 배분. */
+    /**
+     * 자막(.srt): 문장 하나 = 자막 하나. 길면 줄만 바꿔 한 자막 안에 모두 담는다(문장을 여러 자막으로 쪼개 시간이 끊기지 않게).
+     * 끝 시각은 다음 문장이 시작하기 전까지로 제한한다.
+     */
     fun srt(sentences: List<Sentence>, showSpeaker: Boolean = false, maxChars: Int = 42): ByteArray {
         val sb = StringBuilder()
         var n = 1
@@ -208,8 +211,8 @@ object Exporter {
             val nextStart = sentences.getOrNull(i + 1)?.start ?: Double.MAX_VALUE
             val end = minOf(maxOf(s.end, s.start + 0.8), maxOf(nextStart, s.start + 0.5))
             val label = if (showSpeaker && s.speaker != null) speakerLabel(s.speaker) + " " else ""
-            // 줄 나누기
-            val words = s.text.trim().split(Regex("\\s+"))
+            val words = s.text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (words.isEmpty()) return@forEachIndexed
             val lines = ArrayList<String>()
             var cur = StringBuilder()
             for (w in words) {
@@ -218,18 +221,9 @@ object Exporter {
                 cur.append(w)
             }
             if (cur.isNotEmpty()) lines.add(cur.toString())
-            // 한 자막은 최대 두 줄
-            val cues = lines.chunked(2)
-            val total = cues.sumOf { c -> c.sumOf { it.length } }.coerceAtLeast(1)
-            var t = s.start
-            cues.forEachIndexed { ci, cue ->
-                val len = cue.sumOf { it.length }
-                val e = if (ci == cues.lastIndex) end else t + (end - s.start) * len / total
-                sb.append(n++).append('\n').append(srtTime(t)).append(" --> ").append(srtTime(e)).append('\n')
-                cue.forEachIndexed { li, line -> sb.append(if (ci == 0 && li == 0) label else "").append(line).append('\n') }
-                sb.append('\n')
-                t = e
-            }
+            sb.append(n++).append('\n').append(srtTime(s.start)).append(" --> ").append(srtTime(end)).append('\n')
+            lines.forEachIndexed { li, line -> sb.append(if (li == 0) label else "").append(line).append('\n') }
+            sb.append('\n')
         }
         return sb.toString().toByteArray(Charsets.UTF_8)
     }
