@@ -133,6 +133,20 @@ class SubtitleSheet(
 
         playButton.setOnClickListener { svc.togglePlay() }
         root.findViewById<ImageButton>(R.id.subMenuButton).setOnClickListener { showMenu(it) }
+        val selectButton = root.findViewById<ImageButton>(R.id.subSelectButton)
+        fun syncSelectButton() {
+            selectButton.isSelected = selectMode
+            selectButton.alpha = if (selectMode) 1f else 0.45f
+            selectButton.contentDescription = if (selectMode) "글자 선택 모드 끄기" else "글자 선택 모드 켜기"
+        }
+        syncSelectButton()
+        selectButton.setOnClickListener {
+            selectMode = !selectMode
+            syncSelectButton()
+            hint.let { (it as? TextView)?.text = if (selectMode) SELECT_HINT else NORMAL_HINT }
+            adapter.notifyDataSetChanged()
+            Toast.makeText(context, if (selectMode) "자막 글자를 길게 눌러 단어나 구절을 고르세요." else "글자 선택 모드를 껐습니다.", Toast.LENGTH_SHORT).show()
+        }
         root.findViewById<Button>(R.id.cuePick).setOnClickListener { pickFile() }
         refresh()
         dialog.show()
@@ -413,18 +427,11 @@ class SubtitleSheet(
     }
 
     private fun showMenu(anchor: View) {
-        val items = mutableListOf(IconMenu.Item(3, if (selectMode) "글자 선택 모드 끄기" else "글자 선택 모드 (단어·구절 고르기)", R.drawable.ls_ic_edit))
-        items += IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles)
+        val items = mutableListOf(IconMenu.Item(1, if (svc.subtitleUri == null) "자막 파일 선택" else "다른 자막 파일 선택", R.drawable.ls_ic_subtitles))
         if (svc.subtitleUri != null) items += IconMenu.Item(2, "이 곡의 자막 제거", R.drawable.ls_ic_delete, destructive = true)
         IconMenu.show(context, anchor, items, alignEnd = true) { id ->
             when (id) {
                 1 -> pickFile()
-                3 -> {
-                    selectMode = !selectMode
-                    hint.let { (it as? TextView)?.text = if (selectMode) SELECT_HINT else NORMAL_HINT }
-                    adapter.notifyDataSetChanged()
-                    Toast.makeText(context, if (selectMode) "자막 글자를 길게 눌러 단어나 구절을 고르세요." else "글자 선택 모드를 껐습니다.", Toast.LENGTH_SHORT).show()
-                }
                 2 -> {
                     svc.setSubtitle(null)
                     reload()
@@ -439,7 +446,7 @@ class SubtitleSheet(
         const val MENU_TRANSLATE = 3
         const val MENU_COPY = 4
         const val NORMAL_HINT = "문장을 누르면 그 위치로 이동 · 길게 누르면 그 문장을 구간 반복 · 길게 누른 채 끌면 여러 문장을 구간 반복"
-        const val SELECT_HINT = "글자 선택 모드: 자막 글자를 길게 누른 채 끌면 다른 문장(시간대)까지 이어서 고를 수 있어요. 손을 떼면 ‘이 부분 재생 · 단어장·사전 · 번역 · 복사’ 메뉴가 나와요. (메뉴 ⋮ 에서 끌 수 있어요)"
+        const val SELECT_HINT = "글자 선택 모드: 자막 글자를 길게 누른 채 끌면 다른 문장(시간대)까지 이어서 고를 수 있어요. 손을 떼면 ‘이 부분 재생 · 단어장·사전 · 번역 · 복사’ 메뉴가 나와요. (위의 글자 선택 버튼으로 끌 수 있어요)"
     }
 
     private inner class CueHolder(view: View) : RecyclerView.ViewHolder(view) {
