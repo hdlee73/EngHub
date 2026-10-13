@@ -27,7 +27,7 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
 
     val job = JobHub.state
 
-    var tab by mutableIntStateOf(0) // 0 문서→MP3, 1 MP3→문서, 2 녹음 & 문서화, 3 유튜브→MP3
+    var tab by mutableIntStateOf(0) // 0 문서→MP3, 1 MP3→문서, 2 녹음 & 문서화, 3 유튜브→MP3, 4 엑셀 번역
 
     // 문서 → 음성
     var ttsFile by mutableStateOf<Storage.Picked?>(null)
@@ -40,6 +40,15 @@ class DocVoiceViewModel(private val app: Application) : AndroidViewModel(app) {
     /** 저장할 파일 이름(확장자 제외). 비우면 문서/영상 이름으로 자동. */
     var ttsName by mutableStateOf("")
     var ytName by mutableStateOf("")
+    var xlName by mutableStateOf("")
+
+    // 엑셀 번역
+    var xlFile by mutableStateOf<Storage.Picked?>(null)
+    fun pickXlsx(uri: Uri) { xlFile = Storage.describe(app, uri); xlName = "" }
+    fun startXlsx() {
+        val f = xlFile ?: return
+        launch(JobRequest.XlsxTr(f, Storage.cleanName(xlName, "xlsx")))
+    }
     var sttName by mutableStateOf("")
 
     // 유튜브 → MP3
