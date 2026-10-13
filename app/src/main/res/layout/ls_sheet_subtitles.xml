@@ -36,6 +36,13 @@
             android:src="@drawable/ls_ic_play" />
 
         <ImageButton
+            android:id="@+id/subSelectButton"
+            style="@style/ls_HeaderIcon"
+            android:layout_marginStart="6dp"
+            android:contentDescription="글자 선택 모드"
+            android:src="@drawable/ls_ic_edit" />
+
+        <ImageButton
             android:id="@+id/subMenuButton"
             style="@style/ls_HeaderIcon"
             android:layout_marginStart="6dp"
