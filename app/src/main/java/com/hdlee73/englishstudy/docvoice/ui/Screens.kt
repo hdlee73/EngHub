@@ -113,7 +113,7 @@ fun DocVoiceScreen(vm: DocVoiceViewModel) {
 /** Document → MP3, MP3 → document, or recording: sits right under the banner. */
 @Composable
 private fun ModeSwitch(vm: DocVoiceViewModel) {
-    Segmented(listOf("문서 → MP3", "MP3 → 문서", "녹음", "유튜브", "엑셀"), vm.tab) { vm.tab = it }
+    Segmented(listOf("문서 → MP3", "MP3 → 문서", "녹음", "유튜브 음원", "엑셀번역"), vm.tab) { vm.tab = it }
 }
 
 // ---- 설정 시트 --------------------------------------------------------------------
