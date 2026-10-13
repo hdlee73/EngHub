@@ -234,7 +234,7 @@ object Exporter {
     fun txt(paragraphs: List<Paragraph>, includeTime: Boolean = true, showSpeaker: Boolean = false): ByteArray {
         val blocks = paragraphs.map { p ->
             val prefix = prefixOf(p, includeTime, showSpeaker)
-            (if (prefix.isNotEmpty()) "$prefix\n" else "") + p.lines
+            (if (prefix.isNotEmpty()) "$prefix " else "") + p.lines
         }
         return (blocks.joinToString("\n\n") + "\n").toByteArray(Charsets.UTF_8)
     }
