@@ -158,7 +158,10 @@ object Exporter {
             if (prefix.isNotEmpty()) {
                 body.append("<w:r><w:rPr><w:color w:val=\"9A90C0\"/><w:sz w:val=\"18\"/></w:rPr><w:t xml:space=\"preserve\">${esc(prefix)} </w:t></w:r>")
             }
-            body.append("<w:r><w:t xml:space=\"preserve\">${esc(p.text)}</w:t></w:r></w:p>")
+            p.sentences.forEachIndexed { i, s ->
+                body.append("<w:r>").append(if (i > 0) "<w:br/>" else "").append("<w:t xml:space=\"preserve\">${esc(s.text.trim())}</w:t></w:r>")
+            }
+            body.append("</w:p>")
         }
         val w = "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\""
         val document = XML + "<w:document $w><w:body>$body" +
@@ -231,7 +234,7 @@ object Exporter {
     fun txt(paragraphs: List<Paragraph>, includeTime: Boolean = true, showSpeaker: Boolean = false): ByteArray {
         val blocks = paragraphs.map { p ->
             val prefix = prefixOf(p, includeTime, showSpeaker)
-            (if (prefix.isNotEmpty()) "$prefix " else "") + p.text
+            (if (prefix.isNotEmpty()) "$prefix\n" else "") + p.lines
         }
         return (blocks.joinToString("\n\n") + "\n").toByteArray(Charsets.UTF_8)
     }

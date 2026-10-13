@@ -63,16 +63,21 @@ object PdfExporter {
                 canvas.drawText(prefix, MARGIN, y + small.textSize, small)
                 y += small.fontSpacing + 2f
             }
-            val layout = StaticLayout.Builder.obtain(p.text, 0, p.text.length, body, contentW)
-                .setLineSpacing(0f, 1.25f)
-                .setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE)
-                .build()
-            for (i in 0 until layout.lineCount) {
-                if (y + lineH > H - MARGIN) newPage()
-                val s = layout.getLineStart(i)
-                val e = layout.getLineEnd(i)
-                canvas.drawText(p.text, s, e, MARGIN, y + body.textSize, body)
-                y += lineH
+            // One sentence per line (a long sentence still wraps).
+            for (sentence in p.sentences) {
+                val text = sentence.text.trim()
+                if (text.isEmpty()) continue
+                val layout = StaticLayout.Builder.obtain(text, 0, text.length, body, contentW)
+                    .setLineSpacing(0f, 1.25f)
+                    .setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE)
+                    .build()
+                for (i in 0 until layout.lineCount) {
+                    if (y + lineH > H - MARGIN) newPage()
+                    val s = layout.getLineStart(i)
+                    val e = layout.getLineEnd(i)
+                    canvas.drawText(text, s, e, MARGIN, y + body.textSize, body)
+                    y += lineH
+                }
             }
             y += 12f
         }

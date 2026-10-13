@@ -15,6 +15,8 @@ data class Sentence(
 
 data class Paragraph(val sentences: List<Sentence>) {
     val text: String get() = sentences.joinToString(" ") { it.text }
+    /** One sentence per line, for the saved txt / docx / pdf. */
+    val lines: String get() = sentences.joinToString("\n") { it.text.trim() }
     val start: Double get() = sentences.first().start
     val end: Double get() = sentences.last().end
     val speaker: Int? get() = sentences.first().speaker
