@@ -105,7 +105,7 @@ fun DocVoiceScreen(vm: DocVoiceViewModel) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) { when (vm.tab) { 0 -> TtsScreen(vm); 3 -> YoutubeScreen(vm); else -> SttScreen(vm) } }
+            ) { when (vm.tab) { 0 -> TtsScreen(vm); 3 -> YoutubeScreen(vm); 4 -> ExcelScreen(vm); else -> SttScreen(vm) } }
         }
     }
 }
@@ -113,7 +113,7 @@ fun DocVoiceScreen(vm: DocVoiceViewModel) {
 /** Document → MP3, MP3 → document, or recording: sits right under the banner. */
 @Composable
 private fun ModeSwitch(vm: DocVoiceViewModel) {
-    Segmented(listOf("문서 → MP3", "MP3 → 문서", "녹음", "유튜브"), vm.tab) { vm.tab = it }
+    Segmented(listOf("문서 → MP3", "MP3 → 문서", "녹음", "유튜브 음원", "엑셀번역"), vm.tab) { vm.tab = it }
 }
 
 // ---- 설정 시트 --------------------------------------------------------------------
@@ -368,6 +368,28 @@ private fun TtsScreen(vm: DocVoiceViewModel) {
 }
 
 // ---- 유튜브 → MP3 ------------------------------------------------------------------------------
+
+@Composable
+private fun ExcelScreen(vm: DocVoiceViewModel) {
+    val busy = vm.job.collectAsState().value is JobState.Running
+    val picker = rememberLauncherForActivityResult(com.hdlee73.englishstudy.ui.FilePick.Single()) { it?.let(vm::pickXlsx) }
+    ScreenHero(
+        "📊", "엑셀 번역", "1열의 영어를 2열에 한글로 번역해요",
+        "엑셀(.xlsx) 파일의 첫 번째 시트에서 1열(A열)의 영어를 읽어 2열(B열)에 한글 해석을 넣고, 새 파일로 저장해요.\n\n원본 파일은 그대로 두고, 다른 열과 서식은 그대로 유지돼요. 2열이 이미 채워진 줄은 건드리지 않아요. 번역하지 못한 칸은 비워 두니, 다시 변환하면 그 칸만 채워져요.\n\n번역 서비스를 쓰므로 인터넷 연결이 필요해요. 결과는 아래에서 고른 저장 폴더(처음에는 다운로드/DocVoice)에 저장돼요.",
+    )
+    ModeSwitch(vm)
+    JobPanel(vm)
+    Group {
+        row {
+            ValueRow(
+                Icons.Rounded.UploadFile, Dv.Blue, vm.xlFile?.name ?: "엑셀 파일 선택", vm.xlFile?.size?.takeIf { it >= 0 }?.let(::humanSize),
+                titleColor = if (vm.xlFile == null) Dv.Blue else Dv.Label,
+            ) { picker.launch(arrayOf("*/*")) }
+        }
+    }
+    SaveOptions(vm, vm.xlName, { vm.xlName = it }, "xlsx")
+    FilledButton("한글 번역 넣기", Icons.Rounded.Translate, enabled = vm.xlFile != null && !busy) { vm.startXlsx() }
+}
 
 @Composable
 private fun YoutubeScreen(vm: DocVoiceViewModel) {
