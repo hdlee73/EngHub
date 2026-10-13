@@ -28,7 +28,7 @@ class SubtitleSheet(
     private val context: Context,
     private val svc: PlaybackService,
     /** Sends the words picked in the subtitles to the dictionary / word list ... */
-    private val onLookup: (String) -> Unit,
+    private val onLookup: (text: String, positionMs: Long) -> Unit,
     /** ... or to the translator. */
     private val onTranslate: (String) -> Unit,
     private val pickFile: () -> Unit
@@ -354,7 +354,13 @@ class SubtitleSheet(
         ) { id ->
             when (id) {
                 MENU_PLAY -> playSelection(picked)
-                MENU_LOOKUP -> onLookup(text)
+                MENU_LOOKUP -> {
+                    // Where the picked words are said (estimated from their place in the sentence), so playback can come back to them.
+                    val first = cues.getOrNull(picked.loPos)
+                    val at = first?.let { it.startMs + (it.endMs - it.startMs).coerceAtLeast(1L) * picked.loOff / it.text.length.coerceAtLeast(1) } ?: svc.player.currentPosition
+                    val from = if (first != null) (at - 600L).coerceAtLeast(maxOf(0L, first.startMs - 300L)) else at
+                    onLookup(text, from)
+                }
                 MENU_TRANSLATE -> onTranslate(text)
                 MENU_COPY -> {
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager

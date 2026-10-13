@@ -92,6 +92,57 @@ class PlaybackService : MediaSessionService() {
     private var retryPosition = 0L
     private var retryShouldPlay = false
 
+    // ---- life of the service without a screen ----
+    /** True while the Listening tab is on screen and bound to this service. */
+    private var uiAttached = false
+    private val idleStop = Runnable {
+        val waitingForLookup = lookupPositionMs >= 0L && SystemClock.elapsedRealtime() - lookupAt < 30 * 60_000L
+        if (!uiAttached && !player.playWhenReady && !gapPending && !waitingForLookup) stopSelf()
+    }
+
+    /**
+     * The Listening tab binds to this service, but the service is also *started* so that it outlives the tab:
+     * leaving the tab (to the dictionary, quiz, ...) only unbinds, and playback carries on. Once nothing plays and
+     * the tab is gone, the service ends on its own after a while.
+     */
+    fun onUiAttached() {
+        uiAttached = true
+        handler.removeCallbacks(idleStop)
+    }
+
+    fun onUiDetached() {
+        uiAttached = false
+        scheduleIdleStop(10_000L)
+    }
+
+    private fun scheduleIdleStop(delayMs: Long) {
+        handler.removeCallbacks(idleStop)
+        if (!uiAttached && !player.playWhenReady) handler.postDelayed(idleStop, delayMs)
+    }
+
+    // ---- "go to the dictionary and come back to the same words" ----
+    private var lookupTrackUri: String? = null
+    private var lookupPositionMs = -1L
+    private var lookupAt = 0L
+
+    /** Remembers where the picked words are in the track and pauses; [takeLookupReturn] restarts from there. */
+    fun rememberLookup(positionMs: Long) {
+        lookupTrackUri = currentUri
+        lookupPositionMs = positionMs.coerceAtLeast(0L)
+        lookupAt = SystemClock.elapsedRealtime()
+        cancelGap()
+        player.pause()
+    }
+
+    /** The point to resume from when the user comes back to Listening after a lookup (once), or -1. */
+    fun takeLookupReturn(): Long {
+        val pos = lookupPositionMs
+        val fresh = pos >= 0L && lookupTrackUri == currentUri && SystemClock.elapsedRealtime() - lookupAt < 30 * 60_000L
+        lookupPositionMs = -1L
+        lookupTrackUri = null
+        return if (fresh) pos else -1L
+    }
+
     private var tickerRunning = false
     private val ticker = object : Runnable {
         override fun run() {
@@ -104,12 +155,14 @@ class PlaybackService : MediaSessionService() {
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
+                handler.removeCallbacks(idleStop)
                 retryCount = 0
                 startTicker()
             } else if (player.playbackState == Player.STATE_READY) {
                 // Paused while the UI may be gone (focus loss, headset unplugged, sleep timer).
                 savePosition()
             }
+            if (!isPlaying) scheduleIdleStop(10 * 60_000L)
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {

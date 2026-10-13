@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     /** Bumped when a DocVoice notification is tapped, so the DocVoice tab comes to the front. */
     private var docVoiceRequest by mutableStateOf(0)
     private var hasOpenDialog = false
+    private var openMenuAtStart = false
     /** A word sent by another app (Everynote's 단어장): the dictionary tab searches it and offers a way back to [returnPackage]. */
     private data class ExternalLookup(val word: String, val returnPackage: String?, val serial: Long = System.nanoTime())
     private var externalLookup by mutableStateOf<ExternalLookup?>(null)
@@ -105,6 +107,9 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null && DocVoiceLink.isForDocVoice(intent)) docVoiceRequest++
         if (savedInstanceState == null) readExternalLookup(intent)
         if (savedInstanceState == null) readSharedText(intent)
+        // A fresh start shows the left menu so the user sees what the app has; not when another app sent something to a tab.
+        openMenuAtStart = savedInstanceState == null && listeningIntent == null && docVoiceRequest == 0 &&
+            externalLookup == null && sharedText == null && DocVoiceLink.sharedYoutubeUrl(intent) == null
         // Fetches each new BBC 6 Minute English episode into the Listening tab's "6min" folder.
         com.hdlee73.englishstudy.listening.SixMinuteEnglish.schedule(applicationContext)
         // Tells the user (notification and app info) when GitHub has a newer release.
@@ -289,6 +294,61 @@ class MainActivity : AppCompatActivity() {
                 learningVm.syncPhraseExamples(pairs)
             }
 
+            // Leaving a tab: stop what only makes sense on that tab, and refresh the screens that show other tabs' data.
+            fun switchTab(next: AppTab) {
+                if (tab == AppTab.SPEAKING && next != AppTab.SPEAKING) {
+                    learningVm.pauseForBackground()
+                    speech.stop()
+                }
+                if (next != AppTab.DICTIONARY) wordSpeaker.stop()
+                // Words saved or datasets loaded since the last visit show up in the study setup screens.
+                if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
+                if (next == AppTab.READING) readingVm.refresh()
+                returnTab = null
+                returnApp = null
+                tabIndex = next.ordinal
+            }
+
+            // The tabs visited before this one, so the system back button goes to the previous screen instead of closing the app.
+            val history = remember { mutableStateListOf<Int>() }
+            var previousTab by remember { mutableStateOf(tabIndex) }
+            var goingBack by remember { mutableStateOf(false) }
+            LaunchedEffect(tabIndex) {
+                if (goingBack) goingBack = false
+                else if (previousTab != tabIndex) {
+                    history.remove(previousTab)
+                    history.add(previousTab)
+                    while (history.size > 12) history.removeAt(0)
+                }
+                previousTab = tabIndex
+            }
+            val innerBack = when (tab) {
+                AppTab.SPEAKING -> settingsOpen || datasetsOpen || learning.editingDataset != null
+                AppTab.READING -> reading.open != null
+                AppTab.FLASHCARDS -> flash.stage != com.hdlee73.englishstudy.study.StudyStage.SETUP
+                AppTab.QUIZ -> quiz.stage != com.hdlee73.englishstudy.study.QuizStage.SETUP
+                AppTab.DICTIONARY -> dictionary.showSaved
+                else -> false
+            }
+            // Registered before AppRoot's own handler, which closes the left menu first. Without anything to go back to, the app closes.
+            androidx.activity.compose.BackHandler(enabled = innerBack || history.any { it != tabIndex } || tab != AppTab.DICTIONARY) {
+                when {
+                    tab == AppTab.SPEAKING && settingsOpen -> settingsOpen = false
+                    tab == AppTab.SPEAKING && datasetsOpen -> datasetsOpen = false
+                    tab == AppTab.SPEAKING && learning.editingDataset != null -> learningVm.closeEditor()
+                    tab == AppTab.READING && reading.open != null -> readingVm.close()
+                    tab == AppTab.FLASHCARDS && innerBack -> studyVm.endFlashcards()
+                    tab == AppTab.QUIZ && innerBack -> studyVm.endQuiz()
+                    tab == AppTab.DICTIONARY && dictionary.showSaved -> dictionaryVm.setShowSaved(false)
+                    else -> {
+                        history.removeAll { it == tabIndex }
+                        val back = history.removeLastOrNull()?.coerceIn(0, AppTab.values().size - 1) ?: AppTab.DICTIONARY.ordinal
+                        goingBack = true
+                        switchTab(AppTab.values()[back])
+                    }
+                }
+            }
+
             sharedText?.let { text ->
                 com.hdlee73.englishstudy.ui.EnglishStudyTheme {
                     androidx.compose.material3.AlertDialog(
@@ -321,19 +381,8 @@ class MainActivity : AppCompatActivity() {
             AppRoot(
                 tab = tab,
                 onOpenUrl = { openUrl(it) },
-                onTab = { next ->
-                    if (tab == AppTab.SPEAKING && next != AppTab.SPEAKING) {
-                        learningVm.pauseForBackground()
-                        speech.stop()
-                    }
-                    if (next != AppTab.DICTIONARY) wordSpeaker.stop()
-                    // Words saved or datasets loaded since the last visit show up in the study setup screens.
-                    if (next == AppTab.FLASHCARDS || next == AppTab.QUIZ) studyVm.refreshSetup()
-                    if (next == AppTab.READING) readingVm.refresh()
-                    returnTab = null
-                    returnApp = null
-                    tabIndex = next.ordinal
-                }
+                onTab = { next -> switchTab(next) },
+                openMenuAtStart = openMenuAtStart
             ) { selected ->
                 when (selected) {
                     AppTab.DICTIONARY -> androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
