@@ -333,7 +333,7 @@ class ReadingViewModel(application: Application) : AndroidViewModel(application)
                 if (data.size > 30_000_000) error("파일이 너무 큽니다. (30MB 이하)")
                 val isPdf = name.lowercase().endsWith(".pdf")
                 // A PDF can be read as the PDF itself even when it has no text layer (a scan), so a failed text extraction is not fatal there.
-                val text = runCatching { com.hdlee73.englishstudy.docvoice.core.Extractors.extract(name, data, com.hdlee73.englishstudy.docvoice.core.PdfText.reader(app)) }
+                val text = runCatching { com.hdlee73.englishstudy.docvoice.core.Extractors.extract(name, data, com.hdlee73.englishstudy.docvoice.core.PdfText.reader(app), keepPdfLines = true) }
                     .getOrElse { e -> if (isPdf) NO_TEXT else throw e }
                 Triple(name, text, if (isPdf) data else null)
             }

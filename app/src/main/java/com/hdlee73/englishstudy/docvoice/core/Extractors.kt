@@ -42,7 +42,8 @@ object Extractors {
     val SUPPORTED = listOf("pdf", "docx", "doc", "xlsx", "xlsm", "xls", "pptx", "ppt", "hwpx", "hwp", "epub", "txt", "md", "csv")
 
     /** PDF 는 Android 에서만 가능(PDFBox)하므로 호출 측이 리더를 주입한다. */
-    fun extract(name: String, data: ByteArray, pdfReader: ((ByteArray) -> String)? = null): String {
+    /** [keepPdfLines]: keep the PDF's own line breaks (Reading) instead of joining lines cut mid-sentence (text-to-speech). */
+    fun extract(name: String, data: ByteArray, pdfReader: ((ByteArray) -> String)? = null, keepPdfLines: Boolean = false): String {
         val ext = name.substringAfterLast('.', "").lowercase()
         val raw = when (ext) {
             "txt", "md" -> decodeText(data)
@@ -58,7 +59,7 @@ object Extractors {
             "ppt" -> PptBinary.extract(data)
             "pdf" -> {
                 val reader = pdfReader ?: throw ExtractException("PDF 읽기를 사용할 수 없습니다.")
-                reflow(reader(data))
+                reader(data).let { if (keepPdfLines) it else reflow(it) }
             }
             else -> throw ExtractException("지원하지 않는 형식입니다: .$ext (지원: ${SUPPORTED.joinToString(", ")})")
         }
