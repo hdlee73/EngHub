@@ -1,5 +1,6 @@
 package com.hdlee73.englishstudy.docvoice.core
 
+import com.hdlee73.englishstudy.BuildConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -15,7 +16,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import java.io.ByteArrayOutputStream
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,9 +54,14 @@ class EdgeTts(private val client: OkHttpClient = defaultClient()) {
 
     companion object {
         private const val BASE = "speech.platform.bing.com/consumer/speech/synthesize/readaloud"
-        private const val TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
-        private const val CHROMIUM_FULL = "143.0.3650.75"
-        private const val WIN_EPOCH = 11644473600L
+        private const val CHROMIUM_FULL = SecMsGec.CHROMIUM_FULL
+
+        /**
+         * The Edge read-aloud client token. It is a credential, so it is supplied at build time through the
+         * `edgeTtsToken` Gradle property / the `EDGE_TTS_TOKEN` environment variable (see app/build.gradle.kts and
+         * gradle.properties) and never stored in the source. Empty when the build did not configure one.
+         */
+        private val TOKEN: String get() = BuildConfig.EDGE_TTS_TOKEN
 
         @Volatile
         private var clockSkewSeconds = 0L
@@ -67,13 +72,12 @@ class EdgeTts(private val client: OkHttpClient = defaultClient()) {
             .pingInterval(20, TimeUnit.SECONDS)
             .build()
 
-        internal fun secMsGec(nowMillis: Long = System.currentTimeMillis()): String {
-            var t = nowMillis / 1000 + clockSkewSeconds + WIN_EPOCH
-            t -= t % 300
-            val ticks = t * 10_000_000L
-            val digest = MessageDigest.getInstance("SHA-256").digest("$ticks$TOKEN".toByteArray(Charsets.US_ASCII))
-            return digest.joinToString("") { String.format(Locale.ROOT, "%02X", it) }
-        }
+        /** True when a token was configured at build time; without it the online voices cannot be used. */
+        fun configured(): Boolean = TOKEN.isNotBlank()
+
+        /** 서버가 요구하는 Sec-MS-GEC(v2) 토큰. 계산은 [SecMsGec] 에 있다. */
+        internal fun secMsGec(nowMillis: Long = System.currentTimeMillis()): String =
+            SecMsGec.generate(TOKEN, nowMillis, clockSkewSeconds)
 
         private fun jsDate(): String {
             val f = SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss", Locale.ENGLISH)
@@ -108,13 +112,16 @@ class EdgeTts(private val client: OkHttpClient = defaultClient()) {
     private class SkewException(val serverDate: String?) : Exception("서버 시간 불일치")
 
     /** 텍스트 한 덩어리를 mp3 바이트로 합성한다. */
-    suspend fun synthesize(text: String, voice: String, rate: String = "+0%"): ByteArray =
-        suspendCancellableCoroutine { cont ->
+    suspend fun synthesize(text: String, voice: String, rate: String = "+0%"): ByteArray {
+        // Without a build-time token the endpoint refuses the handshake and the cause is hard to read, so fail early
+        // with a message that says what to configure instead of breaking silently at runtime.
+        if (!configured()) throw TtsException("온라인 음성 토큰이 설정되지 않았습니다. EDGE_TTS_TOKEN 빌드 속성을 설정하거나 기기 음성을 사용하세요.")
+        return suspendCancellableCoroutine { cont ->
             val audio = ByteArrayOutputStream()
             var finished = false
             val url = "wss://$BASE/edge/v1?TrustedClientToken=$TOKEN" +
                 "&ConnectionId=${UUID.randomUUID().toString().replace("-", "")}" +
-                "&Sec-MS-GEC=${secMsGec()}&Sec-MS-GEC-Version=1-$CHROMIUM_FULL"
+                "&Sec-MS-GEC=${secMsGec()}&Sec-MS-GEC-Version=${SecMsGec.version}"
             val major = CHROMIUM_FULL.substringBefore('.')
             val request = Request.Builder().url(url)
                 .header("Pragma", "no-cache")
@@ -187,6 +194,7 @@ class EdgeTts(private val client: OkHttpClient = defaultClient()) {
             })
             cont.invokeOnCancellation { ws.cancel() }
         }
+    }
 
     /** 재시도 + 시계 보정 + (실패 시) 대체 음성. */
     suspend fun synthesizeWithRetry(text: String, voice: String, rate: String, fallbackVoice: String? = null): ByteArray {
@@ -207,7 +215,7 @@ class EdgeTts(private val client: OkHttpClient = defaultClient()) {
                 }
             }
         }
-        throw TtsException("음성 합성에 실패했습니다. 인터넷 연결을 확인하세요. (${last?.message})")
+        throw TtsException("음성 합성에 실패했습니다. 인터넷 연결과 시계를 확인해 주세요. (${last?.message})")
     }
 
     private fun adjustSkew(serverDate: String) {

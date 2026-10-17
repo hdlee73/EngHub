@@ -53,15 +53,19 @@ class FilePcm(private val file: java.io.File) : PcmSource, java.io.Closeable {
     }
 }
 
-/** 16kHz 모노 16bit PCM 을 담는 늘어나는 버퍼. */
-class PcmBuffer(initial: Int = 1 shl 20) : PcmSource {
-    var data = ShortArray(initial)
+/** 16kHz 모노 16bit PCM 을 담는 늘어나는 버퍼. [maxSize] 를 넘는 샘플은 담지 않아 메모리가 무한정 커지지 않는다. */
+class PcmBuffer(initial: Int = 1 shl 20, val maxSize: Int = Int.MAX_VALUE) : PcmSource {
+    var data = ShortArray(minOf(initial, maxSize).coerceAtLeast(1))
         private set
     override var size = 0
         private set
 
+    /** True once the buffer holds [maxSize] samples: further [add] calls are dropped. */
+    val full: Boolean get() = size >= maxSize
+
     fun add(v: Short) {
-        if (size == data.size) data = data.copyOf(data.size * 2)
+        if (size >= maxSize) return
+        if (size == data.size) data = data.copyOf(minOf(data.size * 2, maxSize))
         data[size++] = v
     }
 

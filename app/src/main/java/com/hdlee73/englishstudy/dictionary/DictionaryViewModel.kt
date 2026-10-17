@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,18 +71,25 @@ class DictionaryViewModel(application: Application) : AndroidViewModel(applicati
 
     fun saveCurrent() {
         val entry = _state.value.entry ?: return
-        val ok = repository.save(entry)
-        _state.update { it.copy(message = if (ok) "‘${entry.word}’ 단어를 저장했습니다." else "저장하지 못했습니다.") }
+        // SQLite write + full reload, so keep it off the UI thread.
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = repository.save(entry)
+            _state.update { it.copy(message = if (ok) "‘${entry.word}’ 단어를 저장했습니다." else "저장하지 못했습니다.") }
+        }
     }
 
     fun saveEntry(entry: WordEntry) {
-        val ok = repository.save(entry)
-        _state.update { it.copy(message = if (ok) "‘${entry.word}’ 단어를 저장했습니다." else "저장하지 못했습니다.") }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = repository.save(entry)
+            _state.update { it.copy(message = if (ok) "‘${entry.word}’ 단어를 저장했습니다." else "저장하지 못했습니다.") }
+        }
     }
 
     fun deleteSaved(entry: WordEntry) {
-        repository.delete(entry.id)
-        _state.update { it.copy(message = "‘${entry.word}’ 단어를 삭제했습니다.") }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.delete(entry.id)
+            _state.update { it.copy(message = "‘${entry.word}’ 단어를 삭제했습니다.") }
+        }
     }
 
     fun setShowSaved(show: Boolean) = _state.update { it.copy(showSaved = show) }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 (API 31) and above: backup / device-transfer rules.
+
+  As with backup_rules.xml, the app's private "files" directory (recordings, imported audio
+  copies, exports) is excluded from both cloud backup and device-to-device transfer. Small state,
+  such as preferences and the dictionary database, is still included.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="." />
+    </device-transfer>
+</data-extraction-rules>

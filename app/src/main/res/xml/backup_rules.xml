@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 (API 30) and below: full-backup content rules.
+
+  The app's private "files" directory holds user recordings, imported audio copies and exports.
+  Those must not be copied to cloud backup (privacy + size), while small state such as preferences
+  and the dictionary database is still backed up.
+-->
+<full-backup-content>
+    <exclude domain="file" path="." />
+</full-backup-content>

@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -101,13 +102,16 @@ class RecorderService : Service() {
         class Eng(val lang: LiveLang, val rec: com.k2fsa.sherpa.onnx.OnlineRecognizer) { val stream = rec.createStream() }
         val engs = lang.members.map { Eng(it, Stt.newLive(store, it)) }
 
-        val pcm = PcmBuffer(sr * 60 * 5)
+        // Bound the in-memory PCM at the maximum recording length so a runaway recording cannot exhaust memory.
+        val pcm = PcmBuffer(minOf(sr * 60 * 5, sr * MAX_RECORD_SECONDS), maxSize = sr * MAX_RECORD_SECONDS)
         RecorderHub.pcm = pcm
-        val queue = Channel<FloatArray>(Channel.UNLIMITED)
+        // Bounded queues: when recognition falls behind, the capture loop waits (backpressure) instead of buffering
+        // audio without limit.
+        val queue = Channel<FloatArray>(QUEUE_CHUNKS)
         val segments = ArrayList<Segment>()
         // 한·영 혼합: 문장이 끝날 때마다 Whisper(다국어)로 다시 인식해 글자를 교체한다 (화면엔 먼저 빠른 결과가 보임)
         val mix = lang == LiveLang.MIX
-        val refineQ = Channel<Triple<Int, Double, Double>>(Channel.UNLIMITED)
+        val refineQ = Channel<Triple<Int, Double, Double>>(REFINE_QUEUE)
         val refineJob = if (!mix) null else scope.launch(Dispatchers.Default) {
             try {
                 val wr = Stt.newRecognizer(store, com.hdlee73.englishstudy.docvoice.core.SttOptions("", com.hdlee73.englishstudy.docvoice.core.WhisperSize.SMALL, false), 2)
@@ -154,6 +158,7 @@ class RecorderService : Service() {
                 if (text.isNotEmpty()) {
                     val idx = synchronized(segments) { segments.add(Segment(segStart, maxOf(now, segStart + 0.3), text)); segments.size - 1 }
                     lastEnd = now
+                    // Best-effort refinement: when the bounded queue is full the fast (online) result is kept.
                     if (mix) refineQ.trySend(Triple(idx, segStart, maxOf(now, segStart + 0.3)))
                 }
                 for (e in engs) e.rec.reset(e.stream)
@@ -198,20 +203,28 @@ class RecorderService : Service() {
             rec.release(); queue.close(); worker.cancel(); refineQ.close(); refineJob?.cancel(); engs.forEach { it.stream.release(); it.rec.release() }; route.cleanup()
             throw IllegalStateException("마이크를 시작할 수 없습니다.")
         }
+        var limitMessage: String? = null
         try {
             rec.startRecording()
             RecorderHub.upd { copy(phase = RecPhase.Recording, message = null, fraction = null) }
             val buf = ShortArray(1600) // 0.1초
             var lastNotify = 0L
             var peak = 0f
+            var capturing = true
+            var reachedLimit = false
             withContext(Dispatchers.IO) {
                 while (!RecorderHub.stopRequested.get() && scope.isActive) {
-                    val n = rec.read(buf, 0, buf.size)
-                    if (n <= 0) continue
                     if (RecorderHub.paused.get()) {
-                        RecorderHub.upd { copy(phase = RecPhase.Paused, level = 0f) }
+                        // Do not keep reading the microphone while paused: stop capture and reset the meters.
+                        if (capturing) { try { rec.stop() } catch (_: Exception) {}; capturing = false }
+                        peak = 0f
+                        RecorderHub.upd { copy(phase = RecPhase.Paused, level = 0f, peak = 0f) }
+                        delay(120)
                         continue
                     }
+                    if (!capturing) { rec.startRecording(); capturing = true }
+                    val n = rec.read(buf, 0, buf.size)
+                    if (n <= 0) continue
                     var sum = 0.0
                     val f = FloatArray(n)
                     for (i in 0 until n) {
@@ -221,7 +234,7 @@ class RecorderService : Service() {
                         val a = kotlin.math.abs(f[i])
                         if (a > peak) peak = a
                     }
-                    queue.trySend(f)
+                    queue.send(f)
                     val rms = sqrt(sum / n).toFloat()
                     RecorderHub.upd { copy(phase = RecPhase.Recording, seconds = pcm.seconds, level = (rms * 6f).coerceIn(0f, 1f), peak = peak) }
                     val now = System.currentTimeMillis()
@@ -229,15 +242,18 @@ class RecorderService : Service() {
                         lastNotify = now
                         getSystemService(NotificationManager::class.java).notify(NOTIF_ID, notification(fmt(pcm.seconds)))
                     }
+                    // Stop capture at the cap instead of only refusing the audio later in STT.
+                    if (pcm.full || pcm.seconds >= MAX_RECORD_SECONDS) { reachedLimit = true; break }
                 }
             }
+            if (reachedLimit) limitMessage = "최대 녹음 시간(${MAX_RECORD_SECONDS / 60}분)에 도달해 자동으로 멈췄습니다."
         } finally {
             try { rec.stop() } catch (_: Exception) {}
             rec.release()
             route.cleanup()
         }
 
-        RecorderHub.upd { copy(phase = RecPhase.Finishing, message = null, level = 0f) }
+        RecorderHub.upd { copy(phase = RecPhase.Finishing, message = null, level = 0f, peak = 0f) }
         queue.close()
         worker.join()
         refineQ.close()
@@ -245,7 +261,10 @@ class RecorderService : Service() {
         engs.forEach { it.stream.release(); it.rec.release() }
 
         val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-        RecorderHub.upd { copy(phase = RecPhase.Stopped, seconds = pcm.seconds, segments = segments.toList(), wav = null, message = workerError, title = "녹음_$stamp") }
+        // Snapshot under the same lock the worker/refiner use, so the list cannot be read mid-mutation.
+        val snapshot = synchronized(segments) { segments.toList() }
+        RecorderHub.upd { copy(phase = RecPhase.Stopped, seconds = pcm.seconds, segments = snapshot, wav = null,
+            message = listOfNotNull(workerError, limitMessage).joinToString(" ").takeIf { it.isNotBlank() }, title = "녹음_$stamp") }
     }
 
     private class Route(val bt: Boolean, val name: String, val device: android.media.AudioDeviceInfo?, val cleanup: () -> Unit)
@@ -322,6 +341,16 @@ class RecorderService : Service() {
         const val ACTION_START = "com.hdlee73.englishstudy.docvoice.REC_START"
         const val ACTION_STOP = "com.hdlee73.englishstudy.docvoice.REC_STOP"
         const val ACTION_PAUSE = "com.hdlee73.englishstudy.docvoice.REC_PAUSE"
+
+        /** Longest recording kept in memory; a longer one is stopped automatically (~115 MB of PCM at 16 kHz mono 16-bit). */
+        const val MAX_RECORD_SECONDS = 60 * 60
+
+        /** 0.1 s capture chunks buffered before the capture loop waits for the recognizer (backpressure). */
+        private const val QUEUE_CHUNKS = 50
+
+        /** Sentence refinements (mixed-language mode) buffered before new ones are dropped. */
+        private const val REFINE_QUEUE = 16
+
         private const val CHANNEL = "rec"
         private const val NOTIF_ID = 3
     }

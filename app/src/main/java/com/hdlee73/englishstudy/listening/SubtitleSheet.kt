@@ -18,6 +18,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * On-demand subtitle window. It shows the subtitle file linked to the playing track, follows the
@@ -43,6 +48,8 @@ class SubtitleSheet(
     private val layoutManager = LinearLayoutManager(context)
     private val adapter = CueAdapter()
     private val handler = Handler(Looper.getMainLooper())
+    /** Reads subtitle files off the main thread; cancelled when the sheet is dismissed. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var cues: List<Cue> = emptyList()
     private var loadedKey: String? = null
@@ -153,7 +160,9 @@ class SubtitleSheet(
     }
 
     /** Forces the subtitle file to be read again, e.g. right after a new one was chosen. */
+    /** Forces the subtitle file to be read again, e.g. right after a new one was chosen. */
     fun dismiss() {
+        scope.cancel()
         if (dialog.isShowing) dialog.dismiss()
     }
 
@@ -190,7 +199,7 @@ class SubtitleSheet(
             return
         }
         showEmpty("자막을 불러오는 중…", false)
-        Thread {
+        scope.launch {
             val parsed = try {
                 SubtitleParser.load(context, subtitle)
             } catch (_: Throwable) {
@@ -211,7 +220,7 @@ class SubtitleSheet(
                     }
                 }
             }
-        }.start()
+        }
     }
 
     private fun showEmpty(message: String, withButton: Boolean) {

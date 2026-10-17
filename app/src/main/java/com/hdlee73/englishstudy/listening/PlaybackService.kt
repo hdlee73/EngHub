@@ -26,6 +26,12 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.mp3.Mp3Extractor
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Owns the player so audio keeps going with the screen off, while folded, or with the Activity
@@ -41,6 +47,8 @@ class PlaybackService : MediaSessionService() {
 
     private val binder = LocalBinder()
     private val handler = Handler(Looper.getMainLooper())
+    /** Service scope for work that must not run on the main thread (playlist load, MediaStore renames). */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var mediaSession: MediaSession? = null
     private val prefs by lazy { getSharedPreferences(TrackStore.PREFS, MODE_PRIVATE) }
 
@@ -266,8 +274,12 @@ class PlaybackService : MediaSessionService() {
         )
         mediaSession = MediaSession.Builder(this, player).setSessionActivity(openApp).build()
 
-        restoreGroups()
-        importPending()
+        // Reading the playlist and importing background downloads touches SharedPreferences / MediaStore, so do it off
+        // the main thread and apply the result (which touches the player) back on it.
+        scope.launch {
+            restoreGroups()
+            importPending()
+        }
     }
 
     /**
@@ -289,23 +301,26 @@ class PlaybackService : MediaSessionService() {
             }
         }
         if (changed) store.saveGroups(groups, store.activeGroup.coerceIn(0, groups.lastIndex))
-        if (renamedFiles.isNotEmpty()) Thread {
+        if (renamedFiles.isNotEmpty()) scope.launch(Dispatchers.IO) {
             renamedFiles.forEach { (uri, name) ->
                 runCatching {
                     val values = android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name) }
                     contentResolver.update(Uri.parse(uri), values, null, null)
                 }
             }
-        }.start()
+        }
     }
 
     /** Adds the 6 Minute English episodes downloaded in the background to the "6min" folder (created when missing). */
     fun importPending() {
-        val entries = SixMinuteEnglish.takePending(this)
-        if (entries.isEmpty()) return
-        val index = groups.indexOfFirst { it.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true) }
-            .takeIf { it >= 0 } ?: createGroup(SixMinuteEnglish.GROUP_NAME)
-        addEntries(entries, index)
+        // The pending list lives in SharedPreferences: read it off the main thread, then add to the player on it.
+        scope.launch {
+            val entries = withContext(Dispatchers.IO) { SixMinuteEnglish.takePending(this@PlaybackService) }
+            if (entries.isEmpty()) return@launch
+            val index = groups.indexOfFirst { it.name.equals(SixMinuteEnglish.GROUP_NAME, ignoreCase = true) }
+                .takeIf { it >= 0 } ?: createGroup(SixMinuteEnglish.GROUP_NAME)
+            addEntries(entries, index)
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -373,6 +388,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        scope.cancel()
         focus.abandon()
         if (::player.isInitialized) {
             savePosition()
@@ -386,14 +402,15 @@ class PlaybackService : MediaSessionService() {
 
     // ------------------------------------------------------------------ groups and playlist
 
-    /** All groups. The player's queue always mirrors the [activeGroup]. */
-    lateinit var groups: MutableList<TrackStore.Group>
+    /** All groups. Empty until the playlist has been read in the background; [activeGroup] indexes into it. */
+    var groups: MutableList<TrackStore.Group> = mutableListOf()
         private set
     var activeGroup = 0
         private set
 
-    private fun restoreGroups() {
-        groups = store.loadGroups()
+    private suspend fun restoreGroups() {
+        // loadGroups() parses the saved playlist (JSON in SharedPreferences): keep it off the main thread.
+        groups = withContext(Dispatchers.IO) { store.loadGroups() }
         renameSixMinuteEntries()
         activeGroup = store.activeGroup.coerceIn(0, groups.lastIndex)
         loadActiveIntoPlayer(play = false, startIndex = null)
@@ -435,7 +452,7 @@ class PlaybackService : MediaSessionService() {
     /** Replaces the player's queue with the active group's tracks. */
     private fun loadActiveIntoPlayer(play: Boolean, startIndex: Int?) {
         cancelGap()
-        val group = groups[activeGroup]
+        val group = groups.getOrNull(activeGroup) ?: return
         if (group.entries.isEmpty()) {
             player.pause()
             player.clearMediaItems()

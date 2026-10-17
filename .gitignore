@@ -18,3 +18,9 @@ app/src/main/assets/bilingual_examples.sqlite
 
 # The speech library of the DocVoice tab is downloaded at build time
 app/libs/
+
+# Signing material is a secret and must never be committed. The keystore that used to live in signing/ is public and
+# has to be rotated; see the README and the note in app/build.gradle.kts.
+signing/
+*.keystore
+*.jks

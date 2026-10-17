@@ -25,29 +25,39 @@ object UpdateInstaller {
     suspend fun download(context: Context, release: UpdateChecker.Release, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val url = release.apkUrl ?: error("이 릴리스에는 APK 파일이 없어요")
         val folder = dir(context)
-        folder.listFiles()?.forEach { it.delete() }
         val target = File(folder, "EngHub-${release.version}.apk")
         val partial = File(folder, "download.part")
-        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-            if (!response.isSuccessful) error("다운로드에 실패했어요 (${response.code})")
-            val body = response.body ?: error("다운로드에 실패했어요")
-            val total = body.contentLength()
-            var done = 0L
-            body.byteStream().use { input ->
-                partial.outputStream().use { out ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        out.write(buffer, 0, n)
-                        done += n
-                        onProgress(if (total > 0) done.toFloat() / total else -1f)
+        try {
+            client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                if (!response.isSuccessful) error("다운로드에 실패했어요 (${response.code})")
+                val body = response.body ?: error("다운로드에 실패했어요")
+                val total = body.contentLength()
+                var done = 0L
+                body.byteStream().use { input ->
+                    partial.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            done += n
+                            onProgress(if (total > 0) done.toFloat() / total else -1f)
+                        }
                     }
                 }
+                if (total > 0 && done != total) error("다운로드가 중간에 끊겼어요")
             }
-            if (total > 0 && done != total) error("다운로드가 중간에 끊겼어요")
+            // Promote the completed download first; only then drop older APKs, so a failed download never deletes
+            // the file the user already had.
+            if (!partial.renameTo(target)) {
+                partial.copyTo(target, overwrite = true)
+                partial.delete()
+            }
+        } catch (e: Throwable) {
+            partial.delete()
+            throw e
         }
-        if (!partial.renameTo(target)) error("파일을 저장하지 못했어요")
+        folder.listFiles()?.forEach { if (it != target && it.name.endsWith(".apk")) it.delete() }
         target
     }
 

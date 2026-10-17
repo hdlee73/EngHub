@@ -56,7 +56,17 @@ object Exporter {
             when (it) { "번호" -> 7; "시작", "종료" -> 12; "화자" -> 9; else -> 90 }
         }
 
-        fun colName(i: Int): String = ('A' + i).toString()
+        // Excel column name (A..Z, AA, AB, ...) — bijective base-26, not just 'A' + i (which breaks past Z).
+        fun colName(i: Int): String {
+            var n = i
+            val sb = StringBuilder()
+            while (true) {
+                sb.append('A' + n % 26)
+                n = n / 26 - 1
+                if (n < 0) break
+            }
+            return sb.reverse().toString()
+        }
         fun strCell(ref: String, style: Int, text: String) =
             "<c r=\"$ref\" s=\"$style\" t=\"inlineStr\"><is><t xml:space=\"preserve\">${esc(text)}</t></is></c>"
 

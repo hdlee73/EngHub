@@ -5,7 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -98,6 +101,14 @@ object UpdateChecker {
     private fun notify(context: Context, release: Release): Boolean {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "앱 업데이트 알림", NotificationManager.IMPORTANCE_DEFAULT))
+        // Only report success when the user can actually see the notification. Otherwise the version
+        // would be marked as announced and never shown again once notifications are allowed.
+        if (!manager.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return false
+        if (manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return false
         val open = PendingIntent.getActivity(
             context, 0, Intent(Intent.ACTION_VIEW, Uri.parse(release.url)),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -109,7 +120,7 @@ object UpdateChecker {
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
-        return runCatching { manager.notify(3301, notification) }.isSuccess && manager.areNotificationsEnabled()
+        return runCatching { manager.notify(3301, notification) }.isSuccess
     }
 
     /** Runs the check once a day while the phone is online. */
