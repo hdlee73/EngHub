@@ -8,6 +8,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -33,15 +34,22 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
     private val searchIo = Executors.newFixedThreadPool(2)
     private val io = Executors.newSingleThreadExecutor()
     private val translateIo = Executors.newFixedThreadPool(3)
-    private val translationCache = ConcurrentHashMap<String, String>()
+    private val translationCache = lruCache<String, String>()
     private val lookupSequence = AtomicInteger(0)
-    private val resultCache = mutableMapOf<String, WordEntry>()
+    private val resultCache = lruCache<String, WordEntry>()
     private val requestContext = ThreadLocal<Int>()
     private val connections = ConcurrentHashMap<Int, HttpURLConnection>()
     private val exampleCorpus = BilingualExamples(context.applicationContext)
     private val glossary = LocalGlossary(context.applicationContext)
     private var searchTask: Future<*>? = null
     @Volatile private var closed = false
+
+    /** A thread-safe map that evicts its least recently used entry past [MAX_CACHE_ENTRIES], so a long session stays bounded. */
+    private fun <K, V> lruCache(): MutableMap<K, V> = Collections.synchronizedMap(
+        object : LinkedHashMap<K, V>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > MAX_CACHE_ENTRIES
+        }
+    )
 
     init { searchIo.execute { glossary.prewarm() } }
 
@@ -412,5 +420,10 @@ internal class DictionaryEngine(context: Context, private val publish: (SearchUp
         translateIo.shutdownNow()
         connections.values.forEach { connection -> io.execute { connection.disconnect() } }
         io.shutdown()
+    }
+
+    private companion object {
+        /** Cap on each result/translation cache entry list (LRU eviction). */
+        const val MAX_CACHE_ENTRIES = 200
     }
 }

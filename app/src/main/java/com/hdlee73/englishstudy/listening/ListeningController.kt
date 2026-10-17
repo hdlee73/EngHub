@@ -31,11 +31,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -161,6 +164,8 @@ class ListeningController(
         subtitleSheet?.dismiss()
         requestNotifications.unregister()
         pickFiles.unregister()
+        pickFolder.unregister()
+        pickSaveFolder.unregister()
         pickSubtitle.unregister()
         if (serviceBound) {
             playbackService?.onUiDetached()
@@ -282,10 +287,10 @@ class ListeningController(
         } catch (_: Exception) {
         }
         toast("폴더를 읽고 있어요…")
-        Thread {
+        activity.lifecycleScope.launch(Dispatchers.IO) {
             val root = runCatching { FolderImport.scan(ctx, tree) }.getOrNull()
             handler.post {
-                if (playbackService == null) return@post
+                if (disposed || playbackService == null) return@post
                 if (root == null || !root.hasAudio) {
                     toast("이 폴더에는 오디오 파일이 없습니다.")
                     return@post
@@ -296,7 +301,7 @@ class ListeningController(
                     else "${added}곡을 재생목록에 추가했습니다. 이 폴더에 새 파일이 생기면 자동으로 들어옵니다."
                 )
             }
-        }.start()
+        }
     }
 
     /** Adds audio files that appeared in the device folders behind imported playlist folders (also in their subfolders). */
@@ -305,17 +310,17 @@ class ListeningController(
         svc.linkLegacyImports()
         val trees = svc.linkedTrees()
         if (trees.isEmpty()) return
-        Thread {
+        activity.lifecycleScope.launch(Dispatchers.IO) {
             val scans = trees.mapNotNull { t ->
                 runCatching { t to FolderImport.scan(ctx, Uri.parse(t)) }.getOrNull()
             }
             handler.post {
-                if (playbackService == null) return@post
+                if (disposed || playbackService == null) return@post
                 var added = 0
                 scans.forEach { (t, root) -> added += svc.applyScan(t, root, force = false) }
                 if (added > 0) toast("기기 폴더에서 새 파일 ${added}곡을 재생목록에 추가했습니다.")
             }
-        }.start()
+        }
     }
 
     /** Picks from My Files come without a lasting grant, so those are copied into the app and played from the copy. */
@@ -323,10 +328,10 @@ class ListeningController(
         if (uris.isEmpty()) return
         if (uris.all { isPersistable(it) }) { addPicked(uris.map { it to displayName(it) }); return }
         toast("파일을 앱으로 가져오는 중…")
-        Thread {
+        activity.lifecycleScope.launch(Dispatchers.IO) {
             val picked = uris.map { displayName(it).let { name -> keepable(it, name) to name } }
-            handler.post { addPicked(picked) }
-        }.start()
+            handler.post { if (!disposed) addPicked(picked) }
+        }
     }
 
     private fun addPicked(picked: List<Pair<Uri, String>>) {
@@ -355,6 +360,10 @@ class ListeningController(
             val dir = java.io.File(ctx.filesDir, "picked").apply { mkdirs() }
             val safe = name.replace(Regex("[^\\w.\\- ]+"), "_").take(120).ifBlank { "audio" }
             val size = ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+            // A file that would not fit in app storage must not be copied: it would fail half-way and
+            // leave a truncated file behind, and it could fill the disk. Fall back to the original uri.
+            if (size > MAX_PICK_BYTES) throw java.io.IOException("file too large: $size")
+            if (size > 0 && dir.usableSpace - size < MIN_FREE_BYTES) throw java.io.IOException("not enough space for $size")
             val same = dir.listFiles()?.firstOrNull { it.name.endsWith("_$safe") && size > 0 && it.length() == size }
             val file = same ?: java.io.File(dir, "${System.currentTimeMillis()}_$safe").also { target ->
                 ctx.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } }
@@ -833,4 +842,11 @@ class ListeningController(
     private fun toast(message: String) = Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
 
     private fun dp(value: Int): Int = ctx.dp(value)
+
+    private companion object {
+        /** Largest audio file copied into app storage (bytes); bigger picks stay as the original uri. */
+        const val MAX_PICK_BYTES = 512L * 1024 * 1024
+        /** Free space always kept in app storage after a copy (bytes). */
+        const val MIN_FREE_BYTES = 64L * 1024 * 1024
+    }
 }

@@ -34,11 +34,22 @@ class SttResult(
 
 /** 온디바이스 받아쓰기 (Silero VAD → Whisper) + 화자 구분 (pyannote 분할 + 3D-Speaker 임베딩). */
 object Stt {
-    /** 화자 구분은 전체 음성을 메모리에 올리므로 너무 긴 파일에서는 건너뛴다. */
+    /**
+     * 화자 구분은 전체 음성을 한 번에 메모리에 올려야 한다(sherpa 의 `OfflineSpeakerDiarization.process` 는
+     * 조각 처리를 지원하지 않는다). 16 kHz 모노 FloatArray 는 초당 약 64 KB 이므로 이 상한이 복사본의 크기를
+     * 묶어 준다(50분 ≈ 192 MB). 이보다 긴 녹음은 메모리를 지키기 위해 화자 정보 없이 저장한다.
+     */
     const val MAX_DIARIZE_SECONDS = 50 * 60
 
     /** Audio added on each side of a detected speech piece before it is recognized (0.2 s at 16 kHz). */
     private const val PAD_SAMPLES = 3200
+
+    /**
+     * 화자 구분은 전체 음성을 FloatArray 하나로 복사한다(샘플당 4바이트). 앱의 largeHeap 플래그를 뺐으므로
+     * 긴 녹음이 기본 힙을 넘길 수 있다. 복사본이 최대 힙의 절반 안에 들어갈 때만 화자 구분을 실행한다.
+     */
+    private fun fitsInHeap(samples: Int): Boolean =
+        samples.toLong() * 4L <= Runtime.getRuntime().maxMemory() / 2
 
     fun transcribe(
         store: ModelStore,
@@ -109,6 +120,8 @@ object Stt {
         if (opts.diarize && segments.isNotEmpty()) {
             if (pcm.seconds > MAX_DIARIZE_SECONDS) {
                 note = "녹음이 ${MAX_DIARIZE_SECONDS / 60}분보다 길어 화자 구분은 건너뛰었습니다."
+            } else if (!fitsInHeap(pcm.size)) {
+                note = "메모리가 부족해 화자 구분은 건너뛰었습니다."
             } else {
                 try {
                     onStage("화자 구분 중", 0f)
@@ -222,6 +235,8 @@ object Stt {
             )
         )
         try {
+            // The sherpa API needs the whole waveform as a single FloatArray, so it cannot be streamed: the copy is
+            // bounded by MAX_DIARIZE_SECONDS (callers skip diarization for longer recordings).
             val result = sd.process(pcm.toFloats())
             return result.map { Triple(it.start.toDouble(), it.end.toDouble(), it.speaker) }
         } finally {

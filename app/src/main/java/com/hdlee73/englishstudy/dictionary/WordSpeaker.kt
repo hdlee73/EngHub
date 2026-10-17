@@ -144,13 +144,21 @@ internal class WordSpeaker(private val activity: Activity, private val notice: (
         val speech = engine ?: return
         speech.setSpeechRate(rate)
         var mode = TextToSpeech.QUEUE_FLUSH
+        var endQueued = false
         items.forEachIndexed { i, text ->
             if (text.isBlank()) return@forEachIndexed
             speech.speak(text, mode, params, "seq-$i")
             mode = TextToSpeech.QUEUE_ADD
-            speech.playSilentUtterance(gapMs, TextToSpeech.QUEUE_ADD, if (i == items.lastIndex) "seq-end" else "gap-$i")
+            if (i == items.lastIndex) {
+                speech.playSilentUtterance(gapMs, TextToSpeech.QUEUE_ADD, "seq-end")
+                endQueued = true
+            } else {
+                speech.playSilentUtterance(gapMs, TextToSpeech.QUEUE_ADD, "gap-$i")
+            }
         }
         if (mode == TextToSpeech.QUEUE_FLUSH) onEnd()
+        // The last item was blank (or all were): still queue the end marker so onEnd always fires once.
+        else if (!endQueued) speech.playSilentUtterance(gapMs, TextToSpeech.QUEUE_ADD, "seq-end")
     }
 
     private fun showProblem(message: String) {

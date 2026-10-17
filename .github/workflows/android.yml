@@ -29,17 +29,25 @@ jobs:
       - name: Build the offline dictionary and example data
         run: python tools/build_learning_data.py
 
-      - name: Use the repository signing key (or the optional secret)
+      - name: Configure release signing
         env:
           SIGNING_KEY_BASE64: ${{ secrets.ENGLISH_STUDY_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.ENGLISH_STUDY_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.ENGLISH_STUDY_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ENGLISH_STUDY_KEY_PASSWORD }}
         run: |
           if [ -n "$SIGNING_KEY_BASE64" ]; then
             printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/english-study.keystore"
             echo "ENGLISH_STUDY_KEYSTORE_PATH=$RUNNER_TEMP/english-study.keystore" >> "$GITHUB_ENV"
             echo "Using the signing key from the ENGLISH_STUDY_KEYSTORE_BASE64 secret."
           else
-            echo "Using signing/english-study.keystore from the repository."
+            echo "::warning::No ENGLISH_STUDY_KEYSTORE_BASE64 secret: falling back to the public keystore committed under signing/."
           fi
+          # The committed keystore (and its placeholder password) is public and must be rotated; the secrets take
+          # precedence as soon as they are configured. See the note in app/build.gradle.kts and the README.
+          echo "ENGLISH_STUDY_STORE_PASSWORD=${SIGNING_STORE_PASSWORD:-android}" >> "$GITHUB_ENV"
+          echo "ENGLISH_STUDY_KEY_ALIAS=${SIGNING_KEY_ALIAS:-androiddebugkey}" >> "$GITHUB_ENV"
+          echo "ENGLISH_STUDY_KEY_PASSWORD=${SIGNING_KEY_PASSWORD:-android}" >> "$GITHUB_ENV"
 
       - name: Download the sherpa-onnx library (DocVoice tab)
         run: |
@@ -48,11 +56,11 @@ jobs:
             https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar
           ls -la app/libs
 
-      - name: Unit tests and debug APK
+      - name: Unit tests and release APK
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew testDebugUnitTest assembleDebug --no-build-cache 2>&1 | tee gradle.log || status=$?
+          ./gradlew testDebugUnitTest assembleRelease --no-build-cache 2>&1 | tee gradle.log || status=$?
           if [ "${status:-0}" != "0" ]; then
             # Surface the compiler / test errors as annotations so they are readable without opening the raw log.
             grep -E "^e: |FAILED|AssertionError|What went wrong" -A2 gradle.log | head -40 | while IFS= read -r line; do
@@ -63,8 +71,8 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: EngHub-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: EngHub-release-apk
+          path: app/build/outputs/apk/release/*.apk
 
       - name: Publish the APK as a GitHub release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -76,7 +84,7 @@ jobs:
           apk="EngHub-${tag}.apk"
           # Release body = only the newest section of RELEASE_NOTES.md (this version's notes).
           awk '/^## /{n++} n==1' RELEASE_NOTES.md > "$RUNNER_TEMP/release-notes.md"
-          cp app/build/outputs/apk/debug/app-debug.apk "$apk"
+          cp "$(ls app/build/outputs/apk/release/*.apk | head -n 1)" "$apk"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" --clobber
           else

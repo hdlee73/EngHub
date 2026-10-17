@@ -1,14 +1,14 @@
 package com.hdlee73.englishstudy
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 
 /**
  * Receives text selected in another app (the selection bar's "EngHub 사전·번역") and hands it to [MainActivity], which
  * asks what to do with it (dictionary / word list, or translation). It has no screen of its own.
  */
-class ProcessTextActivity : Activity() {
+class ProcessTextActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val text = intent?.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()?.trim().orEmpty()

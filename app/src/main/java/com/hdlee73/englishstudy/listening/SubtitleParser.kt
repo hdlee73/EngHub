@@ -4,12 +4,16 @@ import com.hdlee73.englishstudy.R
 
 import android.content.Context
 import android.net.Uri
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
 
 data class Cue(val startMs: Long, val endMs: Long, val text: String)
 
 /** Reads .srt / .vtt (timed blocks) and .lrc (one timestamp per line) subtitle files. */
 object SubtitleParser {
     private val BOM = 0xFEFF.toChar().toString()
+    private val MS949: Charset? = runCatching { Charset.forName("MS949") }.getOrNull()
     private val timing = Regex(
         """(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{1,3})"""
     )
@@ -23,8 +27,35 @@ object SubtitleParser {
         val raw = runCatching {
             context.contentResolver.openInputStream(Uri.parse(uri))?.use { it.readBytes() }
         }.getOrNull() ?: return null
-        return runCatching { parse(String(raw, Charsets.UTF_8).removePrefix(BOM)) }.getOrNull()
+        return runCatching { parse(decode(raw).removePrefix(BOM)) }.getOrNull()
     }
+
+    /**
+     * Decodes subtitle bytes: a UTF-8/UTF-16 BOM wins, otherwise strict UTF-8, then a legacy Korean
+     * codepage (MS949) and finally Latin-1 — never the silent U+FFFD replacement of a lossy UTF-8 decode.
+     */
+    private fun decode(raw: ByteArray): String {
+        if (raw.size >= 3 && raw[0] == 0xEF.toByte() && raw[1] == 0xBB.toByte() && raw[2] == 0xBF.toByte()) {
+            return String(raw, 3, raw.size - 3, Charsets.UTF_8)
+        }
+        if (raw.size >= 2 && raw[0] == 0xFF.toByte() && raw[1] == 0xFE.toByte()) {
+            return String(raw, 2, raw.size - 2, Charsets.UTF_16LE)
+        }
+        if (raw.size >= 2 && raw[0] == 0xFE.toByte() && raw[1] == 0xFF.toByte()) {
+            return String(raw, 2, raw.size - 2, Charsets.UTF_16BE)
+        }
+        strictDecode(raw, Charsets.UTF_8)?.let { return it }
+        MS949?.let { cs -> strictDecode(raw, cs)?.let { return it } }
+        return String(raw, Charsets.ISO_8859_1)
+    }
+
+    private fun strictDecode(raw: ByteArray, charset: Charset): String? = runCatching {
+        charset.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(raw))
+            .toString()
+    }.getOrNull()
 
     fun parse(text: String): List<Cue> {
         val normalized = text.replace("\r\n", "\n").replace('\r', '\n')

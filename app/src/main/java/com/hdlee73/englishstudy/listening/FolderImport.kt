@@ -23,15 +23,28 @@ object FolderImport {
 
     private val AUDIO_EXT = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac", "amr", "3gp", "wma")
     private const val MAX_DEPTH = 8
+    /** A single file bigger than this (bytes) is skipped: it is not a listening track and would not fit memory anyway. */
+    private const val MAX_FILE_BYTES = 2L * 1024 * 1024 * 1024
+    /** A picked tree may contribute at most this many files; further files are ignored. */
+    private const val MAX_TOTAL_FILES = 50_000
+    /** A picked tree may contribute at most this many bytes (sizes reported by the provider are summed). */
+    private const val MAX_TOTAL_BYTES = 16L * 1024 * 1024 * 1024
+
+    /** Running totals for one [scan] call, shared down the recursion to bound a hostile or huge tree. */
+    private class Budget {
+        var files = 0
+        var bytes = 0L
+        val exhausted: Boolean get() = files >= MAX_TOTAL_FILES || bytes >= MAX_TOTAL_BYTES
+    }
 
     /** Must run off the main thread. */
     fun scan(context: Context, tree: Uri): Node {
         val rootId = DocumentsContract.getTreeDocumentId(tree)
         val rootName = nameOf(context, tree, rootId) ?: rootId.substringAfterLast(':').substringAfterLast('/').ifBlank { "폴더" }
-        return walk(context, tree, rootId, rootName, rootName, 0)
+        return walk(context, tree, rootId, rootName, rootName, 0, Budget())
     }
 
-    private fun walk(context: Context, tree: Uri, docId: String, name: String, path: String, depth: Int): Node {
+    private fun walk(context: Context, tree: Uri, docId: String, name: String, path: String, depth: Int, budget: Budget): Node {
         val files = mutableListOf<TrackStore.Entry>()
         val dirs = mutableListOf<Pair<String, String>>()
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
@@ -41,7 +54,8 @@ object FolderImport {
                 arrayOf(
                     DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                     DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE
+                    DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    DocumentsContract.Document.COLUMN_SIZE
                 ),
                 null, null, null
             )?.use { c ->
@@ -49,17 +63,23 @@ object FolderImport {
                     val id = c.getString(0) ?: continue
                     val fileName = c.getString(1) ?: continue
                     val mime = c.getString(2).orEmpty()
+                    val size = if (c.isNull(3)) -1L else c.getLong(3)
                     when {
                         mime == DocumentsContract.Document.MIME_TYPE_DIR -> dirs += id to fileName
-                        mime.startsWith("audio/") || fileName.substringAfterLast('.', "").lowercase() in AUDIO_EXT ->
+                        mime.startsWith("audio/") || fileName.substringAfterLast('.', "").lowercase() in AUDIO_EXT -> {
+                            if (budget.exhausted) continue
+                            if (size > MAX_FILE_BYTES) continue
+                            budget.files++
+                            if (size > 0) budget.bytes += size
                             files += TrackStore.Entry(DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(), fileName)
+                        }
                     }
                 }
             }
         }
-        val subs = if (depth < MAX_DEPTH) {
+        val subs = if (depth < MAX_DEPTH && !budget.exhausted) {
             dirs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.second })
-                .map { (id, n) -> walk(context, tree, id, n, "$path/$n", depth + 1) }
+                .map { (id, n) -> walk(context, tree, id, n, "$path/$n", depth + 1, budget) }
         } else emptyList()
         return Node(docId, name, path, files.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }), subs)
     }

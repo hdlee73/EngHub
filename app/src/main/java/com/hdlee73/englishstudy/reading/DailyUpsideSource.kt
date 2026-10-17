@@ -101,11 +101,15 @@ internal object DailyUpsideSource {
     fun decode(s: String): String = Regex("&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);").replace(s) { m ->
         val body = m.groupValues[1]
         when {
-            body.startsWith("#x") || body.startsWith("#X") -> body.substring(2).toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: m.value
-            body.startsWith("#") -> body.substring(1).toIntOrNull()?.let { String(Character.toChars(it)) } ?: m.value
+            body.startsWith("#x") || body.startsWith("#X") -> body.substring(2).toIntOrNull(16)?.takeIf { isScalar(it) }?.let { String(Character.toChars(it)) } ?: m.value
+            body.startsWith("#") -> body.substring(1).toIntOrNull()?.takeIf { isScalar(it) }?.let { String(Character.toChars(it)) } ?: m.value
             else -> named[body.lowercase()] ?: m.value
         }
     }
+
+    /** A Unicode scalar value: a valid code point that is not an unpaired surrogate (both break toChars). */
+    private fun isScalar(codePoint: Int): Boolean =
+        Character.isValidCodePoint(codePoint) && codePoint !in 0xD800..0xDFFF
 
     /** True when the text is long enough to be worth a reading session. */
     fun isWorthReading(paragraphs: List<String>, minWords: Int = 150): Boolean =
