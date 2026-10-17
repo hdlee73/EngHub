@@ -58,6 +58,10 @@ jobs:
 
       - name: Unit tests and release APK
         shell: bash
+        env:
+          # 선택: 이 시크릿을 저장소에 넣어 두면 릴리스 APK에서도 온라인 음성(문서 → MP3)을 쓸 수 있습니다.
+          # 넣지 않으면 토큰 없이 빌드되어, 그 기능만 "토큰이 설정되지 않았습니다"로 안내합니다.
+          EDGE_TTS_TOKEN: ${{ secrets.EDGE_TTS_TOKEN }}
         run: |
           set -o pipefail
           ./gradlew testDebugUnitTest assembleRelease --no-build-cache 2>&1 | tee gradle.log || status=$?
