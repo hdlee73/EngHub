@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.hdlee73.englishstudy.ai.GenAi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,6 +24,9 @@ data class DictionaryUiState(
     val suggestionTitle: String = "",
     val showSaved: Boolean = false,
     val sort: SavedSort = SavedSort.ALPHABETICAL,
+    /** The meaning of the shown word in a sentence ("문장 속 뜻"); only shown while it belongs to the word on screen. */
+    val contextMeaning: ContextMeaning? = null,
+    val contextLoading: Boolean = false,
     val message: String? = null
 )
 
@@ -76,6 +80,29 @@ class DictionaryViewModel(application: Application) : AndroidViewModel(applicati
             val ok = repository.save(entry)
             _state.update { it.copy(message = if (ok) "‘${entry.word}’ 단어를 저장했습니다." else "저장하지 못했습니다.") }
         }
+    }
+
+    /** Explains the shown word in [sentence] (Gemini Nano on devices that have it, the dictionary entry otherwise). */
+    fun explainInContext(sentence: String) {
+        val entry = _state.value.entry ?: return
+        if (_state.value.contextLoading) return
+        _state.update { it.copy(contextLoading = true) }
+        viewModelScope.launch {
+            // Checks Gemini Nano the first time this is used (and starts its one-time download).
+            GenAi.initialize(getApplication<Application>())
+            val meaning = try { ContextMeanings.create(entry.word, sentence, entry) } catch (_: Exception) { null }
+            _state.update {
+                if (meaning == null) it.copy(contextLoading = false, message = "문장 속 뜻을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.")
+                else it.copy(contextLoading = false, contextMeaning = meaning)
+            }
+        }
+    }
+
+    /** Saves the shown word with its meaning in the sentence on top. */
+    fun saveWithContext() {
+        val entry = _state.value.entry ?: return
+        val meaning = _state.value.contextMeaning?.takeIf { it.word.equals(entry.word, ignoreCase = true) } ?: return saveCurrent()
+        saveEntry(ContextMeanings.mergeInto(entry, meaning))
     }
 
     fun saveEntry(entry: WordEntry) {

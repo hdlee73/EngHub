@@ -413,6 +413,8 @@ class MainActivity : AppCompatActivity() {
                         onSearch = dictionaryVm::searchNow,
                         onPickSuggestion = dictionaryVm::pickSuggestion,
                         onSave = dictionaryVm::saveCurrent,
+                        onExplainInContext = dictionaryVm::explainInContext,
+                        onSaveWithContext = dictionaryVm::saveWithContext,
                         onDelete = dictionaryVm::deleteSaved,
                         onShowSaved = dictionaryVm::setShowSaved,
                         onSort = dictionaryVm::setSort,
