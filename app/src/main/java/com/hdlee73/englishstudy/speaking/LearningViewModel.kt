@@ -12,6 +12,8 @@ import com.hdlee73.englishstudy.speaking.model.*
 import com.hdlee73.englishstudy.speaking.speech.PronunciationRecorder
 import com.hdlee73.englishstudy.speaking.speech.SpeechScorer
 import com.hdlee73.englishstudy.speaking.speech.RetryEvaluator
+import com.hdlee73.englishstudy.speaking.speech.PronunciationJudge
+import com.hdlee73.englishstudy.ai.GenAi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
@@ -399,7 +401,34 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         startTimer()
     }
 
+    private var judgeJob: Job? = null
+    private var judgeTried = false
+
+    /**
+     * A recognized result. When words are still missing and Gemini Nano is (or may be) on the device, Nano first decides which
+     * missed words were only misheard because of the accent ([PronunciationJudge]); the strict level never does this.
+     */
     fun onRecognition(candidates: List<String>) {
+        if (_state.value.phase != LessonPhase.LISTENING) return
+        val expected = _state.value.current?.english ?: return
+        val strictness = _state.value.settings.strictness
+        val mayJudge = strictness != RecognitionStrictness.STRICT && candidates.any(String::isNotBlank) &&
+            (GenAi.canChat() || !judgeTried)
+        if (!mayJudge) { applyRecognition(candidates, emptySet()); return }
+        val pre = RetryEvaluator.evaluate(expected, candidates, _state.value.matchedWords, strictness)
+        val missing = pre.matched.indices.filter { !pre.matched[it] }
+        if (missing.isEmpty()) { applyRecognition(candidates, emptySet()); return }
+        judgeTried = true
+        judgeJob?.cancel()
+        judgeJob = viewModelScope.launch {
+            val forgiven = try {
+                PronunciationJudge.forgive(getApplication<Application>(), expected, pre.text, missing)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptySet() }
+            applyRecognition(candidates, forgiven)
+        }
+    }
+
+    private fun applyRecognition(candidates: List<String>, forgiven: Set<Int>) {
         // cancel() can deliver a late recognizer callback while TTS is already playing.
         // It belongs to the previous session and must not turn the new countdown into 0.
         if (_state.value.phase != LessonPhase.LISTENING) return
@@ -410,8 +439,9 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         val result = RetryEvaluator.evaluate(expected, candidates, _state.value.matchedWords, strictness)
         val text = result.text.ifBlank { _state.value.heardText }
         // An empty callback (recognizer error/no match) must not erase what was shown.
-        val matchedWords = if (result.text.isBlank() && _state.value.matchedWords.size == result.matched.size)
+        val heardMatched = if (result.text.isBlank() && _state.value.matchedWords.size == result.matched.size)
             _state.value.matchedWords else result.matched
+        val matchedWords = if (forgiven.isEmpty()) heardMatched else heardMatched.mapIndexed { i, matched -> matched || i in forgiven }
         val score = if (matchedWords.all { it }) 100 else matchedWords.count { it } * 100 / matchedWords.size.coerceAtLeast(1)
         val allWordsMatched = matchedWords.isNotEmpty() && matchedWords.all { it }
         if (allWordsMatched) {
