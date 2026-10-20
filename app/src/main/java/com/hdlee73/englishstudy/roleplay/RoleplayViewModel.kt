@@ -9,6 +9,7 @@ import com.hdlee73.englishstudy.translate.Direction
 import com.hdlee73.englishstudy.translate.MlKitTranslator
 import com.hdlee73.englishstudy.translate.OnlineTranslator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,9 @@ data class Turn(
     val text: String,
     val korean: String? = null,
     val showKorean: Boolean = false,
-    val tip: String? = null
+    val tip: String? = null,
+    /** What the recognizer wrote, when a misheard word was fixed from the conversation ([text] is the fixed sentence). */
+    val heard: String? = null
 )
 
 data class RoleplayUiState(
@@ -47,12 +50,13 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
     private var voice: RoleplayVoice? = null
     private var nextId = 1
     private val online = OnlineTranslator()
+    private var replyJob: Job? = null
 
     private fun voice(): RoleplayVoice = voice ?: RoleplayVoice(
         getApplication<Application>(),
         onState = { s -> _state.update { it.copy(voice = s) } },
         onPartial = { p -> _state.update { it.copy(partial = p) } },
-        onSaid = { text -> onSaid(text) },
+        onSaid = { text, alts -> onSaid(text, alts) },
         onProblem = { m -> _state.update { it.copy(message = m) } }
     ).also { voice = it }
 
@@ -80,9 +84,21 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
     /** Starts the same scene again. */
     fun restart() {
         val theme = _state.value.theme ?: return
+        replyJob?.cancel()
         voice?.stop()
-        _state.update { it.copy(theme = null) }
+        _state.update { it.copy(theme = null, busy = false, partial = "") }
         start(theme)
+    }
+
+    /** Takes back the learner's last answer (and the partner's reply to it) and opens the microphone for it again. */
+    fun retryLast() {
+        val current = _state.value
+        val lastUser = current.turns.indexOfLast { it.fromUser }
+        if (lastUser < 0) return
+        replyJob?.cancel()
+        voice?.stop()
+        _state.update { it.copy(turns = it.turns.take(lastUser), busy = false, finished = false, partial = "", message = null) }
+        voice().startListening()
     }
 
     /** Back to the list of scenes. */
@@ -105,20 +121,26 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun onSaid(text: String) {
+    private fun onSaid(text: String, alternatives: List<String>) {
         val current = _state.value
         val theme = current.theme ?: return
         val userId = nextId++
         val turns = current.turns + Turn(userId, true, text)
         _state.update { it.copy(turns = turns, busy = true, partial = "") }
-        val history = turns.map { FreeTalk.Line(it.fromUser, it.text) }
-        val userTurns = turns.count { it.fromUser }
-        viewModelScope.launch {
+        replyJob = viewModelScope.launch {
+            // A word the recognizer mistook for a similar-sounding one is put right from the conversation (Gemini Nano only).
+            val fixed = withContext(Dispatchers.IO) {
+                RecognitionFix.fix(theme, turns.dropLast(1).map { FreeTalk.Line(it.fromUser, it.text) }, text, alternatives)
+            }
+            val said = fixed ?: text
+            if (fixed != null) _state.update { s -> s.copy(turns = s.turns.map { if (it.id == userId) it.copy(text = fixed, heard = text) else it }) }
+            val history = turns.dropLast(1).map { FreeTalk.Line(it.fromUser, it.text) } + FreeTalk.Line(true, said)
+            val userTurns = turns.count { it.fromUser }
             val reply = withContext(Dispatchers.IO) { RoleplayChat.reply(theme, history, userTurns) }
             val partnerId = nextId++
             _state.update { it.copy(turns = it.turns + Turn(partnerId, false, reply.text), busy = false, finished = reply.finished) }
             voice().speak(reply.text, listenAfter = !reply.finished)
-            val tip = runCatching { FreeTalk.suggestion(text) }.getOrNull()
+            val tip = runCatching { FreeTalk.suggestion(said) }.getOrNull()
             if (tip != null) _state.update { s -> s.copy(turns = s.turns.map { if (it.id == userId) it.copy(tip = tip) else it }) }
         }
     }
