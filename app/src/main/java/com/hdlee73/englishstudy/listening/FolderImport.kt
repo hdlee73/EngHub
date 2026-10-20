@@ -21,7 +21,12 @@ object FolderImport {
         val hasAudio: Boolean get() = files.isNotEmpty() || children.any { it.hasAudio }
     }
 
-    private val AUDIO_EXT = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac", "amr", "3gp", "wma")
+    private val AUDIO_EXT = setOf(
+        "mp3", "m4a", "m4b", "aac", "wav", "ogg", "oga", "opus", "flac", "amr", "3gp", "wma", "mka", "aif", "aiff", "mp2", "weba"
+    )
+
+    /** True when the file name has an audio extension (the system's file type is not always "audio/*": m4a, opus, amr ...). */
+    fun isAudioName(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in AUDIO_EXT
     private const val MAX_DEPTH = 8
     /** A single file bigger than this (bytes) is skipped: it is not a listening track and would not fit memory anyway. */
     private const val MAX_FILE_BYTES = 2L * 1024 * 1024 * 1024

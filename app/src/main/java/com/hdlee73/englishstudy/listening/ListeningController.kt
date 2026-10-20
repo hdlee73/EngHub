@@ -272,10 +272,14 @@ class ListeningController(
 
     // ------------------------------------------------------------------ adding files
 
-    /** One system picker covers Drive and device storage, and allows several files at once. */
+    /**
+     * One system picker covers Drive and device storage, and allows several files at once. It asks for every file type:
+     * with "audio/*" My Files hides audio it does not file as audio (m4a, opus, amr ... or folders it has not indexed),
+     * so the files are checked by name after they are picked ([addFiles]).
+     */
     private fun openFilePicker(group: Int = playbackService?.activeGroup ?: 0) {
         pendingAddGroup = group
-        val intent = FilePick.intent(ctx, arrayOf("audio/*"), multiple = true)
+        val intent = FilePick.intent(ctx, arrayOf("*/*"), multiple = true)
         pickFiles.launch(intent)
     }
 
@@ -323,28 +327,53 @@ class ListeningController(
         }
     }
 
-    /** Picks from My Files come without a lasting grant, so those are copied into the app and played from the copy. */
+    /**
+     * Picks from My Files come without a lasting grant, so those are copied into the app and played from the copy.
+     * The picker lists every file (not just those the system sorts as audio), so files that are not audio are
+     * left out here, and anything that could not be kept is reported instead of being added as a dead link.
+     */
     private fun addFiles(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        if (uris.all { isPersistable(it) }) { addPicked(uris.map { it to displayName(it) }); return }
+        val named = uris.map { it to displayName(it) }
+        val (audio, other) = named.partition { (uri, name) -> isAudio(uri, name) }
+        if (audio.isEmpty()) {
+            toast("오디오 파일이 아닙니다. (mp3, m4a, wav, flac, ogg 등을 고르세요)")
+            return
+        }
+        if (audio.all { isPersistable(it.first) }) { addPicked(audio, notAudio = other.size, failed = 0); return }
         toast("파일을 앱으로 가져오는 중…")
         activity.lifecycleScope.launch(Dispatchers.IO) {
-            val picked = uris.map { displayName(it).let { name -> keepable(it, name) to name } }
-            handler.post { if (!disposed) addPicked(picked) }
+            val kept = mutableListOf<Pair<Uri, String>>()
+            var failed = 0
+            for ((uri, name) in audio) {
+                val usable = if (isPersistable(uri)) uri else copyPicked(uri, name)
+                if (usable != null) kept += usable to name else failed++
+            }
+            handler.post { if (!disposed) addPicked(kept, notAudio = other.size, failed = failed) }
         }
     }
 
-    private fun addPicked(picked: List<Pair<Uri, String>>) {
+    private fun isAudio(uri: Uri, name: String): Boolean =
+        FolderImport.isAudioName(name) || runCatching { ctx.contentResolver.getType(uri) }.getOrNull()?.startsWith("audio/") == true
+
+    private fun addPicked(picked: List<Pair<Uri, String>>, notAudio: Int, failed: Int) {
         val svc = playbackService ?: return
-        val entries = picked.map { (uri, name) -> TrackStore.Entry(uri.toString(), name) }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         val group = pendingAddGroup.takeIf { it in svc.groups.indices } ?: svc.activeGroup
         pendingAddGroup = -1
+        val skipped = buildList {
+            if (notAudio > 0) add("오디오가 아닌 ${notAudio}개")
+            if (failed > 0) add("가져오지 못한 ${failed}개(너무 크거나 저장 공간 부족 — 큰 파일은 ‘폴더 가져오기’로 추가해 보세요)")
+        }.joinToString(", ")
+        if (picked.isEmpty()) {
+            toast(if (skipped.isEmpty()) "추가할 파일이 없습니다." else "추가하지 못했어요: $skipped")
+            return
+        }
+        val entries = picked.map { (uri, name) -> TrackStore.Entry(uri.toString(), name) }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         val added = svc.addEntries(entries, group, startIfIdle = group == svc.activeGroup)
-        toast(
-            if (added == 0) "이미 그 그룹에 있는 파일입니다."
-            else "${added}곡을 ‘${svc.groups[group].name}’ 그룹에 추가했습니다."
-        )
+        val base = if (added == 0) "이미 그 그룹에 있는 파일입니다."
+        else "${added}곡을 ‘${svc.groups[group].name}’ 그룹에 추가했습니다."
+        toast(if (skipped.isEmpty()) base else "$base (제외: $skipped)")
     }
 
     private fun isPersistable(uri: Uri): Boolean {
@@ -353,24 +382,32 @@ class ListeningController(
         return ctx.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
     }
 
-    /** The uri itself when the app may keep reading it, otherwise a private copy under files/picked. */
-    private fun keepable(uri: Uri, name: String = displayName(uri)): Uri {
-        if (isPersistable(uri)) return uri
-        return runCatching {
-            val dir = java.io.File(ctx.filesDir, "picked").apply { mkdirs() }
-            val safe = name.replace(Regex("[^\\w.\\- ]+"), "_").take(120).ifBlank { "audio" }
-            val size = ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
-            // A file that would not fit in app storage must not be copied: it would fail half-way and
-            // leave a truncated file behind, and it could fill the disk. Fall back to the original uri.
-            if (size > MAX_PICK_BYTES) throw java.io.IOException("file too large: $size")
-            if (size > 0 && dir.usableSpace - size < MIN_FREE_BYTES) throw java.io.IOException("not enough space for $size")
-            val same = dir.listFiles()?.firstOrNull { it.name.endsWith("_$safe") && size > 0 && it.length() == size }
-            val file = same ?: java.io.File(dir, "${System.currentTimeMillis()}_$safe").also { target ->
+    /** The uri itself when the app may keep reading it, otherwise a private copy under files/picked (null when the copy is not possible). */
+    private fun copyPicked(uri: Uri, name: String): Uri? = runCatching {
+        val dir = java.io.File(ctx.filesDir, "picked").apply { mkdirs() }
+        val safe = name.replace(Regex("[^\\w.\\- ]+"), "_").take(120).ifBlank { "audio" }
+        val size = ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+        // A file that would not fit in app storage must not be copied: it would fail half-way and
+        // leave a truncated file behind, and it could fill the disk.
+        if (size > MAX_PICK_BYTES) throw java.io.IOException("file too large: $size")
+        if (size > 0 && dir.usableSpace - size < MIN_FREE_BYTES) throw java.io.IOException("not enough space for $size")
+        val same = dir.listFiles()?.firstOrNull { it.name.endsWith("_$safe") && size > 0 && it.length() == size }
+        val file = same ?: java.io.File(dir, "${System.currentTimeMillis()}_$safe").also { target ->
+            try {
                 ctx.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } }
                     ?: throw java.io.IOException("cannot open")
+            } catch (e: Exception) {
+                target.delete()
+                throw e
             }
-            Uri.fromFile(file)
-        }.getOrElse { handler.post { toast("파일을 가져오지 못했습니다.") }; uri }
+        }
+        Uri.fromFile(file)
+    }.getOrNull()
+
+    /** [copyPicked] for files where the original uri is an acceptable fallback (subtitles are small and used right away). */
+    private fun keepable(uri: Uri, name: String = displayName(uri)): Uri {
+        if (isPersistable(uri)) return uri
+        return copyPicked(uri, name) ?: uri
     }
 
     private fun takePersistable(uri: Uri) {
@@ -839,7 +876,8 @@ class ListeningController(
         if (view.isEnabled != enabled) view.isEnabled = enabled
     }
 
-    private fun toast(message: String) = Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
+    private fun toast(message: String) =
+        Toast.makeText(ctx, message, if (message.length > 40) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
 
     private fun dp(value: Int): Int = ctx.dp(value)
 
