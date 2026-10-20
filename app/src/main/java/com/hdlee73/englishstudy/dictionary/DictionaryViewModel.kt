@@ -27,6 +27,8 @@ data class DictionaryUiState(
     /** The meaning of the shown word in a sentence ("문장 속 뜻"); only shown while it belongs to the word on screen. */
     val contextMeaning: ContextMeaning? = null,
     val contextLoading: Boolean = false,
+    /** The sentence the meaning in context was made from: the entry's first example with a Korean translation, else the word. */
+    val contextSentence: String = "",
     val message: String? = null
 )
 
@@ -45,7 +47,10 @@ class DictionaryViewModel(application: Application) : AndroidViewModel(applicati
                 suggestions = update.suggestions, suggestionTitle = update.suggestionTitle, searching = update.searching
             )
         }
+        if (!update.searching) update.entry?.let(::autoExplain)
     }
+    private var autoJob: Job? = null
+    private var autoWord = ""
     private var debounce: Job? = null
     private var lastClipboard = ""
 
@@ -85,9 +90,9 @@ class DictionaryViewModel(application: Application) : AndroidViewModel(applicati
     /** Explains the shown word in [sentence] (Gemini Nano on devices that have it, the dictionary entry otherwise). */
     fun explainInContext(sentence: String) {
         val entry = _state.value.entry ?: return
-        if (_state.value.contextLoading) return
-        _state.update { it.copy(contextLoading = true) }
-        viewModelScope.launch {
+        autoJob?.cancel()
+        _state.update { it.copy(contextLoading = true, contextSentence = sentence.trim()) }
+        autoJob = viewModelScope.launch {
             // Checks Gemini Nano the first time this is used (and starts its one-time download).
             GenAi.initialize(getApplication<Application>())
             val meaning = try { ContextMeanings.create(entry.word, sentence, entry) } catch (_: Exception) { null }
@@ -95,6 +100,25 @@ class DictionaryViewModel(application: Application) : AndroidViewModel(applicati
                 if (meaning == null) it.copy(contextLoading = false, message = "문장 속 뜻을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.")
                 else it.copy(contextLoading = false, contextMeaning = meaning)
             }
+        }
+    }
+
+    /**
+     * Fills "문장 속 뜻" by itself for a newly shown word: with the entry's first example that has a Korean translation, or with the
+     * word alone when there is none. Typing a sentence and asking again replaces it.
+     */
+    private fun autoExplain(entry: WordEntry) {
+        val key = entry.word.lowercase() + "|" + entry.examples.hashCode()
+        if (key == autoWord) return
+        autoWord = key
+        autoJob?.cancel()
+        val pair = examplePairs(entry.examples).firstOrNull { it.second.isNotBlank() }
+        val sentence = pair?.first ?: entry.word
+        _state.update { it.copy(contextLoading = true, contextSentence = sentence, contextMeaning = null) }
+        autoJob = viewModelScope.launch {
+            GenAi.initialize(getApplication<Application>())
+            val meaning = try { ContextMeanings.create(entry.word, sentence, entry, pair?.second) } catch (_: Exception) { null }
+            _state.update { it.copy(contextLoading = false, contextMeaning = meaning ?: it.contextMeaning) }
         }
     }
 
