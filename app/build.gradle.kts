@@ -63,8 +63,8 @@ android {
         targetSdk = 36
         // Keep in step with the Windows port (EngHub_Win) when releasing; RELEASE_NOTES.md lists what each version
         // contains. Do not invent a version here: only bump it together with the matching Windows release.
-        versionCode = 64
-        versionName = "1.35.0"
+        versionCode = 65
+        versionName = "1.36.0"
         // The on-device speech recognition library (DocVoice) only ships 64-bit ARM code, so its features need an
         // arm64-v8a device; the other ABIs are still built so the rest of the app runs on 32-bit phones and x86_64
         // emulators instead of refusing to install.
@@ -136,6 +136,13 @@ dependencies {
     implementation(libs.commons.compress)
     implementation(libs.newpipe.extractor)
     implementation(libs.lame)
+    // On-device AI: ML Kit translation (offline fallback) and Gemini Nano through ML Kit GenAI (AICore).
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.kotlinx.coroutines.guava)
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.genai.proofreading)
+    implementation(libs.mlkit.genai.rewriting)
+    implementation(libs.mlkit.genai.prompt)
     coreLibraryDesugaring(libs.desugar)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
