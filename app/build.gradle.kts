@@ -63,8 +63,8 @@ android {
         targetSdk = 36
         // Keep in step with the Windows port (EngHub_Win) when releasing; RELEASE_NOTES.md lists what each version
         // contains. Do not invent a version here: only bump it together with the matching Windows release.
-        versionCode = 63
-        versionName = "1.34.2"
+        versionCode = 64
+        versionName = "1.35.0"
         // The on-device speech recognition library (DocVoice) only ships 64-bit ARM code, so its features need an
         // arm64-v8a device; the other ABIs are still built so the rest of the app runs on 32-bit phones and x86_64
         // emulators instead of refusing to install.
