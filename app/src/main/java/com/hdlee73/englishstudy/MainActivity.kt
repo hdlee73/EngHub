@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private val readingVm: ReadingViewModel by viewModels()
     private val translateVm: TranslateViewModel by viewModels()
     private val docVoiceVm: DocVoiceViewModel by viewModels()
+    private val roleplayVm: com.hdlee73.englishstudy.roleplay.RoleplayViewModel by viewModels()
     private lateinit var speech: SpeechEngine
     private lateinit var wordSpeaker: WordSpeaker
 
@@ -137,6 +138,9 @@ class MainActivity : AppCompatActivity() {
             val quiz by studyVm.quiz.collectAsStateWithLifecycle()
             val reading by readingVm.state.collectAsStateWithLifecycle()
             val translation by translateVm.state.collectAsStateWithLifecycle()
+            val roleplay by roleplayVm.state.collectAsStateWithLifecycle()
+            // 0 = 따라읽기 (sentence lessons), 1 = 롤플레잉.
+            var speakingMode by rememberSaveable { mutableStateOf(0) }
 
             var tabIndex by rememberSaveable { mutableStateOf(0) }
             // The tab a dictionary lookup was started from, so the dictionary can offer a way back to it.
@@ -148,6 +152,7 @@ class MainActivity : AppCompatActivity() {
                 if (tabIndex == AppTab.SPEAKING.ordinal) {
                     learningVm.pauseForBackground()
                     speech.stop()
+                    roleplayVm.stop()
                 }
                 returnTab = null
                 returnApp = lookup.returnPackage?.takeIf { it.isNotBlank() }
@@ -160,6 +165,7 @@ class MainActivity : AppCompatActivity() {
                     if (tabIndex == AppTab.SPEAKING.ordinal) {
                         learningVm.pauseForBackground()
                         speech.stop()
+                        roleplayVm.stop()
                     }
                     tabIndex = AppTab.DOCVOICE.ordinal
                 }
@@ -169,6 +175,7 @@ class MainActivity : AppCompatActivity() {
                     if (tabIndex == AppTab.SPEAKING.ordinal) {
                         learningVm.pauseForBackground()
                         speech.stop()
+                        roleplayVm.stop()
                     }
                     tabIndex = AppTab.LISTENING.ordinal
                 }
@@ -299,6 +306,7 @@ class MainActivity : AppCompatActivity() {
                 if (tab == AppTab.SPEAKING && next != AppTab.SPEAKING) {
                     learningVm.pauseForBackground()
                     speech.stop()
+                    roleplayVm.stop()
                 }
                 if (next != AppTab.DICTIONARY) wordSpeaker.stop()
                 // Words saved or datasets loaded since the last visit show up in the study setup screens.
@@ -323,7 +331,7 @@ class MainActivity : AppCompatActivity() {
                 previousTab = tabIndex
             }
             val innerBack = when (tab) {
-                AppTab.SPEAKING -> settingsOpen || datasetsOpen || learning.editingDataset != null
+                AppTab.SPEAKING -> if (speakingMode == 1) roleplay.theme != null else settingsOpen || datasetsOpen || learning.editingDataset != null
                 AppTab.READING -> reading.open != null
                 AppTab.FLASHCARDS -> flash.stage != com.hdlee73.englishstudy.study.StudyStage.SETUP
                 AppTab.QUIZ -> quiz.stage != com.hdlee73.englishstudy.study.QuizStage.SETUP
@@ -333,6 +341,7 @@ class MainActivity : AppCompatActivity() {
             // Registered before AppRoot's own handler, which closes the left menu first. Without anything to go back to, the app closes.
             androidx.activity.compose.BackHandler(enabled = innerBack || history.any { it != tabIndex } || tab != AppTab.DICTIONARY) {
                 when {
+                    tab == AppTab.SPEAKING && speakingMode == 1 && roleplay.theme != null -> roleplayVm.end()
                     tab == AppTab.SPEAKING && settingsOpen -> settingsOpen = false
                     tab == AppTab.SPEAKING && datasetsOpen -> datasetsOpen = false
                     tab == AppTab.SPEAKING && learning.editingDataset != null -> learningVm.closeEditor()
@@ -359,7 +368,7 @@ class MainActivity : AppCompatActivity() {
                             androidx.compose.foundation.layout.Row {
                                 androidx.compose.material3.TextButton(onClick = {
                                     sharedText = null
-                                    if (tabIndex == AppTab.SPEAKING.ordinal) { learningVm.pauseForBackground(); speech.stop() }
+                                    if (tabIndex == AppTab.SPEAKING.ordinal) { learningVm.pauseForBackground(); speech.stop(); roleplayVm.stop() }
                                     dictionaryVm.pickSuggestion(text)
                                     returnTab = null
                                     returnApp = null
@@ -367,7 +376,7 @@ class MainActivity : AppCompatActivity() {
                                 }) { androidx.compose.material3.Text("📖 사전·단어장") }
                                 androidx.compose.material3.TextButton(onClick = {
                                     sharedText = null
-                                    if (tabIndex == AppTab.SPEAKING.ordinal) { learningVm.pauseForBackground(); speech.stop() }
+                                    if (tabIndex == AppTab.SPEAKING.ordinal) { learningVm.pauseForBackground(); speech.stop(); roleplayVm.stop() }
                                     translateVm.setInput(text)
                                     translateVm.translate()
                                     tabIndex = AppTab.TRANSLATE.ordinal
@@ -554,7 +563,25 @@ class MainActivity : AppCompatActivity() {
                             tabIndex = AppTab.DICTIONARY.ordinal
                         }
                     )
-                    AppTab.SPEAKING -> SpeakFlowApp(
+                    AppTab.SPEAKING -> androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+                    com.hdlee73.englishstudy.ui.SpeakingModeBar(roleplay = speakingMode == 1) { toRoleplay ->
+                        if (toRoleplay != (speakingMode == 1)) {
+                            if (toRoleplay) { learningVm.pauseForBackground(); speech.stop() } else roleplayVm.stop()
+                            speakingMode = if (toRoleplay) 1 else 0
+                        }
+                    }
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.weight(1f)) {
+                    if (speakingMode == 1) com.hdlee73.englishstudy.ui.RoleplayScreen(
+                        state = roleplay,
+                        onStart = roleplayVm::start,
+                        onMic = roleplayVm::micTap,
+                        onEnd = roleplayVm::end,
+                        onRestart = roleplayVm::restart,
+                        onToggleKorean = roleplayVm::toggleKorean,
+                        onSummary = roleplayVm::showSummary,
+                        onMessage = roleplayVm::showMessage,
+                        onMessageDismiss = roleplayVm::clearMessage
+                    ) else SpeakFlowApp(
                         state = learning,
                         settingsOpen = settingsOpen,
                         datasetsOpen = datasetsOpen,
@@ -584,6 +611,8 @@ class MainActivity : AppCompatActivity() {
                         onToggleRecording = learningVm::toggleRecording,
                         onMessageDismiss = learningVm::clearMessage
                     )
+                    }
+                    }
                     AppTab.DOCVOICE -> DocVoiceScreen(docVoiceVm)
                     AppTab.LISTENING -> ListeningScreen(
                         pendingIntent = listeningIntent,
@@ -650,6 +679,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         learningVm.pauseForBackground()
         speech.stop()
+        roleplayVm.stop()
         wordSpeaker.stop()
         super.onStop()
     }
