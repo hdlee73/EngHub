@@ -274,7 +274,7 @@ class ListeningController(
 
     /**
      * One system picker covers Drive and device storage, and allows several files at once. It asks for every file type:
-     * with "audio/*" My Files hides audio it does not file as audio (m4a, opus, amr ... or folders it has not indexed),
+     * when asked only for audio, My Files hides audio it does not file as audio (m4a, opus, amr ... or folders it has not indexed),
      * so the files are checked by name after they are picked ([addFiles]).
      */
     private fun openFilePicker(group: Int = playbackService?.activeGroup ?: 0) {
