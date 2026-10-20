@@ -284,7 +284,7 @@ private fun SearchResult(
             }
             item {
                 ContextSection(
-                    word = entry.word, loading = state.contextLoading,
+                    word = entry.word, loading = state.contextLoading, initialSentence = state.contextSentence,
                     meaning = state.contextMeaning?.takeIf { it.word.equals(entry.word, ignoreCase = true) },
                     canSave = state.canSave, onExplain = onExplainInContext, onSave = onSaveWithContext, onSpeak = onSpeak
                 )
@@ -299,17 +299,18 @@ private fun SearchResult(
 private fun ContextSection(
     word: String,
     loading: Boolean,
+    initialSentence: String,
     meaning: com.hdlee73.englishstudy.dictionary.ContextMeaning?,
     canSave: Boolean,
     onExplain: (String) -> Unit,
     onSave: () -> Unit,
     onSpeak: (String) -> Unit
 ) {
-    var sentence by remember(word) { mutableStateOf("") }
+    var sentence by remember(word, initialSentence) { mutableStateOf(initialSentence) }
     val focus = LocalFocusManager.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(18.dp)) {
         Text("문장 속 뜻", color = DictBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Text("이 단어가 나온 문장을 넣으면, 그 문장에서의 한글·영어 뜻과 예문을 알려 줘요. (비워 두면 대표 뜻)", color = DictGrey, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+        Text("단어를 찾으면 예문(한국어 해석이 있는 첫 예문, 없으면 단어)으로 자동으로 보여 줘요. 다른 문장을 넣고 누르면 그 문장에서의 뜻을 알려 줘요.", color = DictGrey, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
         TextField(
             value = sentence, onValueChange = { sentence = it },
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),

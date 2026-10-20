@@ -577,6 +577,7 @@ class MainActivity : AppCompatActivity() {
                         onMic = roleplayVm::micTap,
                         onEnd = roleplayVm::end,
                         onRestart = roleplayVm::restart,
+                        onRetry = roleplayVm::retryLast,
                         onToggleKorean = roleplayVm::toggleKorean,
                         onSummary = roleplayVm::showSummary,
                         onMessage = roleplayVm::showMessage,

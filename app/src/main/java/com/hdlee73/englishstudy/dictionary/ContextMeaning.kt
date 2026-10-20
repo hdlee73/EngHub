@@ -37,7 +37,7 @@ internal object ContextMeanings {
     fun buildPrompt(word: String, sentence: String, entry: WordEntry?): String = buildString {
         append("You are an English vocabulary tutor for a Korean adult learner.\n")
         append("Word: \"").append(word.trim()).append("\"\n")
-        append("Sentence: ").append(if (sentence.isBlank()) "(none; explain the most common meaning)" else "\"" + sentence.trim() + "\"").append('\n')
+        append("Sentence: ").append(if (sentence.isBlank() || sentence.trim().equals(word.trim(), ignoreCase = true)) "(none; explain the most common meaning)" else "\"" + sentence.trim() + "\"").append('\n')
         if (entry != null) {
             val hints = listOf(firstSense(entry.korean), firstSense(entry.english)).filter { it.isNotEmpty() }
             if (hints.isNotEmpty()) append("Dictionary hints (may be incomplete): ").append(hints.joinToString(" / ")).append('\n')
@@ -69,10 +69,26 @@ internal object ContextMeanings {
     private suspend fun toKorean(text: String): String =
         online.translate(text, Direction.EN_KO) ?: MlKitTranslator.translate(text, Direction.EN_KO).orEmpty()
 
-    suspend fun create(word: String, sentence: String, entry: WordEntry?): ContextMeaning = withContext(Dispatchers.IO) {
+    /** [sentence] as an example sentence of the word: capitalised and ended with a full stop, or null when it is just the word itself. */
+    fun asExample(word: String, sentence: String): String? {
+        val t = sentence.trim()
+        if (t.isEmpty() || t.equals(word.trim(), ignoreCase = true)) return null
+        val ended = if (t.last() in ".!?") t else "$t."
+        return ended.takeIf { SentenceExamples.isSentence(it) }
+    }
+
+    /**
+     * [knownKorean] is the Korean translation of [sentence] when it is already known (an example of the dictionary entry), so it
+     * is not translated again. A [sentence] that is only the word itself gets no sentence translation.
+     */
+    suspend fun create(word: String, sentence: String, entry: WordEntry?, knownKorean: String? = null): ContextMeaning = withContext(Dispatchers.IO) {
         val given = sentence.trim()
         val parsed = if (GenAi.canChat()) GenAi.generate(buildPrompt(word, given, entry))?.let(::parse) else null
-        val sentenceKorean = if (given.isEmpty()) "" else toKorean(given)
+        val sentenceKorean = when {
+            !knownKorean.isNullOrBlank() -> knownKorean
+            given.isEmpty() || given.equals(word.trim(), ignoreCase = true) -> ""
+            else -> toKorean(given)
+        }
         if (parsed != null) {
             return@withContext ContextMeaning(
                 word, given, parsed.korean, parsed.english, parsed.pos, parsed.nuance, sentenceKorean,
@@ -93,7 +109,7 @@ internal object ContextMeanings {
         val korean = "[이 문장에서] ${meaning.korean}$note\n${entry.korean}".trim()
         val english = if (meaning.english.isBlank()) entry.english else "[in this sentence] ${meaning.english}\n${entry.english}".trim()
         val own = buildList {
-            if (meaning.sentence.isNotBlank()) add(meaning.sentence to meaning.sentenceKorean)
+            asExample(meaning.word, meaning.sentence)?.let { add(it to meaning.sentenceKorean) }
             if (meaning.usedModel) addAll(meaning.examples)
         }.joinToString("\n") { (en, ko) -> "$en\t$ko" }
         val examples = listOf(own, entry.examples).filter { it.isNotBlank() }.joinToString("\n")

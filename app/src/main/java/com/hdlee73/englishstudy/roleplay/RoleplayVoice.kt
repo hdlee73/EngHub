@@ -24,7 +24,8 @@ class RoleplayVoice(
     context: Context,
     private val onState: (State) -> Unit,
     private val onPartial: (String) -> Unit,
-    private val onSaid: (String) -> Unit,
+    /** What was said, and the recognizer's other readings of it (empty when it was heard in several parts). */
+    private val onSaid: (String, List<String>) -> Unit,
     private val onProblem: (String) -> Unit
 ) {
     enum class State { IDLE, SPEAKING, LISTENING }
@@ -43,6 +44,8 @@ class RoleplayVoice(
     private var listening = false
     private var silentRestarts = 0
     private var failures = 0
+    private var segments = 0
+    private var alternatives: List<String> = emptyList()
 
     init {
         tts = TextToSpeech(app) { status -> main.post { onTtsReady(status) } }
@@ -109,6 +112,8 @@ class RoleplayVoice(
         generation++
         said.setLength(0)
         lastPartial = ""
+        segments = 0
+        alternatives = emptyList()
         userDone = false
         silentRestarts = 0
         failures = 0
@@ -146,7 +151,7 @@ class RoleplayVoice(
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANGUAGE)
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, LANGUAGE)
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, app.packageName)
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 6_000L)
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4_000L)
@@ -194,7 +199,9 @@ class RoleplayVoice(
         generation++
         onState(State.IDLE)
         onPartial("")
-        if (text.isBlank()) onProblem("말씀이 들리지 않았어요. 마이크 버튼을 눌러 다시 말해 보세요.") else onSaid(text)
+        // The other readings only belong to the text when it came in one piece.
+        val alts = if (segments == 1 && lastPartial.isBlank()) alternatives else emptyList()
+        if (text.isBlank()) onProblem("말씀이 들리지 않았어요. 마이크 버튼을 눌러 다시 말해 보세요.") else onSaid(text, alts)
     }
 
     /** The recognizer ended without an answer: try again a few times, then stop and say why. */
@@ -243,9 +250,12 @@ class RoleplayVoice(
 
         override fun onResults(results: Bundle?) {
             if (!current()) return
-            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().trim()
+            val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+            val text = list.firstOrNull().orEmpty().trim()
             lastPartial = ""
             if (text.isNotEmpty()) {
+                segments++
+                alternatives = list.drop(1)
                 if (said.isNotEmpty()) said.append(' ')
                 said.append(text)
                 silentRestarts = 0
