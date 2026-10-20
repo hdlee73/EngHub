@@ -517,6 +517,10 @@ class MainActivity : AppCompatActivity() {
                         onTranslate = translateVm::translate,
                         onSwap = translateVm::swap,
                         onClear = translateVm::clear,
+                        onMode = translateVm::setMode,
+                        onCorrect = { translateVm.correct(this@MainActivity) },
+                        onCorrectResult = { translateVm.correctResult(this@MainActivity) },
+                        onPrepareAi = { translateVm.prepareAi(this@MainActivity) },
                         onLookup = { text ->
                             dictionaryVm.pickSuggestion(text)
                             wordSpeaker.stop()
