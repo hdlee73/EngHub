@@ -93,7 +93,11 @@ fun DictionaryScreen(
     onExport: (Int) -> Unit,
     onSpeak: (String) -> Unit,
     onOpenUrl: (String) -> Unit,
-    onMessageDismiss: () -> Unit
+    onMessageDismiss: () -> Unit,
+    /** Explains the shown word in the sentence the learner typed. */
+    onExplainInContext: (String) -> Unit = {},
+    /** Saves the shown word with its meaning in that sentence. */
+    onSaveWithContext: () -> Unit = {}
 ) {
     val focus = LocalFocusManager.current
     var sortOpen by remember { mutableStateOf(false) }
@@ -139,7 +143,7 @@ fun DictionaryScreen(
                     onOpen = { detail = it }, onResearch = onPickSuggestion, onDelete = onDelete
                 )
             } else {
-                SearchResult(state, saved, { word -> focus.clearFocus(); onPickSuggestion(word) }, onSave, onSpeak, onOpenUrl)
+                SearchResult(state, saved, { word -> focus.clearFocus(); onPickSuggestion(word) }, onSave, onSpeak, onOpenUrl, onExplainInContext, onSaveWithContext)
             }
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
@@ -249,7 +253,9 @@ private fun SearchResult(
     onPickSuggestion: (String) -> Unit,
     onSave: () -> Unit,
     onSpeak: (String) -> Unit,
-    onOpenUrl: (String) -> Unit
+    onOpenUrl: (String) -> Unit,
+    onExplainInContext: (String) -> Unit,
+    onSaveWithContext: () -> Unit
 ) {
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -276,8 +282,69 @@ private fun SearchResult(
                 val alreadySaved = saved.any { it.word.equals(entry.word, ignoreCase = true) }
                 EntryCard(entry, state.canSave, alreadySaved, onSave, onSpeak, onOpenUrl)
             }
+            item {
+                ContextSection(
+                    word = entry.word, loading = state.contextLoading,
+                    meaning = state.contextMeaning?.takeIf { it.word.equals(entry.word, ignoreCase = true) },
+                    canSave = state.canSave, onExplain = onExplainInContext, onSave = onSaveWithContext, onSpeak = onSpeak
+                )
+            }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+/** "문장 속 뜻": the learner types the sentence a word was found in and gets the meaning it has there. */
+@Composable
+private fun ContextSection(
+    word: String,
+    loading: Boolean,
+    meaning: com.hdlee73.englishstudy.dictionary.ContextMeaning?,
+    canSave: Boolean,
+    onExplain: (String) -> Unit,
+    onSave: () -> Unit,
+    onSpeak: (String) -> Unit
+) {
+    var sentence by remember(word) { mutableStateOf("") }
+    val focus = LocalFocusManager.current
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(18.dp)) {
+        Text("문장 속 뜻", color = DictBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text("이 단어가 나온 문장을 넣으면, 그 문장에서의 한글·영어 뜻과 예문을 알려 줘요. (비워 두면 대표 뜻)", color = DictGrey, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+        TextField(
+            value = sentence, onValueChange = { sentence = it },
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
+            placeholder = { Text("예: She runs a small bakery downtown.") },
+            minLines = 2,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = TabOff, unfocusedContainerColor = TabOff,
+                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
+            )
+        )
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { focus.clearFocus(); onExplain(sentence) }, enabled = !loading, shape = RoundedCornerShape(12.dp)) {
+                Text(if (loading) "만드는 중…" else "문장 속 뜻 알아보기")
+            }
+            if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        }
+        if (meaning != null) {
+            Section("이 문장에서의 한글 뜻", meaning.korean.ifBlank { "사전 뜻을 찾지 못했어요." })
+            if (meaning.pos.isNotBlank()) Text(meaning.pos, color = DictGrey, fontSize = 13.sp)
+            if (meaning.english.isNotBlank()) Section("English meaning here", meaning.english)
+            if (meaning.nuance.isNotBlank()) Section("뉘앙스", meaning.nuance)
+            if (meaning.sentenceKorean.isNotBlank()) Section("문장 해석", meaning.sentenceKorean)
+            if (meaning.examples.isNotEmpty()) {
+                Section("예문", meaning.examples.joinToString("\n") { (en, ko) -> if (ko.isBlank()) en else "$en\n$ko" })
+                PillButton("🔊 첫 예문 듣기", ListenFill, ListenInk, 130.dp) { onSpeak(meaning.examples.first().first) }
+            }
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                PillButton("🔖 이 뜻과 함께 저장", SaveFill, SaveInk, 168.dp, enabled = canSave, onClick = onSave)
+            }
+            Text(
+                if (meaning.usedModel) "Gemini Nano(기기 내 AI)로 만든 설명이에요. 틀릴 수 있으니 사전 뜻과 함께 보세요."
+                else "기본 엔진: 사전의 첫 뜻과 문장 번역이에요. (Gemini Nano를 쓸 수 있는 기기에서는 문장에 맞춰 설명해 줘요.)",
+                color = Color(0xFF6B7D7A), fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp)
+            )
+        }
     }
 }
 
