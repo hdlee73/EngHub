@@ -76,6 +76,7 @@ fun RoleplayScreen(
     onMic: () -> Unit,
     onEnd: () -> Unit,
     onRestart: () -> Unit,
+    onRetry: () -> Unit,
     onToggleKorean: (Int) -> Unit,
     onSummary: (Boolean) -> Unit,
     onMessage: (String) -> Unit,
@@ -97,7 +98,7 @@ fun RoleplayScreen(
         when {
             theme == null -> ThemeList(state.busy, start)
             state.summary -> SummaryView(state, onContinue = { onSummary(false) }, onEnd = onEnd)
-            else -> Conversation(state, theme, onMic, onEnd, onRestart, onToggleKorean, onSummary)
+            else -> Conversation(state, theme, onMic, onEnd, onRestart, onRetry, onToggleKorean, onSummary)
         }
         MessageBar(state.message, onMessageDismiss, Modifier.align(Alignment.BottomCenter))
     }
@@ -158,6 +159,7 @@ private fun Conversation(
     onMic: () -> Unit,
     onEnd: () -> Unit,
     onRestart: () -> Unit,
+    onRetry: () -> Unit,
     onToggleKorean: (Int) -> Unit,
     onSummary: (Boolean) -> Unit
 ) {
@@ -189,6 +191,12 @@ private fun Conversation(
                 }
             }
         }
+        if (state.turns.any { it.fromUser }) {
+            Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onRetry, Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("↺ 방금 말 다시", fontSize = 13.sp) }
+                OutlinedButton(onClick = onRestart, Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("⟲ 처음부터 다시", fontSize = 13.sp) }
+            }
+        }
         MicBar(state, onMic)
     }
 }
@@ -200,6 +208,7 @@ private fun Bubble(turn: Turn, onToggleKorean: (Int) -> Unit) {
             Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(18.dp))
                 .background(if (turn.fromUser) Blue else Color.White).padding(horizontal = 14.dp, vertical = 10.dp)
         ) { Text(turn.text, color = if (turn.fromUser) Color.White else Ink, fontSize = 17.sp, lineHeight = 24.sp) }
+        turn.heard?.let { Text("들린 대로: $it", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, end = 4.dp)) }
         if (!turn.fromUser) {
             TextButton(onClick = { onToggleKorean(turn.id) }) { Text(if (turn.showKorean) "한국어 숨기기" else "한국어 번역", fontSize = 12.sp) }
             if (turn.showKorean && turn.korean != null) Text(turn.korean, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp, bottom = 4.dp))

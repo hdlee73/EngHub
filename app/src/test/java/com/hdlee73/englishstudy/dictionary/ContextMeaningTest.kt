@@ -46,4 +46,18 @@ class ContextMeaningTest {
         assertEquals("She runs a bakery.\t그녀는 빵집을 운영한다.", lines[0])
         assertEquals("I run daily.\t나는 매일 달린다.", lines.last())
     }
+
+    @Test
+    fun theWordAloneIsNotAnExampleButATypedSentenceIsMadeOne() {
+        assertNull(ContextMeanings.asExample("run", "run"))
+        assertNull(ContextMeanings.asExample("run", "  "))
+        assertEquals("She runs a small bakery.", ContextMeanings.asExample("run", "She runs a small bakery"))
+    }
+
+    @Test
+    fun savedCopyOfAWordOnlyInputAddsNoSentenceButKeepsTheModelExamples() {
+        val entry = WordEntry(word = "run", ipa = "", korean = "1. 달리다", english = "", examples = "")
+        val meaning = ContextMeaning("run", "run", "달리다", "", "verb", "", "", listOf("He runs every morning." to "그는 매일 아침 달린다."), usedModel = true)
+        assertEquals("He runs every morning.\t그는 매일 아침 달린다.", ContextMeanings.mergeInto(entry, meaning).examples)
+    }
 }
