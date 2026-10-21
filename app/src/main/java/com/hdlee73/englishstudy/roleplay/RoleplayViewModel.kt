@@ -1,10 +1,13 @@
 package com.hdlee73.englishstudy.roleplay
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hdlee73.englishstudy.ai.FreeTalk
 import com.hdlee73.englishstudy.ai.GenAi
+import com.hdlee73.englishstudy.docvoice.core.ModelStore
+import kotlinx.coroutines.channels.Channel
 import com.hdlee73.englishstudy.translate.Direction
 import com.hdlee73.englishstudy.translate.MlKitTranslator
 import com.hdlee73.englishstudy.translate.OnlineTranslator
@@ -29,6 +32,9 @@ data class Turn(
     val heard: String? = null
 )
 
+/** The on-device speech recognition model (Whisper base.en, about 160 MB, downloaded once when the learner asks for it). */
+enum class SttModel { MISSING, DOWNLOADING, READY, FAILED }
+
 data class RoleplayUiState(
     val theme: RoleplayTheme? = null,
     val turns: List<Turn> = emptyList(),
@@ -40,12 +46,23 @@ data class RoleplayUiState(
     /** A scripted scene has reached its last line. */
     val finished: Boolean = false,
     val summary: Boolean = false,
-    val message: String? = null
+    val message: String? = null,
+    val sttModel: SttModel = SttModel.MISSING,
+    val sttProgress: Float = 0f,
+    /** The learner's choice: recognize on the phone (when the model is there) instead of with the Google speech service. */
+    val deviceStt: Boolean = true
 )
 
 /** The 롤플레잉 part of the Speaking tab: 프리토킹 and the themes, spoken instead of typed. */
 class RoleplayViewModel(application: Application) : AndroidViewModel(application) {
-    private val _state = MutableStateFlow(RoleplayUiState())
+    private val settings = application.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val models = ModelStore(application)
+    private val _state = MutableStateFlow(
+        RoleplayUiState(
+            sttModel = if (models.speakingReady()) SttModel.READY else SttModel.MISSING,
+            deviceStt = settings.getBoolean("rpDeviceStt", true)
+        )
+    )
     val state: StateFlow<RoleplayUiState> = _state.asStateFlow()
     private var voice: RoleplayVoice? = null
     private var nextId = 1
@@ -59,6 +76,32 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
         onSaid = { text, alts -> onSaid(text, alts) },
         onProblem = { m -> _state.update { it.copy(message = m) } }
     ).also { voice = it }
+
+    private fun deviceSttOn() = _state.value.deviceStt && _state.value.sttModel == SttModel.READY
+
+    /** Downloads the on-device recognition model (once; it stays on the phone afterwards). */
+    fun downloadSttModel() {
+        if (_state.value.sttModel == SttModel.DOWNLOADING) return
+        _state.update { it.copy(sttModel = SttModel.DOWNLOADING, sttProgress = 0f, message = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val ok = try {
+                models.ensureSpeaking({ true }) { p -> _state.update { it.copy(sttProgress = p) } }
+                true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(message = e.message ?: "음성 인식 모델을 내려받지 못했어요.") }
+                false
+            }
+            _state.update { it.copy(sttModel = if (ok) SttModel.READY else SttModel.FAILED, sttProgress = if (ok) 1f else 0f) }
+        }
+    }
+
+    /** Chooses between the on-device recognition and the Google speech service (the latter stays as the spare). */
+    fun setDeviceStt(on: Boolean) {
+        settings.edit().putBoolean("rpDeviceStt", on).apply()
+        _state.update { it.copy(deviceStt = on) }
+    }
 
     /** Starts [theme]: checks Gemini Nano first (the first time this also starts its one-time download), then the partner speaks. */
     fun start(theme: RoleplayTheme) {
@@ -74,6 +117,8 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
                 _state.update { it.copy(busy = false, message = why) }
                 return@launch
             }
+            voice().useDeviceStt = deviceSttOn()
+            if (deviceSttOn()) voice().warmUp()
             val opener = RoleplayChat.opener(theme)
             nextId = 1
             _state.update { it.copy(theme = theme, turns = listOf(Turn(nextId++, false, opener)), busy = false, finished = false, summary = false, partial = "") }
@@ -104,6 +149,7 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
     /** Back to the list of scenes. */
     fun end() {
         voice?.stop()
+        voice?.releaseModel()
         _state.update { RoleplayUiState() }
     }
 
@@ -116,8 +162,9 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
     fun micTap() {
         val v = voice ?: return
         when (_state.value.voice) {
+            RoleplayVoice.State.RECOGNIZING -> Unit
             RoleplayVoice.State.LISTENING -> v.finishListening()
-            else -> if (!_state.value.busy && !_state.value.finished) v.startListening()
+            else -> if (!_state.value.busy && !_state.value.finished) { v.useDeviceStt = deviceSttOn(); v.startListening() }
         }
     }
 
@@ -136,10 +183,43 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
             if (fixed != null) _state.update { s -> s.copy(turns = s.turns.map { if (it.id == userId) it.copy(text = fixed, heard = text) else it }) }
             val history = turns.dropLast(1).map { FreeTalk.Line(it.fromUser, it.text) } + FreeTalk.Line(true, said)
             val userTurns = turns.count { it.fromUser }
-            val reply = withContext(Dispatchers.IO) { RoleplayChat.reply(theme, history, userTurns) }
-            val partnerId = nextId++
-            _state.update { it.copy(turns = it.turns + Turn(partnerId, false, reply.text), busy = false, finished = reply.finished) }
-            voice().speak(reply.text, listenAfter = !reply.finished)
+            // The partner starts speaking with the first finished sentence while Gemini Nano is still writing the rest.
+            val v = voice()
+            v.useDeviceStt = deviceSttOn()
+            v.beginStream()
+            val sentences = Channel<String>(Channel.UNLIMITED)
+            var partnerId = -1
+            val spoken = StringBuilder()
+            val consumer = launch {
+                for (sentence in sentences) {
+                    v.speakPart(sentence)
+                    if (spoken.isNotEmpty()) spoken.append(' ')
+                    spoken.append(sentence)
+                    val line = spoken.toString()
+                    if (partnerId < 0) {
+                        partnerId = nextId++
+                        val id = partnerId
+                        _state.update { it.copy(turns = it.turns + Turn(id, false, line), busy = false) }
+                    } else {
+                        val id = partnerId
+                        _state.update { s -> s.copy(turns = s.turns.map { if (it.id == id) it.copy(text = line) else it }) }
+                    }
+                }
+            }
+            val reply = withContext(Dispatchers.IO) { RoleplayChat.reply(theme, history, userTurns) { sentences.trySend(it) } }
+            sentences.close()
+            consumer.join()
+            if (partnerId < 0) {
+                partnerId = nextId++
+                val id = partnerId
+                _state.update { it.copy(turns = it.turns + Turn(id, false, reply.text), busy = false, finished = reply.finished) }
+            } else {
+                val id = partnerId
+                _state.update { s -> s.copy(turns = s.turns.map { if (it.id == id) it.copy(text = reply.text) else it }, busy = false, finished = reply.finished) }
+            }
+            if (!v.streamAbandoned()) {
+                if (v.streamStarted()) v.endStream(listenAfter = !reply.finished) else v.speak(reply.text, listenAfter = !reply.finished)
+            }
             val tip = runCatching { FreeTalk.suggestion(said) }.getOrNull()
             if (tip != null) _state.update { s -> s.copy(turns = s.turns.map { if (it.id == userId) it.copy(tip = tip) else it }) }
         }

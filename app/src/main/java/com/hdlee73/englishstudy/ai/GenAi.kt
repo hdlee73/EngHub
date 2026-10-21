@@ -156,5 +156,27 @@ object GenAi {
         }.getOrNull()
     }
 
+    /**
+     * Like [generate], but [onText] gets each piece of text as soon as the model has written it, so a spoken partner can start
+     * with the first sentence. Returns the whole text, or null when unavailable or nothing was written.
+     */
+    suspend fun generateStream(prompt: String, onText: (String) -> Unit): String? = withContext(Dispatchers.IO) {
+        val m = chatModel?.takeIf { chatReady } ?: return@withContext null
+        val all = StringBuilder()
+        try {
+            withTimeoutOrNull(TIMEOUT_MS) {
+                m.generateContentStream(prompt).collect { chunk ->
+                    val text = chunk.candidates.firstOrNull()?.text.orEmpty()
+                    if (text.isNotEmpty()) { all.append(text); onText(text) }
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Whatever was written before the failure is still returned.
+        }
+        all.toString().trim().takeIf { it.isNotBlank() }
+    }
+
     private const val TIMEOUT_MS = 15_000L
 }
