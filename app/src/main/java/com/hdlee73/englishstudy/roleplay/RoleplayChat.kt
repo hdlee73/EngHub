@@ -2,6 +2,7 @@ package com.hdlee73.englishstudy.roleplay
 
 import com.hdlee73.englishstudy.ai.FreeTalk
 import com.hdlee73.englishstudy.ai.GenAi
+import com.hdlee73.englishstudy.ai.SmallTalk
 
 /**
  * The partner's answers. With Gemini Nano on the device the partner plays the theme's role freely; without it 프리토킹 uses the
@@ -21,18 +22,28 @@ object RoleplayChat {
      * The next line of the partner. [userTurns] is how many times the learner has spoken so far, including the latest turn
      * that is the last entry of [history]; it moves a fixed script forward.
      */
-    suspend fun reply(theme: RoleplayTheme, history: List<FreeTalk.Line>, userTurns: Int): Reply {
+    suspend fun reply(theme: RoleplayTheme, history: List<FreeTalk.Line>, userTurns: Int, onSentence: ((String) -> Unit)? = null): Reply {
         if (theme.free) {
-            val r = FreeTalk.reply(history)
-            return Reply(r.text, r.usedModel)
+            if (!GenAi.canChat()) return FreeTalk.reply(history).let { Reply(it.text, it.usedModel) }
+            generateText(FreeTalk.buildPrompt(history), onSentence)?.let { FreeTalk.cleanModelReply(it) }?.takeIf { it.isNotBlank() }?.let { return Reply(it, true) }
+            return Reply(SmallTalk.reply(history), false)
         }
         if (GenAi.canChat()) {
-            GenAi.generate(buildPrompt(theme, history))?.let { clean(it) }?.takeIf { it.isNotBlank() }?.let { return Reply(it, true) }
+            generateText(buildPrompt(theme, history), onSentence)?.let { clean(it) }?.takeIf { it.isNotBlank() }?.let { return Reply(it, true) }
         }
         val script = theme.script ?: return Reply("Sorry, I did not catch that. Could you say it again?", false)
         val said = history.lastOrNull { it.fromUser }?.text.orEmpty()
         val turn = (userTurns - 1).coerceAtLeast(0)
         return Reply(Scenarios.reply(script, turn, said), false, finished = Scenarios.isFinished(script, turn + 1))
+    }
+
+    /** The model's text; with [onSentence] each finished sentence is handed over while the rest is still being written. */
+    private suspend fun generateText(prompt: String, onSentence: ((String) -> Unit)?): String? {
+        if (onSentence == null) return GenAi.generate(prompt)
+        val streamer = SentenceStreamer(onSentence)
+        val full = GenAi.generateStream(prompt) { streamer.feed(it) }
+        streamer.finish()
+        return full
     }
 
     internal fun buildPrompt(theme: RoleplayTheme, history: List<FreeTalk.Line>): String = buildString {

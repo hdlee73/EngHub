@@ -28,7 +28,7 @@ class RoleplayVoice(
     private val onSaid: (String, List<String>) -> Unit,
     private val onProblem: (String) -> Unit
 ) {
-    enum class State { IDLE, SPEAKING, LISTENING }
+    enum class State { IDLE, SPEAKING, LISTENING, RECOGNIZING }
 
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -44,6 +44,17 @@ class RoleplayVoice(
     private var listening = false
     private var silentRestarts = 0
     private var failures = 0
+    private val stt = OnDeviceStt(context)
+    /** Recognize on the phone (Whisper) instead of with the Google speech service; the caller sets it from the learner's choice and the model being present. */
+    var useDeviceStt = false
+    private var deviceMode = false
+    private var streamGen = -1
+    private var streamBegun = -1
+    private var streamQueued = 0
+    private var streamEnded = false
+    private var streamListenAfter = true
+    private var streamParts = 0
+    private var streamPending = ArrayList<String>()
     private var segments = 0
     private var alternatives: List<String> = emptyList()
 
@@ -66,6 +77,7 @@ class RoleplayVoice(
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
+                streamPartId(utteranceId)?.let { g -> main.post { onStreamPartSpoken(g) }; return }
                 val parsed = parseId(utteranceId) ?: return
                 main.post { if (parsed.first == generation) { if (parsed.second) startListening() else onState(State.IDLE) } }
             }
@@ -75,6 +87,7 @@ class RoleplayVoice(
         })
         ttsReady = true
         pending?.let { (text, listenAfter) -> pending = null; speak(text, listenAfter) }
+        if (streamPending.isNotEmpty()) { val parts = streamPending; streamPending = ArrayList(); parts.forEach { speakPart(it) } }
     }
 
     /** The utterance id is "rp-<generation>-<1 when the microphone opens afterwards>". */
@@ -87,6 +100,7 @@ class RoleplayVoice(
     }
 
     private fun spokenWithError(utteranceId: String?) {
+        streamPartId(utteranceId)?.let { g -> main.post { onStreamPartSpoken(g) }; return }
         val parsed = parseId(utteranceId) ?: return
         main.post {
             if (parsed.first == generation) {
@@ -96,9 +110,69 @@ class RoleplayVoice(
         }
     }
 
+    /** The utterance id of a streamed part is "rps-<generation>-<n>"; returns the generation, or null for any other id. */
+    private fun streamPartId(id: String?): Int? =
+        if (id != null && id.startsWith("rps-")) id.removePrefix("rps-").substringBefore('-').toIntOrNull() else null
+
+    private fun onStreamPartSpoken(g: Int) {
+        if (g != streamGen || g != generation) return
+        streamQueued--
+        checkStreamEnd()
+    }
+
+    private fun checkStreamEnd() {
+        if (!streamEnded || streamQueued > 0 || streamGen != generation) return
+        streamGen = -1
+        if (streamListenAfter) startListening() else onState(State.IDLE)
+    }
+
+    /**
+     * A spoken answer that is still being written: [beginStream], then [speakPart] for every finished sentence, then
+     * [endStream]. The first sentence is read while the later ones are being made.
+     */
+    fun beginStream() {
+        cancelRecognizer()
+        stt.cancel()
+        deviceMode = false
+        listening = false
+        val g = ++generation
+        streamGen = g
+        streamBegun = g
+        streamQueued = 0
+        streamParts = 0
+        streamEnded = false
+        streamPending = ArrayList()
+        tts?.stop()
+        onState(State.SPEAKING)
+    }
+
+    fun speakPart(text: String) {
+        if (streamGen != generation) return
+        if (!ttsReady) { streamPending.add(text); return }
+        streamQueued++
+        tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "rps-$streamGen-${streamParts++}")
+    }
+
+    /** No more sentences are coming; the microphone opens once the last one has been read (unless [listenAfter] is false). */
+    fun endStream(listenAfter: Boolean = true) {
+        if (streamGen != generation) return
+        streamEnded = true
+        streamListenAfter = listenAfter
+        checkStreamEnd()
+    }
+
+    /** True when the learner (or a restart) took over after [beginStream], so the rest of that answer must not be read. */
+    fun streamAbandoned(): Boolean = streamBegun != generation
+
+    /** True while a streamed answer is being read (so the answer has begun). */
+    fun streamStarted(): Boolean = streamGen == generation && streamParts > 0
+
     /** Reads [text] aloud; when it is finished the microphone opens (unless [listenAfter] is false). */
     fun speak(text: String, listenAfter: Boolean = true) {
         cancelRecognizer()
+        stt.cancel()
+        deviceMode = false
+        streamGen = -1
         val g = ++generation
         onState(State.SPEAKING)
         if (!ttsReady) { pending = text to listenAfter; return }
@@ -117,11 +191,49 @@ class RoleplayVoice(
         userDone = false
         silentRestarts = 0
         failures = 0
+        streamGen = -1
+        if (useDeviceStt && stt.modelReady() && startDevice()) return
         beginRecognition()
     }
 
+    private fun startDevice(): Boolean {
+        val g = generation
+        if (!stt.start { main.post { if (g == generation && deviceMode && listening) finishListening() } }) return false
+        deviceMode = true
+        listening = true
+        onState(State.LISTENING)
+        return true
+    }
+
+    /** Hands the recording to the on-device recognizer; the answer comes a moment later. */
+    private fun finishDevice() {
+        listening = false
+        deviceMode = false
+        val g = generation
+        onState(State.RECOGNIZING)
+        stt.finish(post = { r -> main.post(r) }) { text ->
+            if (g != generation) return@finish
+            onState(State.IDLE)
+            when {
+                text == null -> {
+                    useDeviceStt = false
+                    onProblem("기기 안 음성 인식을 쓰지 못했어요. 이번에는 구글 인식으로 바꿨으니 마이크 버튼을 눌러 다시 말해 보세요.")
+                }
+                text.isBlank() -> onProblem("말씀이 들리지 않았어요. 마이크 버튼을 눌러 다시 말해 보세요.")
+                else -> onSaid(text, emptyList())
+            }
+        }
+    }
+
+    /** Loads the on-device model ahead of time. */
+    fun warmUp() = stt.warmUp()
+
+    /** Frees the on-device model (it takes a few hundred MB while loaded). */
+    fun releaseModel() = stt.release()
+
     /** The learner is done talking: hands over everything said since the microphone opened. */
     fun finishListening() {
+        if (deviceMode) { if (listening) finishDevice(); return }
         if (!listening) { deliver(); return }
         userDone = true
         runCatching { recognizer?.stopListening() }
@@ -133,6 +245,9 @@ class RoleplayVoice(
     fun stop() {
         generation++
         pending = null
+        streamGen = -1
+        stt.cancel()
+        deviceMode = false
         tts?.stop()
         cancelRecognizer()
         listening = false
@@ -141,6 +256,7 @@ class RoleplayVoice(
 
     fun shutdown() {
         stop()
+        stt.release()
         tts?.shutdown()
         tts = null
         ttsReady = false
