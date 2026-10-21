@@ -123,6 +123,23 @@ class ModelStore(context: Context) {
     val segFile get() = File(root, "diar/segmentation.onnx")
     val embFile get() = File(root, "diar/embedding.onnx")
 
+    /** The English-only base Whisper used by the spoken 프리토킹·롤플레잉 (about 160 MB: small enough to answer within a couple of seconds). */
+    fun speakingWhisper(): WhisperFiles {
+        val d = File(root, "whisper-speaking-base.en")
+        return WhisperFiles(File(d, "encoder.onnx"), File(d, "decoder.onnx"), File(d, "tokens.txt"))
+    }
+
+    fun speakingReady() = speakingWhisper().let { it.encoder.exists() && it.decoder.exists() && it.tokens.exists() }
+
+    fun ensureSpeaking(isActive: () -> Boolean, onProgress: (Float) -> Unit) {
+        if (speakingReady()) return
+        val f = speakingWhisper()
+        val repo = "$HF/sherpa-onnx-whisper-base.en/resolve/main/base.en"
+        download("$repo-encoder.int8.onnx", f.encoder, isActive) { onProgress(it * 0.2f) }
+        download("$repo-decoder.int8.onnx", f.decoder, isActive) { onProgress(0.2f + it * 0.78f) }
+        download("$repo-tokens.txt", f.tokens, isActive) { onProgress(0.98f + it * 0.02f) }
+    }
+
     fun whisperReady(size: WhisperSize) = whisper(size).let { it.encoder.exists() && it.decoder.exists() && it.tokens.exists() }
     fun vadReady() = vadFile.exists()
     fun diarReady() = segFile.exists() && embFile.exists()
