@@ -52,6 +52,7 @@ import com.hdlee73.englishstudy.roleplay.RoleplayTheme
 import com.hdlee73.englishstudy.roleplay.RoleplayThemes
 import com.hdlee73.englishstudy.roleplay.RoleplayUiState
 import com.hdlee73.englishstudy.roleplay.RoleplayVoice
+import com.hdlee73.englishstudy.roleplay.SttModel
 import com.hdlee73.englishstudy.roleplay.Turn
 
 /** The switch at the top of the Speaking tab: 따라읽기 (the sentence lessons) or 롤플레잉 (talking with a partner). */
@@ -77,6 +78,8 @@ fun RoleplayScreen(
     onEnd: () -> Unit,
     onRestart: () -> Unit,
     onRetry: () -> Unit,
+    onDownloadStt: () -> Unit,
+    onDeviceStt: (Boolean) -> Unit,
     onToggleKorean: (Int) -> Unit,
     onSummary: (Boolean) -> Unit,
     onMessage: (String) -> Unit,
@@ -96,7 +99,7 @@ fun RoleplayScreen(
     Box(Modifier.fillMaxSize().background(Canvas)) {
         val theme = state.theme
         when {
-            theme == null -> ThemeList(state.busy, start)
+            theme == null -> ThemeList(state, start, onDownloadStt, onDeviceStt)
             state.summary -> SummaryView(state, onContinue = { onSummary(false) }, onEnd = onEnd)
             else -> Conversation(state, theme, onMic, onEnd, onRestart, onRetry, onToggleKorean, onSummary)
         }
@@ -105,7 +108,8 @@ fun RoleplayScreen(
 }
 
 @Composable
-private fun ThemeList(busy: Boolean, onStart: (RoleplayTheme) -> Unit) {
+private fun ThemeList(state: RoleplayUiState, onStart: (RoleplayTheme) -> Unit, onDownloadStt: () -> Unit, onDeviceStt: (Boolean) -> Unit) {
+    val busy = state.busy
     val aiStatus by GenAi.status.collectAsState()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -117,6 +121,7 @@ private fun ThemeList(busy: Boolean, onStart: (RoleplayTheme) -> Unit) {
             Text(Tutor.engineLabel(aiStatus), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
             if (busy) CircularProgressIndicator(Modifier.padding(top = 8.dp).size(22.dp), strokeWidth = 2.dp)
         }
+        item { SttCard(state, onDownloadStt, onDeviceStt) }
         // 프리토킹 first, then the scenes by group.
         item { ThemeCard(RoleplayThemes.FREE, highlighted = true, needsAi = false, onStart) }
         var lastGroup = ""
@@ -129,6 +134,38 @@ private fun ThemeList(busy: Boolean, onStart: (RoleplayTheme) -> Unit) {
             item(key = scene.id) { ThemeCard(scene, highlighted = false, needsAi = scene.script == null && aiStatus != GenAi.Status.AVAILABLE, onStart) }
         }
         item { androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp)) }
+    }
+}
+
+/** The choice of speech recognition: on the phone (Whisper, no internet) once its model is downloaded, the Google speech service otherwise. */
+@Composable
+private fun SttCard(state: RoleplayUiState, onDownload: () -> Unit, onDeviceStt: (Boolean) -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("음성 인식", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        when (state.sttModel) {
+            SttModel.READY -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (state.deviceStt) "기기 안 인식(Whisper)을 쓰는 중이에요. 인터넷 없이 되고, 말을 마친 뒤 1~3초 안에 글자로 바뀌어요."
+                        else "구글 음성 인식을 쓰는 중이에요. 인터넷이 필요해요.",
+                        color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(checked = state.deviceStt, onCheckedChange = onDeviceStt)
+                }
+            }
+            SttModel.DOWNLOADING -> {
+                Text("기기 안 인식 모델을 내려받는 중… ${(state.sttProgress * 100).toInt()}%", color = Muted, fontSize = 12.sp)
+                androidx.compose.material3.LinearProgressIndicator(progress = { state.sttProgress }, modifier = Modifier.fillMaxWidth())
+            }
+            else -> {
+                Text(
+                    if (state.sttModel == SttModel.FAILED) "내려받지 못했어요. 인터넷을 확인하고 다시 눌러 주세요. 그동안은 구글 음성 인식을 써요."
+                    else "지금은 구글 음성 인식(인터넷 필요)을 써요. 기기 안 인식 모델(약 160MB, 와이파이 권장)을 받으면 인터넷 없이도 되고, 억양이 있는 영어도 더 잘 알아듣는 편이에요.",
+                    color = Muted, fontSize = 12.sp
+                )
+                OutlinedButton(onClick = onDownload, shape = RoundedCornerShape(12.dp)) { Text("기기 안 인식 모델 내려받기") }
+            }
+        }
     }
 }
 
@@ -231,8 +268,13 @@ private fun MicBar(state: RoleplayUiState, onMic: () -> Unit) {
     ) {
         val listening = state.voice == RoleplayVoice.State.LISTENING
         val speaking = state.voice == RoleplayVoice.State.SPEAKING
+        val recognizing = state.voice == RoleplayVoice.State.RECOGNIZING
         if (state.partial.isNotBlank()) Text(state.partial, color = Ink, fontSize = 15.sp, maxLines = 3)
         when {
+            recognizing -> {
+                CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                Text("말씀을 글자로 바꾸는 중…", color = Muted, fontSize = 13.sp)
+            }
             state.busy -> {
                 CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
                 Text("답변을 만드는 중…", color = Muted, fontSize = 13.sp)
