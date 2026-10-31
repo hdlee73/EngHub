@@ -64,7 +64,7 @@ class OnDeviceStt(context: Context) {
 
     /** Starts recording; false when the microphone could not be opened. [onLimit] is called (on the recording thread) when the longest recording is reached. */
     @SuppressLint("MissingPermission")
-    fun start(onLimit: () -> Unit, tee: ((ByteArray, Int) -> Unit)? = null): Boolean {
+    fun start(tee: ((ByteArray, Int) -> Unit)? = null, onLimit: () -> Unit): Boolean {
         cancel()
         val min = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (min <= 0) return false
