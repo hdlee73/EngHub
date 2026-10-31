@@ -64,7 +64,7 @@ class OnDeviceStt(context: Context) {
 
     /** Starts recording; false when the microphone could not be opened. [onLimit] is called (on the recording thread) when the longest recording is reached. */
     @SuppressLint("MissingPermission")
-    fun start(onLimit: () -> Unit): Boolean {
+    fun start(tee: ((ByteArray, Int) -> Unit)? = null, onLimit: () -> Unit): Boolean {
         cancel()
         val min = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (min <= 0) return false
@@ -75,12 +75,21 @@ class OnDeviceStt(context: Context) {
         try { record.startRecording() } catch (_: Exception) { record.release(); return false }
         val mine = ++session
         count = 0
+        heardVoice = false
+        silentMs = 0
+        noiseFloor = 1f
         recording = record
         Thread {
             val buffer = ShortArray(SAMPLE_RATE / 10)
             while (mine == session && recording === record) {
                 val n = record.read(buffer, 0, buffer.size)
                 if (n <= 0) break
+                if (tee != null) {
+                    val bytes = ByteArray(n * 2)
+                    for (i in 0 until n) { bytes[i * 2] = (buffer[i].toInt() and 0xff).toByte(); bytes[i * 2 + 1] = (buffer[i].toInt() shr 8).toByte() }
+                    runCatching { tee(bytes, bytes.size) }
+                }
+                trackVoice(buffer, n)
                 synchronized(lock) {
                     if (mine != session) return@Thread
                     if (count + n > samples.size) samples = samples.copyOf(maxOf(samples.size * 2, count + n))
@@ -91,6 +100,37 @@ class OnDeviceStt(context: Context) {
             }
         }.start()
         return true
+    }
+
+    @Volatile private var heardVoice = false
+    @Volatile private var silentMs = 0
+    private var noiseFloor = 1f
+    private val decodeLock = Any()
+
+    /** Tracks whether the learner has spoken yet and for how long it has been quiet since (energy based, adapts to room noise). */
+    private fun trackVoice(buffer: ShortArray, n: Int) {
+        var sum = 0.0
+        for (i in 0 until n) { val v = buffer[i] / 32768.0; sum += v * v }
+        val rms = Math.sqrt(sum / n).toFloat()
+        noiseFloor = minOf(noiseFloor, maxOf(rms, 0.003f))
+        if (rms > maxOf(0.02f, noiseFloor * 4f)) { heardVoice = true; silentMs = 0 }
+        else silentMs += n * 1000 / SAMPLE_RATE
+    }
+
+    /** True when the learner has said something and has now been quiet for [quietMs]. */
+    fun endpoint(quietMs: Int): Boolean = heardVoice && silentMs >= quietMs
+
+    fun heardSpeech(): Boolean = heardVoice
+
+    /** Recognizes what has been recorded so far without stopping the recording (for the live text). [onResult] gets null on failure. */
+    fun peek(post: (Runnable) -> Unit, onResult: (String?) -> Unit) {
+        val mine = session
+        val pcm: FloatArray
+        synchronized(lock) { pcm = samples.copyOf(count) }
+        Thread {
+            val text = try { recognize(pcm) } catch (_: Throwable) { null }
+            post(Runnable { if (mine == session) onResult(text) })
+        }.start()
     }
 
     /** Throws the recording away. */
@@ -133,6 +173,10 @@ class OnDeviceStt(context: Context) {
         val peak = pcm.maxOf { abs(it) }
         // Nothing but room noise: Whisper would invent a phrase over it.
         if (peak < 0.02f) return ""
+        return synchronized(decodeLock) { decode(pcm) }
+    }
+
+    private fun decode(pcm: FloatArray): String {
         val rec = recognizerOrCreate()
         val out = ArrayList<String>()
         var from = 0
