@@ -234,6 +234,7 @@ class MainActivity : AppCompatActivity() {
                 speech.phoneMic = learning.settings.phoneMic
                 speech.bluetoothInputAddress = learning.settings.bluetoothInputAddress
                 speech.outdoorAudio = learning.settings.outdoorAudio
+                speech.allowDeviceStt = learning.settings.strictness != RecognitionStrictness.STRICT
                 speech.biasTowardExpected = learning.settings.strictness != RecognitionStrictness.STRICT
                 speech.recognitionLanguage = if (learning.settings.voiceAccent == VoiceAccent.UK) "en-GB" else "en-US"
                 when (learning.phase) {
