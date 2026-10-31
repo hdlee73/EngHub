@@ -181,6 +181,8 @@ class SpeechEngine(
 
     fun speak(text: String, korean: Boolean, accent: VoiceAccent) {
         currentPromptId = null
+        stopDevice()
+        if (deviceSttWanted()) deviceStt.warmUp()
         cancelPendingChime()
         cancelPendingSpeak()
         cancelPendingListen()
@@ -304,7 +306,104 @@ class SpeechEngine(
         return trimmed + if (firstWord in questionStarters) "?" else "."
     }
 
+    // ---- On-device (Whisper) recognition, the same engine as 롤플레잉; Google stays as the spare. ----
+    private var deviceSttInstance: com.hdlee73.englishstudy.roleplay.OnDeviceStt? = null
+    private val deviceStt: com.hdlee73.englishstudy.roleplay.OnDeviceStt
+        get() = deviceSttInstance ?: com.hdlee73.englishstudy.roleplay.OnDeviceStt(appContext).also { deviceSttInstance = it }
+    private var deviceActive = false
+    private var deviceFailed = false
+    private var deviceTick: Runnable? = null
+    private var lastPeekAt = 0L
+    private var peeking = false
+    @Volatile private var deviceLimit = false
+    /** Set by the screen: false for the strict level (Whisper tends to write a mispronounced word correctly, which would make strict scoring lenient). */
+    var allowDeviceStt: Boolean = true
+
+    private fun deviceSttWanted(): Boolean = allowDeviceStt && !deviceFailed &&
+        appContext.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean("rpDeviceStt", true) && deviceStt.modelReady()
+
+    private fun stopDevice() {
+        deviceActive = false
+        deviceTick?.let(mainHandler::removeCallbacks)
+        deviceTick = null
+        peeking = false
+        deviceSttInstance?.cancel()
+    }
+
+    private fun listenDevice(expectedText: String) {
+        cancelPendingListen()
+        cancelPendingChime()
+        stopDevice()
+        acceptingRecognitionResults = false
+        recognitionStarting = false
+        recognitionGeneration++
+        recognizer?.destroy()
+        recognizer = null
+        closeOutdoorInput()
+        restoreRecognitionAudio()
+        val gen = recognitionGeneration
+        val routeDelay = maxOf(selectInputDevice(), 150L)
+        if (bluetoothRouteActive || communicationRouteActive) outputWarmer.stop() else outputWarmer.start()
+        pendingListen = Runnable {
+            pendingListen = null
+            if (gen != recognitionGeneration) return@Runnable
+            deviceLimit = false
+            val started = deviceStt.start(onLimit = { deviceLimit = true }, tee = if (isRecording()) recordingTee else null)
+            if (!started) {
+                deviceFailed = true
+                onNotice("기기 안 음성 인식을 시작하지 못해 구글 인식으로 바꿨어요.")
+                listen(expectedText)
+                return@Runnable
+            }
+            onInputDeviceChanged("휴대전화 마이크 · 기기 안 인식")
+            deviceActive = true
+            acceptingRecognitionResults = true
+            lastPeekAt = SystemClock.elapsedRealtime()
+            onRecognizerReady()
+            val tick = object : Runnable {
+                override fun run() {
+                    if (gen != recognitionGeneration || !deviceActive) return
+                    if (deviceLimit || deviceStt.endpoint(DEVICE_QUIET_MS)) { finishDevice(gen, expectedText); return }
+                    val now = SystemClock.elapsedRealtime()
+                    if (!peeking && deviceStt.heardSpeech() && now - lastPeekAt >= DEVICE_PEEK_MS) {
+                        peeking = true
+                        deviceStt.peek(post = { mainHandler.post(it) }) { text ->
+                            peeking = false
+                            lastPeekAt = SystemClock.elapsedRealtime()
+                            if (gen == recognitionGeneration && deviceActive && acceptingRecognitionResults && !text.isNullOrBlank()) onPartialResult(listOf(text))
+                        }
+                    }
+                    mainHandler.postDelayed(this, 200L)
+                }
+            }
+            deviceTick = tick
+            mainHandler.postDelayed(tick, 200L)
+        }.also { mainHandler.postDelayed(it, routeDelay) }
+    }
+
+    private fun finishDevice(gen: Long, expectedText: String) {
+        deviceActive = false
+        deviceTick?.let(mainHandler::removeCallbacks)
+        deviceTick = null
+        peeking = false
+        acceptingRecognitionResults = false
+        deviceStt.finish(post = { mainHandler.post(it) }) { text ->
+            if (gen != recognitionGeneration) return@finish
+            if (text == null) {
+                deviceFailed = true
+                onNotice("기기 안 음성 인식이 실패해 구글 인식으로 바꿨어요.")
+                listen(expectedText)
+            } else {
+                acceptingRecognitionResults = true
+                onResult(if (text.isBlank()) emptyList() else listOf(text))
+                acceptingRecognitionResults = false
+            }
+        }
+    }
+
     fun listen(expectedText: String) {
+        if (deviceSttWanted()) { listenDevice(expectedText); return }
+        stopDevice()
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) { onUnavailable("이 기기에서 음성 인식을 사용할 수 없습니다."); return }
         cancelPendingListen()
         cancelPendingChime()
@@ -631,10 +730,12 @@ class SpeechEngine(
 
     fun stop() { stopActivity(); cancelPendingChime(); outputWarmer.stop() }
 
-    private fun stopActivity() { recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.cancel(); restoreRecognitionAudio(); restoreAudioRoute(); tts.stop() }
-    fun destroy() { cancelPendingChime(); outputWarmer.stop(); soundPool.release(); recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.destroy(); restoreRecognitionAudio(); restoreAudioRoute(); tts.shutdown() }
+    private fun stopActivity() { stopDevice(); recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.cancel(); restoreRecognitionAudio(); restoreAudioRoute(); tts.stop() }
+    fun destroy() { stopDevice(); deviceSttInstance?.release(); cancelPendingChime(); outputWarmer.stop(); soundPool.release(); recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.destroy(); restoreRecognitionAudio(); restoreAudioRoute(); tts.shutdown() }
 
     private companion object {
+        const val DEVICE_QUIET_MS = 1_300
+        const val DEVICE_PEEK_MS = 1_500L
         const val OUTPUT_WARM_MILLIS = 350L
         const val CHIME_WARM_MILLIS = 150L
 
