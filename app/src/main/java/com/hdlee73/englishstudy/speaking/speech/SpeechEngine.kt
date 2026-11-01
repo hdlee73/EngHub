@@ -195,6 +195,9 @@ class SpeechEngine(
         val wasInCallMode = bluetoothRouteActive || communicationRouteActive
         restoreAudioRoute()
         val prompt = PendingPrompt(text, korean, accent)
+        // After the app-owned microphone was closed the phone re-routes its audio; a warmer that kept running through that
+        // can be stale and the first words get lost, so start it again and let it warm up before speaking.
+        if (lastListenDevice) { outputWarmer.stop(); lastListenDevice = false }
         // Open the output path now so it is fully awake when the first word is spoken.
         outputWarmer.start()
         if (!ttsReady) {
@@ -315,6 +318,9 @@ class SpeechEngine(
     private var deviceTick: Runnable? = null
     private var lastPeekAt = 0L
     private var peeking = false
+    private var lastPeekSamples = 0
+    /** The last listening session used the microphone directly (AudioRecord): the output path needs a fresh start afterwards. */
+    private var lastListenDevice = false
     @Volatile private var deviceLimit = false
     /** Set by the screen: false for the strict level (Whisper tends to write a mispronounced word correctly, which would make strict scoring lenient). */
     var allowDeviceStt: Boolean = true
@@ -348,6 +354,8 @@ class SpeechEngine(
             pendingListen = null
             if (gen != recognitionGeneration) return@Runnable
             deviceLimit = false
+            lastPeekSamples = 0
+            lastListenDevice = true
             val started = deviceStt.start(onLimit = { deviceLimit = true }, tee = if (isRecording()) recordingTee else null)
             if (!started) {
                 deviceFailed = true
@@ -365,8 +373,10 @@ class SpeechEngine(
                     if (gen != recognitionGeneration || !deviceActive) return
                     if (deviceLimit || deviceStt.endpoint(DEVICE_QUIET_MS)) { finishDevice(gen, expectedText); return }
                     val now = SystemClock.elapsedRealtime()
-                    if (!peeking && deviceStt.heardSpeech() && now - lastPeekAt >= DEVICE_PEEK_MS) {
+                    if (!peeking && deviceStt.heardSpeech() && now - lastPeekAt >= DEVICE_PEEK_MS &&
+                        deviceStt.sampleCount() - lastPeekSamples >= DEVICE_PEEK_NEW_SAMPLES) {
                         peeking = true
+                        lastPeekSamples = deviceStt.sampleCount()
                         deviceStt.peek(post = { mainHandler.post(it) }) { text ->
                             peeking = false
                             lastPeekAt = SystemClock.elapsedRealtime()
@@ -403,6 +413,7 @@ class SpeechEngine(
 
     fun listen(expectedText: String) {
         if (deviceSttWanted()) { listenDevice(expectedText); return }
+        lastListenDevice = false
         stopDevice()
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) { onUnavailable("이 기기에서 음성 인식을 사용할 수 없습니다."); return }
         cancelPendingListen()
@@ -681,7 +692,9 @@ class SpeechEngine(
     }
 
     fun playSuccessSound(onFinished: () -> Unit) {
+        val fresh = lastListenDevice
         stopActivity()
+        if (fresh) { outputWarmer.stop(); lastListenDevice = false }
         // The warmer is usually already running from the listening phase; if not (Bluetooth),
         // give the freshly opened path a short moment so the chime's attack is not swallowed.
         val wait = if (outputWarmer.isRunning) (CHIME_WARM_MILLIS - outputWarmer.warmMillis()).coerceAtLeast(0L) else CHIME_WARM_MILLIS
@@ -734,8 +747,9 @@ class SpeechEngine(
     fun destroy() { stopDevice(); deviceSttInstance?.release(); cancelPendingChime(); outputWarmer.stop(); soundPool.release(); recognitionGeneration++; closeOutdoorInput(); currentPromptId = null; pendingPrompt = null; cancelPendingSpeak(); cancelPendingListen(); acceptingRecognitionResults = false; recognitionStarting = false; recognizer?.destroy(); restoreRecognitionAudio(); restoreAudioRoute(); tts.shutdown() }
 
     private companion object {
-        const val DEVICE_QUIET_MS = 1_300
-        const val DEVICE_PEEK_MS = 1_500L
+        const val DEVICE_QUIET_MS = 900
+        const val DEVICE_PEEK_MS = 300L
+        const val DEVICE_PEEK_NEW_SAMPLES = 16_000 * 3 / 10
         const val OUTPUT_WARM_MILLIS = 350L
         const val CHIME_WARM_MILLIS = 150L
 

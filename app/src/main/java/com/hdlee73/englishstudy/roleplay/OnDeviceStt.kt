@@ -33,7 +33,7 @@ class OnDeviceStt(context: Context) {
     /** Loads the model in the background so the first answer does not wait for it. */
     fun warmUp() {
         if (!modelReady()) return
-        Thread { runCatching { recognizerOrCreate() } }.start()
+        Thread { background(); runCatching { recognizerOrCreate() } }.start()
     }
 
     fun release() {
@@ -102,6 +102,12 @@ class OnDeviceStt(context: Context) {
         return true
     }
 
+    /** Recognition must not starve the speech output (the example sentence read aloud or the result chime). */
+    private fun background() = runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
+
+    /** Number of samples recorded so far. */
+    fun sampleCount(): Int = count
+
     @Volatile private var heardVoice = false
     @Volatile private var silentMs = 0
     private var noiseFloor = 1f
@@ -128,6 +134,7 @@ class OnDeviceStt(context: Context) {
         val pcm: FloatArray
         synchronized(lock) { pcm = samples.copyOf(count) }
         Thread {
+            background()
             val text = try { recognize(pcm) } catch (_: Throwable) { null }
             post(Runnable { if (mine == session) onResult(text) })
         }.start()
@@ -159,6 +166,7 @@ class OnDeviceStt(context: Context) {
         val pcm: FloatArray
         synchronized(lock) { pcm = samples.copyOf(count); count = 0 }
         Thread {
+            background()
             val text: String? = try {
                 recognize(pcm)
             } catch (_: Throwable) {
