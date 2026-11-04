@@ -579,7 +579,7 @@ class MainActivity : AppCompatActivity() {
                         onEnd = roleplayVm::end,
                         onRestart = roleplayVm::restart,
                         onRetry = roleplayVm::retryLast,
-                        onDownloadStt = roleplayVm::downloadSttModel,
+                        onPickStt = roleplayVm::pickSttModel,
                         onDeviceStt = roleplayVm::setDeviceStt,
                         onToggleKorean = roleplayVm::toggleKorean,
                         onSummary = roleplayVm::showSummary,
