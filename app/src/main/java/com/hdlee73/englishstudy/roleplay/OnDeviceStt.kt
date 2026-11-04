@@ -23,6 +23,8 @@ class OnDeviceStt(context: Context) {
     private val store = ModelStore(context.applicationContext)
     private val lock = Any()
     private var recognizer: OfflineRecognizer? = null
+    private var loadedKey = ""
+    private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     @Volatile private var recording: AudioRecord? = null
     private var samples = FloatArray(SAMPLE_RATE * 10)
     private var count = 0
@@ -45,8 +47,11 @@ class OnDeviceStt(context: Context) {
     }
 
     private fun recognizerOrCreate(): OfflineRecognizer = synchronized(lock) {
+        val key = store.speakingActive()?.key ?: ""
+        if (recognizer != null && key != loadedKey) { runCatching { recognizer?.release() }; recognizer = null }
         recognizer ?: run {
             val f = store.speakingWhisper()
+            loadedKey = key
             OfflineRecognizer(
                 config = OfflineRecognizerConfig(
                     modelConfig = OfflineModelConfig(
@@ -54,7 +59,7 @@ class OnDeviceStt(context: Context) {
                             encoder = f.encoder.path, decoder = f.decoder.path, language = "", task = "transcribe", tailPaddings = 1000
                         ),
                         tokens = f.tokens.path,
-                        numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4),
+                        numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 6),
                         provider = "cpu"
                     )
                 )
@@ -181,7 +186,12 @@ class OnDeviceStt(context: Context) {
         val peak = pcm.maxOf { abs(it) }
         // Nothing but room noise: Whisper would invent a phrase over it.
         if (peak < 0.02f) return ""
-        return synchronized(decodeLock) { decode(pcm) }
+        val t0 = System.currentTimeMillis()
+        val text = synchronized(decodeLock) { decode(pcm) }
+        // Kept for the 음성 인식 card: how long the last recognition took per second of speech (shows whether the chosen model is fast enough).
+        val ms = System.currentTimeMillis() - t0
+        prefs.edit().putLong("rpSttLastMs", ms).putInt("rpSttLastAudioMs", (pcm.size * 1000L / SAMPLE_RATE).toInt()).apply()
+        return text
     }
 
     private fun decode(pcm: FloatArray): String {
