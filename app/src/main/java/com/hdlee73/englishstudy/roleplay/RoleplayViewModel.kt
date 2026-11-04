@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.hdlee73.englishstudy.ai.FreeTalk
 import com.hdlee73.englishstudy.ai.GenAi
 import com.hdlee73.englishstudy.docvoice.core.ModelStore
+import com.hdlee73.englishstudy.docvoice.core.SpeakingModel
 import kotlinx.coroutines.channels.Channel
 import com.hdlee73.englishstudy.translate.Direction
 import com.hdlee73.englishstudy.translate.MlKitTranslator
@@ -49,6 +50,9 @@ data class RoleplayUiState(
     val message: String? = null,
     val sttModel: SttModel = SttModel.MISSING,
     val sttProgress: Float = 0f,
+    /** The recognition model picked for speaking practice, and which of the two are on the phone. */
+    val sttChoice: SpeakingModel = SpeakingModel.SMALL_EN,
+    val sttReady: Set<SpeakingModel> = emptySet(),
     /** The learner's choice: recognize on the phone (when the model is there) instead of with the Google speech service. */
     val deviceStt: Boolean = true
 )
@@ -60,6 +64,8 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
     private val _state = MutableStateFlow(
         RoleplayUiState(
             sttModel = if (models.speakingReady()) SttModel.READY else SttModel.MISSING,
+            sttChoice = models.speakingChoice(),
+            sttReady = SpeakingModel.values().filter { models.speakingReady(it) }.toSet(),
             deviceStt = settings.getBoolean("rpDeviceStt", true)
         )
     )
@@ -79,13 +85,19 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
 
     private fun deviceSttOn() = _state.value.deviceStt && _state.value.sttModel == SttModel.READY
 
-    /** Downloads the on-device recognition model (once; it stays on the phone afterwards). */
-    fun downloadSttModel() {
+    /** Picks [model] for speaking practice and downloads it first when it is not on the phone yet (once; it stays afterwards). */
+    fun pickSttModel(model: SpeakingModel) {
         if (_state.value.sttModel == SttModel.DOWNLOADING) return
-        _state.update { it.copy(sttModel = SttModel.DOWNLOADING, sttProgress = 0f, message = null) }
+        models.setSpeakingChoice(model)
+        _state.update { it.copy(sttChoice = model, message = null) }
+        if (models.speakingReady(model)) {
+            _state.update { it.copy(sttModel = SttModel.READY) }
+            return
+        }
+        _state.update { it.copy(sttModel = SttModel.DOWNLOADING, sttProgress = 0f) }
         viewModelScope.launch(Dispatchers.IO) {
             val ok = try {
-                models.ensureSpeaking({ true }) { p -> _state.update { it.copy(sttProgress = p) } }
+                models.ensureSpeaking(model, { true }) { p -> _state.update { it.copy(sttProgress = p) } }
                 true
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -93,7 +105,13 @@ class RoleplayViewModel(application: Application) : AndroidViewModel(application
                 _state.update { it.copy(message = e.message ?: "음성 인식 모델을 내려받지 못했어요.") }
                 false
             }
-            _state.update { it.copy(sttModel = if (ok) SttModel.READY else SttModel.FAILED, sttProgress = if (ok) 1f else 0f) }
+            _state.update {
+                it.copy(
+                    sttModel = if (models.speakingReady()) SttModel.READY else SttModel.FAILED,
+                    sttProgress = if (ok) 1f else 0f,
+                    sttReady = SpeakingModel.values().filter { m -> models.speakingReady(m) }.toSet()
+                )
+            }
         }
     }
 

@@ -78,7 +78,7 @@ fun RoleplayScreen(
     onEnd: () -> Unit,
     onRestart: () -> Unit,
     onRetry: () -> Unit,
-    onDownloadStt: () -> Unit,
+    onPickStt: (com.hdlee73.englishstudy.docvoice.core.SpeakingModel) -> Unit,
     onDeviceStt: (Boolean) -> Unit,
     onToggleKorean: (Int) -> Unit,
     onSummary: (Boolean) -> Unit,
@@ -99,7 +99,7 @@ fun RoleplayScreen(
     Box(Modifier.fillMaxSize().background(Canvas)) {
         val theme = state.theme
         when {
-            theme == null -> ThemeList(state, start, onDownloadStt, onDeviceStt)
+            theme == null -> ThemeList(state, start, onPickStt, onDeviceStt)
             state.summary -> SummaryView(state, onContinue = { onSummary(false) }, onEnd = onEnd)
             else -> Conversation(state, theme, onMic, onEnd, onRestart, onRetry, onToggleKorean, onSummary)
         }
@@ -108,7 +108,7 @@ fun RoleplayScreen(
 }
 
 @Composable
-private fun ThemeList(state: RoleplayUiState, onStart: (RoleplayTheme) -> Unit, onDownloadStt: () -> Unit, onDeviceStt: (Boolean) -> Unit) {
+private fun ThemeList(state: RoleplayUiState, onStart: (RoleplayTheme) -> Unit, onPickStt: (com.hdlee73.englishstudy.docvoice.core.SpeakingModel) -> Unit, onDeviceStt: (Boolean) -> Unit) {
     val busy = state.busy
     val aiStatus by GenAi.status.collectAsState()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -121,7 +121,7 @@ private fun ThemeList(state: RoleplayUiState, onStart: (RoleplayTheme) -> Unit, 
             Text(Tutor.engineLabel(aiStatus), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
             if (busy) CircularProgressIndicator(Modifier.padding(top = 8.dp).size(22.dp), strokeWidth = 2.dp)
         }
-        item { SttCard(state, onDownloadStt, onDeviceStt) }
+        item { SttCard(state, onPickStt, onDeviceStt) }
         // 프리토킹 first, then the scenes by group.
         item { ThemeCard(RoleplayThemes.FREE, highlighted = true, needsAi = false, onStart) }
         var lastGroup = ""
@@ -139,7 +139,7 @@ private fun ThemeList(state: RoleplayUiState, onStart: (RoleplayTheme) -> Unit, 
 
 /** The choice of speech recognition: on the phone (Whisper, no internet) once its model is downloaded, the Google speech service otherwise. */
 @Composable
-private fun SttCard(state: RoleplayUiState, onDownload: () -> Unit, onDeviceStt: (Boolean) -> Unit) {
+private fun SttCard(state: RoleplayUiState, onPick: (com.hdlee73.englishstudy.docvoice.core.SpeakingModel) -> Unit, onDeviceStt: (Boolean) -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("음성 인식", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         when (state.sttModel) {
@@ -152,6 +152,7 @@ private fun SttCard(state: RoleplayUiState, onDownload: () -> Unit, onDeviceStt:
                     )
                     androidx.compose.material3.Switch(checked = state.deviceStt, onCheckedChange = onDeviceStt)
                 }
+                SttModelPicker(state, onPick)
             }
             SttModel.DOWNLOADING -> {
                 Text("기기 안 인식 모델을 내려받는 중… ${(state.sttProgress * 100).toInt()}%", color = Muted, fontSize = 12.sp)
@@ -163,9 +164,28 @@ private fun SttCard(state: RoleplayUiState, onDownload: () -> Unit, onDeviceStt:
                     else "지금은 구글 음성 인식(인터넷 필요)을 써요. 기기 안 인식 모델(약 160MB, 와이파이 권장)을 받으면 인터넷 없이도 되고, 억양이 있는 영어도 더 잘 알아듣는 편이에요.",
                     color = Muted, fontSize = 12.sp
                 )
-                OutlinedButton(onClick = onDownload, shape = RoundedCornerShape(12.dp)) { Text("기기 안 인식 모델 내려받기") }
+                SttModelPicker(state, onPick)
             }
         }
+    }
+}
+
+/** Choice between the quick base.en and the more accurate small.en; a model that is not on the phone yet is downloaded when picked. */
+@Composable
+private fun SttModelPicker(state: RoleplayUiState, onPick: (com.hdlee73.englishstudy.docvoice.core.SpeakingModel) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    val lastMs = prefs.getLong("rpSttLastMs", 0L)
+    val audioMs = prefs.getInt("rpSttLastAudioMs", 0)
+    for (m in com.hdlee73.englishstudy.docvoice.core.SpeakingModel.values()) {
+        val have = m in state.sttReady
+        val chosen = m == state.sttChoice && have
+        val label = (if (chosen) "✓ " else "") + m.label + " — " + m.hint + (if (!have) " · 내려받기" else "")
+        if (chosen) androidx.compose.material3.Button(onClick = { onPick(m) }, shape = RoundedCornerShape(12.dp)) { Text(label, fontSize = 12.sp) }
+        else OutlinedButton(onClick = { onPick(m) }, shape = RoundedCornerShape(12.dp)) { Text(label, fontSize = 12.sp) }
+    }
+    if (lastMs > 0 && audioMs > 0) {
+        Text("최근 인식: 말 ${"%.1f".format(audioMs / 1000.0)}초 → 계산 ${"%.1f".format(lastMs / 1000.0)}초", color = Muted, fontSize = 11.sp)
     }
 }
 

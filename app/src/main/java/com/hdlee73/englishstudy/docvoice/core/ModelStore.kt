@@ -34,10 +34,17 @@ enum class LiveLang(val key: String, val label: String, val archive: String, val
     }
 }
 
+/** Which Whisper the spoken parts (프리토킹·롤플레잉·따라읽기) recognize with. */
+enum class SpeakingModel(val key: String, val label: String, val hint: String) {
+    BASE_EN("base.en", "빠름", "base.en · 약 160MB · 1~2초"),
+    SMALL_EN("small.en", "정확 (폴드8 권장)", "small.en · 약 370MB · 2~5초")
+}
+
 class ModelException(message: String) : Exception(message)
 
 /** 음성 인식 · VAD · 화자 구분 모델을 앱 저장공간에 내려받아 보관한다 (최초 1회, 이후 오프라인 사용). */
 class ModelStore(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val root = File(context.filesDir, "models").apply { mkdirs() }
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -123,17 +130,38 @@ class ModelStore(context: Context) {
     val segFile get() = File(root, "diar/segmentation.onnx")
     val embFile get() = File(root, "diar/embedding.onnx")
 
-    /** The English-only base Whisper used by the spoken 프리토킹·롤플레잉 (about 160 MB: small enough to answer within a couple of seconds). */
-    fun speakingWhisper(): WhisperFiles {
-        val d = File(root, "whisper-speaking-base.en")
-        return WhisperFiles(File(d, "encoder.onnx"), File(d, "decoder.onnx"), File(d, "tokens.txt"))
+    /** The model the learner picked for spoken practice (small.en by default: the Fold8 is fast enough for it). */
+    fun speakingChoice(): SpeakingModel = SpeakingModel.values().firstOrNull { it.key == prefs.getString("rpSttModel", null) } ?: SpeakingModel.SMALL_EN
+
+    fun setSpeakingChoice(m: SpeakingModel) { prefs.edit().putString("rpSttModel", m.key).apply() }
+
+    fun speakingFiles(m: SpeakingModel): WhisperFiles = when (m) {
+        SpeakingModel.BASE_EN -> File(root, "whisper-speaking-base.en").let { d -> WhisperFiles(File(d, "encoder.onnx"), File(d, "decoder.onnx"), File(d, "tokens.txt")) }
+        SpeakingModel.SMALL_EN -> whisper(WhisperSize.SMALL_EN) // shared with the DocVoice tab, so it is downloaded only once
     }
 
-    fun speakingReady() = speakingWhisper().let { it.encoder.exists() && it.decoder.exists() && it.tokens.exists() }
+    fun speakingReady(m: SpeakingModel) = speakingFiles(m).let { it.encoder.exists() && it.decoder.exists() && it.tokens.exists() }
 
-    fun ensureSpeaking(isActive: () -> Boolean, onProgress: (Float) -> Unit) {
-        if (speakingReady()) return
-        val f = speakingWhisper()
+    /** The model actually used: the chosen one when it is on the phone, otherwise the other one if that is there. */
+    fun speakingActive(): SpeakingModel? {
+        val c = speakingChoice()
+        if (speakingReady(c)) return c
+        return SpeakingModel.values().firstOrNull { speakingReady(it) }
+    }
+
+    fun speakingReady() = speakingActive() != null
+
+    fun speakingWhisper(): WhisperFiles = speakingFiles(speakingActive() ?: speakingChoice())
+
+    fun ensureSpeaking(isActive: () -> Boolean, onProgress: (Float) -> Unit) = ensureSpeaking(speakingChoice(), isActive, onProgress)
+
+    fun ensureSpeaking(m: SpeakingModel, isActive: () -> Boolean, onProgress: (Float) -> Unit) {
+        if (speakingReady(m)) return
+        if (m == SpeakingModel.SMALL_EN) {
+            ensureWhisper(WhisperSize.SMALL_EN, isActive) { _, f -> onProgress(f) }
+            return
+        }
+        val f = speakingFiles(m)
         val repo = "$HF/sherpa-onnx-whisper-base.en/resolve/main/base.en"
         download("$repo-encoder.int8.onnx", f.encoder, isActive) { onProgress(it * 0.2f) }
         download("$repo-decoder.int8.onnx", f.decoder, isActive) { onProgress(0.2f + it * 0.78f) }
