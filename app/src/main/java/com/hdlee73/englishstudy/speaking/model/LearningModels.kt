@@ -42,6 +42,8 @@ data class LearningSettings(
     val mirrorAudio: Boolean = false,
     val outdoorAudio: Boolean = false,
     val phoneMic: Boolean = false,
+    /** A connected Bluetooth headset is always the microphone (watches and speakers excluded). */
+    val headsetMicAlways: Boolean = true,
     val voiceAccent: VoiceAccent = VoiceAccent.US,
     val strictness: RecognitionStrictness = RecognitionStrictness.NORMAL,
     /** Empty = automatic: the headset that is currently playing the sound. */

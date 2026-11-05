@@ -69,7 +69,7 @@ class OnDeviceStt(context: Context) {
 
     /** Starts recording; false when the microphone could not be opened. [onLimit] is called (on the recording thread) when the longest recording is reached. */
     @SuppressLint("MissingPermission")
-    fun start(tee: ((ByteArray, Int) -> Unit)? = null, onLimit: () -> Unit): Boolean {
+    fun start(tee: ((ByteArray, Int) -> Unit)? = null, preferred: android.media.AudioDeviceInfo? = null, onLimit: () -> Unit): Boolean {
         cancel()
         val min = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (min <= 0) return false
@@ -77,6 +77,7 @@ class OnDeviceStt(context: Context) {
             AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, min * 4)
         } catch (_: Exception) { return false }
         if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); return false }
+        if (preferred != null) runCatching { record.setPreferredDevice(preferred) }
         try { record.startRecording() } catch (_: Exception) { record.release(); return false }
         val mine = ++session
         count = 0
@@ -187,11 +188,44 @@ class OnDeviceStt(context: Context) {
         // Nothing but room noise: Whisper would invent a phrase over it.
         if (peak < 0.02f) return ""
         val t0 = System.currentTimeMillis()
-        val text = synchronized(decodeLock) { decode(pcm) }
+        val prepared = prepare(pcm)
+        val text = synchronized(decodeLock) { decode(prepared) }
         // Kept for the 음성 인식 card: how long the last recognition took per second of speech (shows whether the chosen model is fast enough).
         val ms = System.currentTimeMillis() - t0
         prefs.edit().putLong("rpSttLastMs", ms).putInt("rpSttLastAudioMs", (pcm.size * 1000L / SAMPLE_RATE).toInt()).apply()
         return text
+    }
+
+    /**
+     * Makes the recording easier for Whisper: cuts the silence before and after the speech (long quiet stretches are where
+     * Whisper invents words, and they cost computing time) and lifts a quiet recording (a Bluetooth headset or a soft voice)
+     * to a normal level.
+     */
+    private fun prepare(pcm: FloatArray): FloatArray {
+        val frame = SAMPLE_RATE / 50
+        val frames = pcm.size / frame
+        if (frames < 10) return pcm
+        val rms = FloatArray(frames) { f ->
+            var sum = 0.0
+            for (i in f * frame until (f + 1) * frame) sum += pcm[i] * pcm[i]
+            Math.sqrt(sum / frame).toFloat()
+        }
+        val sorted = rms.sortedArray()
+        val floor = sorted[frames / 10]
+        val threshold = maxOf(0.008f, floor * 3f, sorted[frames - 1] * 0.06f)
+        var first = rms.indexOfFirst { it > threshold }
+        var last = rms.indexOfLast { it > threshold }
+        if (first < 0) return pcm
+        val margin = 15 // 0.3 s
+        first = maxOf(0, first - margin)
+        last = minOf(frames - 1, last + margin)
+        var out = pcm.copyOfRange(first * frame, minOf(pcm.size, (last + 1) * frame))
+        val peak = out.maxOf { abs(it) }
+        if (peak in 0.001f..0.5f) {
+            val gain = minOf(0.9f / peak, 8f)
+            out = FloatArray(out.size) { out[it] * gain }
+        }
+        return out
     }
 
     private fun decode(pcm: FloatArray): String {

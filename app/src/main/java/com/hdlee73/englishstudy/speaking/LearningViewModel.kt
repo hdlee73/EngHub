@@ -358,6 +358,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
             .putString("voice_accent", settings.voiceAccent.name)
             .putBoolean("outdoor_audio", settings.outdoorAudio)
             .putBoolean("phone_mic", settings.phoneMic)
+            .putBoolean("headset_mic_always", settings.headsetMicAlways)
             .putString("strictness", settings.strictness.name)
             .putString("bluetooth_input", settings.bluetoothInputAddress)
             .apply()
@@ -690,6 +691,7 @@ class LearningViewModel(application: Application) : AndroidViewModel(application
         passScore = prefs.getInt("pass_score", 65),
         outdoorAudio = prefs.getBoolean("outdoor_audio", false),
         phoneMic = prefs.getBoolean("phone_mic", false),
+        headsetMicAlways = prefs.getBoolean("headset_mic_always", true),
         voiceAccent = runCatching { VoiceAccent.valueOf(prefs.getString("voice_accent", null) ?: "US") }.getOrDefault(VoiceAccent.US),
         strictness = runCatching { RecognitionStrictness.valueOf(prefs.getString("strictness", null) ?: "NORMAL") }.getOrDefault(RecognitionStrictness.NORMAL),
         bluetoothInputAddress = prefs.getString("bluetooth_input", "") ?: ""
