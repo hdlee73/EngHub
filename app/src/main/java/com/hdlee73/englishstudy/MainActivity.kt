@@ -232,6 +232,7 @@ class MainActivity : AppCompatActivity() {
             LaunchedEffect(learning.phase, learning.position, learning.listenRequestId, learning.promptRequestId) {
                 speech.mirrorAudio = learning.settings.mirrorAudio
                 speech.phoneMic = learning.settings.phoneMic
+                speech.headsetMicAlways = learning.settings.headsetMicAlways
                 speech.bluetoothInputAddress = learning.settings.bluetoothInputAddress
                 speech.outdoorAudio = learning.settings.outdoorAudio
                 speech.allowDeviceStt = learning.settings.strictness != RecognitionStrictness.STRICT

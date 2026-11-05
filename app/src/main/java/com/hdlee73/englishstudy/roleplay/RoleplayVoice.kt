@@ -45,6 +45,7 @@ class RoleplayVoice(
     private var silentRestarts = 0
     private var failures = 0
     private val stt = OnDeviceStt(context)
+    private val headset = HeadsetMic(context)
     /** Recognize on the phone (Whisper) instead of with the Google speech service; the caller sets it from the learner's choice and the model being present. */
     var useDeviceStt = false
     private var deviceMode = false
@@ -131,6 +132,7 @@ class RoleplayVoice(
      * [endStream]. The first sentence is read while the later ones are being made.
      */
     fun beginStream() {
+        headset.release()
         cancelRecognizer()
         stt.cancel()
         deviceMode = false
@@ -169,6 +171,7 @@ class RoleplayVoice(
 
     /** Reads [text] aloud; when it is finished the microphone opens (unless [listenAfter] is false). */
     fun speak(text: String, listenAfter: Boolean = true) {
+        headset.release()
         cancelRecognizer()
         stt.cancel()
         deviceMode = false
@@ -192,13 +195,19 @@ class RoleplayVoice(
         silentRestarts = 0
         failures = 0
         streamGen = -1
-        if (useDeviceStt && stt.modelReady() && startDevice()) return
-        beginRecognition()
+        val g = generation
+        val wait = headset.acquire()
+        val open = Runnable {
+            if (g != generation) return@Runnable
+            if (useDeviceStt && stt.modelReady() && startDevice()) return@Runnable
+            beginRecognition()
+        }
+        if (wait > 0) { onState(State.LISTENING); main.postDelayed(open, wait) } else open.run()
     }
 
     private fun startDevice(): Boolean {
         val g = generation
-        if (!stt.start { main.post { if (g == generation && deviceMode && listening) finishListening() } }) return false
+        if (!stt.start(preferred = headset.inputDevice()) { main.post { if (g == generation && deviceMode && listening) finishListening() } }) return false
         deviceMode = true
         listening = true
         onState(State.LISTENING)
@@ -223,6 +232,7 @@ class RoleplayVoice(
                 else -> onSaid(text, emptyList())
             }
         }
+        headset.release()
     }
 
     /** Loads the on-device model ahead of time. */
@@ -243,6 +253,7 @@ class RoleplayVoice(
     }
 
     fun stop() {
+        headset.release()
         generation++
         pending = null
         streamGen = -1
@@ -309,6 +320,7 @@ class RoleplayVoice(
 
     private fun deliver() {
         val text = (said.toString() + " " + lastPartial).trim().replace(Regex("\\s+"), " ")
+        headset.release()
         cancelRecognizer()
         listening = false
         userDone = false
