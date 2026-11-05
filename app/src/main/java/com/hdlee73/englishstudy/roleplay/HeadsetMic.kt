@@ -43,6 +43,7 @@ class HeadsetMic(context: Context) {
     }
 
     /** Opens the headset microphone route; returns how many milliseconds to wait before recording (0 = nothing to wait for or no headset). */
+    @Suppress("DEPRECATION")
     fun acquire(): Long {
         if (audio == null || !enabled() || !permitted()) return 0L
         return runCatching {
@@ -55,8 +56,8 @@ class HeadsetMic(context: Context) {
                 val dev = pick(audio.getDevices(AudioManager.GET_DEVICES_INPUTS).toList()) ?: return 0L
                 if (active != null) return 0L
                 audio.mode = AudioManager.MODE_IN_COMMUNICATION
-                @Suppress("DEPRECATION") audio.startBluetoothSco()
-                @Suppress("DEPRECATION") audio.isBluetoothScoOn = true
+                audio.startBluetoothSco()
+                audio.isBluetoothScoOn = true
                 active = dev
                 1_000L
             }
@@ -69,16 +70,18 @@ class HeadsetMic(context: Context) {
         return audio?.getDevices(AudioManager.GET_DEVICES_INPUTS)?.firstOrNull { it.address == a.address && isHeadsetType(it.type) }
     }
 
+    @Suppress("DEPRECATION")
     fun release() {
+        val a = audio ?: return
         if (active == null) return
         active = null
         runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) audio?.clearCommunicationDevice()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) a.clearCommunicationDevice()
             else {
-                @Suppress("DEPRECATION") audio?.stopBluetoothSco()
-                @Suppress("DEPRECATION") audio?.isBluetoothScoOn = false
+                a.stopBluetoothSco()
+                a.isBluetoothScoOn = false
             }
-            audio?.mode = AudioManager.MODE_NORMAL
+            a.mode = AudioManager.MODE_NORMAL
         }
     }
 }
