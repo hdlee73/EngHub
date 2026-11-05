@@ -608,6 +608,11 @@ private fun SettingsSheet(current: LearningSettings, bluetoothDevices: List<Blue
                 }
                 Text("Android 13 이상에서 지원되는 음성 인식 엔진에 보정된 마이크 입력을 전달합니다. 지원되지 않으면 일반 입력으로 돌아갑니다. 바람 소리 제거 효과는 기기마다 다릅니다.", fontSize = 12.sp, color = Color.Gray)
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("블루투스 헤드셋 마이크 항상 사용", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                    Switch(checked = draft.headsetMicAlways, onCheckedChange = { draft = draft.copy(headsetMicAlways = it) })
+                }
+                Text("헤드셋(이어셋)이 연결되어 있으면 아래 ‘휴대전화 마이크 사용’과 상관없이 항상 그 마이크로 듣습니다. 스피커·워치는 제외합니다. 프리토킹·롤플레잉에도 적용됩니다.", fontSize = 12.sp, color = Color.Gray)
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("휴대전화 마이크 사용", Modifier.weight(1f), fontWeight = FontWeight.Bold)
                     Switch(checked = draft.phoneMic, onCheckedChange = { draft = draft.copy(phoneMic = it) })
                 }

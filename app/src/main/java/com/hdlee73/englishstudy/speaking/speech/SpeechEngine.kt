@@ -53,6 +53,8 @@ class SpeechEngine(
     var outdoorAudio: Boolean = false
     private var recordingNoticeShown = false
     var phoneMic: Boolean = false
+    /** When a Bluetooth headset (not a watch) is connected it is always the microphone, whatever [phoneMic] says. */
+    var headsetMicAlways: Boolean = true
     /** Empty = automatic. Otherwise the address of the headset chosen in settings. */
     var bluetoothInputAddress: String = ""
     /**
@@ -356,14 +358,21 @@ class SpeechEngine(
             deviceLimit = false
             lastPeekSamples = 0
             lastListenDevice = true
-            val started = deviceStt.start(onLimit = { deviceLimit = true }, tee = if (isRecording()) recordingTee else null)
+            val btInput = if (bluetoothRouteActive) runCatching {
+                val routed = if (Build.VERSION.SDK_INT >= 31) audioManager?.communicationDevice else null
+                audioManager?.getDevices(AudioManager.GET_DEVICES_INPUTS)?.firstOrNull {
+                    (routed == null || it.address == routed.address) &&
+                        (it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+                }
+            }.getOrNull() else null
+            val started = deviceStt.start(onLimit = { deviceLimit = true }, tee = if (isRecording()) recordingTee else null, preferred = btInput)
             if (!started) {
                 deviceFailed = true
                 onNotice("기기 안 음성 인식을 시작하지 못해 구글 인식으로 바꿨어요.")
                 listen(expectedText)
                 return@Runnable
             }
-            onInputDeviceChanged("휴대전화 마이크 · 기기 안 인식")
+            onInputDeviceChanged((btInput?.productName?.let { "$it 마이크" } ?: "휴대전화 마이크") + " · 기기 안 인식")
             deviceActive = true
             acceptingRecognitionResults = true
             lastPeekAt = SystemClock.elapsedRealtime()
@@ -518,10 +527,10 @@ class SpeechEngine(
         if (bluetoothRouteActive && Build.VERSION.SDK_INT >= 31) {
             val current = audioManager?.communicationDevice
             val wanted = audioManager?.availableCommunicationDevices?.let { preferredBluetooth(it, current) }
-            if (!phoneMic && current != null && wanted != null && current.id == wanted.id) return 0L
+            if (!usePhoneMic() && current != null && wanted != null && current.id == wanted.id) return 0L
             restoreAudioRoute()
         }
-        if (phoneMic) {
+        if (usePhoneMic()) {
             restoreAudioRoute()
             selectPhoneInput()
             onInputDeviceChanged("휴대전화 마이크")
@@ -571,6 +580,20 @@ class SpeechEngine(
             audioManager.mode = AudioManager.MODE_NORMAL
             0L
         }
+    }
+
+    /** The phone microphone is used only when asked for and no headset is there to override it. */
+    private fun usePhoneMic(): Boolean {
+        if (!phoneMic) return false
+        if (!headsetMicAlways || audioManager == null) return true
+        val permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        if (!permitted) return true
+        val devices = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) audioManager.availableCommunicationDevices
+            else audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).toList()
+        }.getOrDefault(emptyList())
+        return preferredBluetooth(devices, null) == null
     }
 
     private fun selectPhoneInput() {
