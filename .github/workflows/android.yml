@@ -54,6 +54,8 @@ jobs:
           mkdir -p app/libs
           curl -fL --retry 3 -o app/libs/sherpa-onnx.aar \
             https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar
+          # Keep this hash in step with sherpaSha256 in app/build.gradle.kts (update both when the version changes).
+          echo "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96  app/libs/sherpa-onnx.aar" | sha256sum -c -
           ls -la app/libs
 
       - name: Unit tests and release APK
@@ -77,6 +79,13 @@ jobs:
         with:
           name: EngHub-release-apk
           path: app/build/outputs/apk/release/*.apk
+
+      # R8 renames classes in the release APK; this file translates the names in a crash log back. Keep it per version.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: EngHub-release-mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
 
       - name: Publish the APK as a GitHub release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
