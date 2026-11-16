@@ -1,4 +1,5 @@
 import java.net.URI
+import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.android.application)
@@ -54,7 +55,7 @@ val downloadSherpa by tasks.registering {
         URI(url).toURL().openStream().use { input ->
             tmp.outputStream().use { input.copyTo(it) }
         }
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val digest = MessageDigest.getInstance("SHA-256")
         tmp.inputStream().use { input ->
             val buffer = ByteArray(1 shl 16)
             while (true) {
