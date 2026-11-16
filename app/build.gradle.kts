@@ -7,6 +7,9 @@ plugins {
 }
 
 val sherpaVersion = "1.13.8"
+// SHA-256 of sherpa-onnx-$sherpaVersion.aar. MUST be updated together with sherpaVersion (and with the version in
+// .github/workflows/android.yml): the download below is refused when the hash does not match.
+val sherpaSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
 val sherpaAar = layout.projectDirectory.file("libs/sherpa-onnx.aar").asFile
 
 /** Reads a build secret from a Gradle property first, then from an environment variable. */
@@ -44,8 +47,32 @@ val downloadSherpa by tasks.registering {
         sherpaAar.parentFile.mkdirs()
         val url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaVersion/sherpa-onnx-$sherpaVersion.aar"
         logger.lifecycle("Downloading $url")
+        // Download to a temporary file first and only promote it once the SHA-256 matches, so a truncated or tampered
+        // file can never be picked up as the library.
+        val tmp = file("${sherpaAar.absolutePath}.part")
+        tmp.delete()
         URI(url).toURL().openStream().use { input ->
-            sherpaAar.outputStream().use { input.copyTo(it) }
+            tmp.outputStream().use { input.copyTo(it) }
+        }
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        tmp.inputStream().use { input ->
+            val buffer = ByteArray(1 shl 16)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        if (!actual.equals(sherpaSha256, ignoreCase = true)) {
+            tmp.delete()
+            sherpaAar.delete()
+            throw GradleException("sherpa-onnx AAR SHA-256 mismatch: expected $sherpaSha256, got $actual")
+        }
+        sherpaAar.delete()
+        if (!tmp.renameTo(sherpaAar)) {
+            tmp.copyTo(sherpaAar, overwrite = true)
+            tmp.delete()
         }
     }
 }
@@ -86,6 +113,9 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Signed only when real credentials were supplied (see hasReleaseSigning above); otherwise the APK is
             // built unsigned so the build itself never fails for lack of secrets.
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
